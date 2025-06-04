@@ -1,0 +1,2892 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DICOM RT Plan Delivery Simulator (Illustrative Purpose Only)</title>
+    <link rel="icon" href="data:,">
+
+    <script>
+        // Function to show a custom message modal
+        function showMessageModal(title, message) {
+            // Check if modal elements exist, create if not
+            let modal = document.getElementById('customMessageModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'customMessageModal';
+                modal.style.position = 'fixed';
+                modal.style.left = '0';
+                modal.style.top = '0';
+                modal.style.width = '100%';
+                modal.style.height = '100%';
+                modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+                modal.style.display = 'none'; // Initially hidden
+                modal.style.justifyContent = 'center';
+                modal.style.alignItems = 'center';
+                modal.style.zIndex = '10000'; // Ensure it's on top
+
+                const modalContent = document.createElement('div');
+                modalContent.style.backgroundColor = '#fff';
+                modalContent.style.padding = '20px';
+                modalContent.style.borderRadius = '8px';
+                modalContent.style.textAlign = 'center';
+                modalContent.style.minWidth = '300px';
+                modalContent.style.maxWidth = '80%';
+                modalContent.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
+
+                const modalTitle = document.createElement('h3');
+                modalTitle.id = 'customMessageModalTitle';
+                modalTitle.style.marginTop = '0';
+
+                const modalText = document.createElement('p');
+                modalText.id = 'customMessageModalText';
+                modalText.style.whiteSpace = 'pre-wrap'; // Preserve line breaks
+
+                const closeButton = document.createElement('button');
+                closeButton.textContent = 'Close';
+                closeButton.style.padding = '10px 20px';
+                closeButton.style.marginTop = '15px';
+                closeButton.style.backgroundColor = '#3498db';
+                closeButton.style.color = 'white';
+                closeButton.style.border = 'none';
+                closeButton.style.borderRadius = '5px';
+                closeButton.style.cursor = 'pointer';
+                closeButton.onclick = function () {
+                    modal.style.display = 'none';
+                };
+
+                modalContent.appendChild(modalTitle);
+                modalContent.appendChild(modalText);
+                modalContent.appendChild(closeButton);
+                modal.appendChild(modalContent);
+                document.body.appendChild(modal);
+            }
+
+            // Set title and message
+            document.getElementById('customMessageModalTitle').textContent = title;
+            document.getElementById('customMessageModalText').textContent = message;
+            modal.style.display = 'flex'; // Show the modal
+        }
+
+
+        // Script loading with fallback
+        function loadScriptWithFallback(localPath, cdnPath, integrityHash = null, crossorigin = null) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = localPath;
+                script.onload = () => {
+                    console.log(`DEBUG: ${localPath} loaded successfully locally.`);
+                    resolve();
+                };
+                script.onerror = () => {
+                    console.warn(`DEBUG: Failed to load ${localPath} locally. Attempting CDN fallback: ${cdnPath}`);
+                    const fallbackScript = document.createElement('script');
+                    fallbackScript.src = cdnPath;
+                    if (integrityHash) fallbackScript.integrity = integrityHash;
+                    if (crossorigin) fallbackScript.crossOrigin = crossorigin;
+                    fallbackScript.onload = () => {
+                        console.log(`DEBUG: ${cdnPath} loaded successfully from CDN.`);
+                        resolve();
+                    };
+                    fallbackScript.onerror = () => {
+                        console.error(`DEBUG: Failed to load script from both local and CDN: ${localPath} / ${cdnPath}`);
+                        reject(new Error(`Failed to load ${cdnPath} from CDN after local failure.`));
+                    };
+                    document.head.appendChild(fallbackScript);
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        async function loadCriticalScripts() {
+            try {
+                await loadScriptWithFallback('dcmjs.js', 'https://cdn.jsdelivr.net/npm/dcmjs/build/dcmjs.js');
+                await loadScriptWithFallback('Tone.js', 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js');
+                console.log('DEBUG: All critical scripts (dcmjs, Tone.js) loaded.');
+            } catch (error) {
+                console.error("DEBUG: Critical script loading error:", error);
+                // Use custom modal instead of alert
+                showMessageModal("Critical Library Load Error", "A critical library (dcmjs or Tone.js) failed to load. The application might not work correctly. Please check the browser console for more details.");
+            }
+        }
+        loadCriticalScripts(); // Call immediately in head
+    </script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+
+        h1,
+        h2,
+        h3 {
+            color: #2c3e50;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .author-info-header,
+        .plan-info-header {
+            background-color: #e9ecef;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 0.85em;
+            border: 1px solid #ced4da;
+            color: #495057;
+        }
+
+        .author-info-header p,
+        .plan-info-header p {
+            margin: 5px 0;
+            line-height: 1.4;
+        }
+
+        .author-info-header strong,
+        .plan-info-header strong {
+            color: #343a40;
+        }
+
+        .plan-info-header h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+
+        .plan-info-header ul {
+            list-style-type: none;
+            padding-left: 0;
+            margin-top: 5px;
+        }
+
+        .plan-info-header li {
+            padding: 3px 0;
+            border-bottom: 1px dotted #ccc;
+            font-size: 0.95em;
+        }
+
+        .plan-info-header li:last-child {
+            border-bottom: none;
+        }
+
+        .visualization-section {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            padding: 10px;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+
+        canvas {
+            border: 1px solid #ccc;
+            background-color: #fafafa;
+            display: block;
+            margin: 5px auto;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.1);
+            cursor: grab;
+        }
+
+        canvas:active {
+            cursor: grabbing;
+        }
+
+
+        .xy-plot-canvas {
+            width: 100%;
+            max-width: 600px;
+            height: 350px;
+            margin: 10px auto;
+        }
+
+
+        .controls,
+        .beam-selector-controls,
+        .mode-controls,
+        .speed-limit-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .speed-limit-controls>div {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+
+
+        .controls button,
+        .beam-selector-controls button,
+        .mode-controls button,
+        .speed-limit-controls button,
+        .xy-plot-container button {
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+            margin-top: 5px;
+        }
+
+        .controls button:hover,
+        .beam-selector-controls button:hover,
+        .mode-controls button:hover,
+        .speed-limit-controls button:hover,
+        .xy-plot-container button:hover {
+            background-color: #2980b9;
+        }
+
+        .mode-controls button.active-mode {
+            background-color: #27ae60;
+        }
+
+        .mode-controls label {
+            font-size: 0.85em;
+            vertical-align: middle;
+        }
+
+        .mode-controls input[type="checkbox"] {
+            vertical-align: middle;
+            width: 15px;
+            height: 15px;
+        }
+
+        .speed-limit-controls label {
+            font-size: 0.8em;
+            margin-right: 3px;
+            white-space: nowrap;
+        }
+
+        .speed-limit-controls input[type="number"] {
+            width: 60px;
+            padding: 6px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 0.85em;
+        }
+
+        .beam-selector-controls select {
+            padding: 8px;
+            font-size: 14px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .param-display {
+            margin-top: 10px;
+            font-size: 1em;
+            line-height: 1.5;
+        }
+
+        .param-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px dashed #eee;
+        }
+
+        .param-item:last-child {
+            border-bottom: none;
+        }
+
+        .notes {
+            background-color: #eaf6ff;
+            border-left: 5px solid #3498db;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .notes h3 {
+            margin-top: 0;
+            color: #2980b9;
+        }
+
+        .file-input-section {
+            width: 100%;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #fdfdfd;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+        }
+
+        .file-input-section input[type="file"] {
+            margin-right: 8px;
+            margin-bottom: 4px;
+        }
+
+        .radial-plot-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            gap: 8px;
+        }
+
+        .radial-plot-container {
+            width: calc(33.333% - 10px);
+            min-width: 230px;
+            text-align: center;
+            box-sizing: border-box;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+
+
+        .radial-plot-container h3 {
+            margin-top: 3px;
+            margin-bottom: 3px;
+            font-size: 0.9em;
+            color: #555;
+        }
+
+        .xy-time-plots-section h2 {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .xy-time-plot-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            gap: 15px;
+        }
+
+        .xy-time-plot-container {
+            width: 100%;
+            max-width: 620px;
+            box-sizing: border-box;
+            padding: 5px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            background-color: #fdfdfd;
+            text-align: center;
+        }
+
+
+        .data-input-group {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .data-input-group:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .data-input-group h3 {
+            margin-bottom: 8px;
+        }
+
+
+        .slider-controls {
+            width: 100%;
+            margin-top: 15px;
+            padding: 8px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .slider-controls label {
+            margin-right: 8px;
+            font-size: 0.85em;
+        }
+
+        .slider-controls input[type="range"] {
+            width: 65%;
+            max-width: 450px;
+            cursor: pointer;
+        }
+
+        #dicomDropZone {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            color: #888;
+            font-size: 1em;
+            margin-top: 8px;
+            background-color: #f9f9f9;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+
+        #dicomDropZone.dragover {
+            background-color: #e9e9e9;
+            border-color: #aaa;
+        }
+
+        @media (max-width: 1000px) {
+            .radial-plot-container {
+                width: calc(50% - 10px);
+            }
+        }
+
+        @media (max-width: 520px) {
+            .radial-plot-container {
+                width: 100%;
+                min-width: 220px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="author-info-header">
+            <p><strong>Author:</strong> Taoran Li, PhD</p>
+            <p><strong>Contact:</strong> taoran.li@varian.com</p>
+            <p><strong>Version:</strong> 3.14.3 (Metrics with Collimator)</p>
+            <p><strong>Date:</strong> June 10, 2025</p>
+            <p><strong>Rights & Disclaimer:</strong> © 2025 Taoran Li. All rights reserved. This software is provided
+                "as is" for educational and research purposes only. It is not intended for clinical use, patient
+                diagnosis, or treatment planning. The accuracy of simulations and any derived data is not guaranteed.
+                The user assumes all responsibility for the use of this software.</p>
+        </div>
+
+        <h1>DICOM RT Plan Delivery Simulator (NOT For Clinical Use)</h1>
+        <div class="notes">
+            <h3>Important Information:</h3>
+            <p style="color:red;">
+                For Educational and Research Purpose Only. Not For Clinical Use. Estimated Time Not Guaranteed to Match
+                Actual Delivery Time.
+            </p>
+            <p>
+                <strong>Step 1: Load your DICOM RT Plan (<code>.dcm</code>) file.</strong>
+            <ul>
+                <li>Drag and drop your file onto the designated area below.</li>
+                <li>Alternatively, use the "Choose File" button.</li>
+            </ul>
+            </p>
+            <p>
+                <strong>Step 2: Configure Simulation (Optional).</strong>
+                Adjust the machine speed and acceleration limits below if you want to customize the
+                "Simulate Delivery" mode. Default speeds may adjust based on the loaded plan's machine type.
+            </p>
+            <p>
+                <strong>Step 3: Select a Beam (if multiple exist).</strong>
+                Use the dropdown menu that appears above the BEV to select the beam you wish to visualize.
+                Overall plan info shows overall MCSv (now includes collimator factor) for each beam (calculated
+                segmentally).
+            </p>
+            <p>
+                <strong>Step 4: Choose Playback Mode & Interact.</strong>
+            <ul>
+                <li>Use the "Simulate Delivery" / "Use Fixed Speed Animation" button to toggle playback modes.</li>
+                <li>Enable "Beep per MU" for audible feedback during simulation (max 20 beeps/sec).</li>
+                <li>Move your mouse cursor over the Radial Plots or use the slider to scrub through control
+                    points. The "MIsport" plot and "Local MIt" plot (now include collimator factors) use a rolling
+                    window. Both visually exclude the first and last CPs of the beam.
+                </li>
+                <li>XY plots for Speed/Acceleration vs. Time will appear below when "Simulate Delivery" mode is active
+                    and a plan is loaded. Use mouse wheel to zoom (Shift+Wheel for X-axis, Ctrl+Wheel for Y-axis) and
+                    click-drag to pan these plots.</li>
+            </ul>
+            </p>
+        </div>
+
+        <div class="file-input-section">
+            <h2>Load RT Plan Data & Configure Simulation Parameters</h2>
+            <button id="clearAllBtn" style="background-color: #e74c3c; float: right;">Clear All Data &
+                Visuals</button>
+
+            <div class="data-input-group">
+                <h3>Load from DICOM (.dcm) File</h3>
+                <div id="dicomDropZone">Drag & Drop your DICOM RT Plan (.dcm) file here
+                    <br> or <br>
+                    <input type="file" id="dicomFileInput" accept=".dcm,application/dicom">
+                </div>
+            </div>
+
+            <div class="data-input-group speed-limit-controls">
+                <h3>Machine Speed & Acceleration Limits (for Simulation)</h3>
+                <div>
+                    <label for="maxGantrySpeedInput">Max Gantry Speed (°/s):</label>
+                    <input type="number" id="maxGantrySpeedInput" value="6" step="0.1">
+                </div>
+                <div>
+                    <label for="maxGantryAccelDecelInput">Max Gantry Accel/Decel (°/s²):</label>
+                    <input type="number" id="maxGantryAccelDecelInput" value="12" step="0.1">
+                </div>
+                <div>
+                    <label for="maxMlcSpeedInput">Max MLC Speed (cm/s):</label>
+                    <input type="number" id="maxMlcSpeedInput" value="2.25" step="0.1">
+                </div>
+                <div>
+                    <label for="maxMlcAccelDecelInput">Max MLC Accel/Decel (cm/s²):</label>
+                    <input type="number" id="maxMlcAccelDecelInput" value="10" step="0.1">
+                </div>
+                <div>
+                    <label for="maxCollimatorSpeedInput">Max Coll Speed (°/s):</label>
+                    <input type="number" id="maxCollimatorSpeedInput" value="9" step="0.1">
+                </div>
+                <div> <label for="maxCollimatorAccelDecelInput">Max Coll Accel/Decel (°/s²):</label>
+                    <input type="number" id="maxCollimatorAccelDecelInput" value="10" step="0.1">
+                </div>
+                <div> <label for="maxJawSpeedInput">Max Jaw Speed (cm/s):</label>
+                    <input type="number" id="maxJawSpeedInput" value="2.0" step="0.1">
+                </div>
+                <div> <label for="maxJawAccelDecelInput">Max Jaw Accel/Decel (cm/s²):</label>
+                    <input type="number" id="maxJawAccelDecelInput" value="8.0" step="0.1">
+                </div>
+                <button id="applySpeedLimitsBtn">Apply & Recalculate Simulation</button>
+            </div>
+        </div>
+
+        <div class="plan-info-header" id="overallPlanInfoContainer" style="display:none;">
+            <h3>Overall Plan Information</h3>
+            <p><strong>Patient Name:</strong> <span id="planPatientName">N/A</span></p>
+            <p><strong>Patient ID:</strong> <span id="planPatientID">N/A</span></p>
+            <p><strong>Plan Label:</strong> <span id="planLabel">N/A</span></p>
+            <p><strong>Total Beams in Plan:</strong> <span id="planTotalBeams">N/A</span></p>
+            <p><strong>Total Plan MU:</strong> <span id="planTotalMU">N/A</span></p>
+            <p><strong>Primary Dose Rate (First Beam, CP0):</strong> <span id="planDoseRate">N/A</span> MU/min</p>
+            <div id="individualBeamInfoContainer">
+            </div>
+        </div>
+
+
+        <div class="mode-controls">
+            <button id="toggleSimulationBtn">Simulate Delivery</button>
+            <span style="margin-left: 20px;">
+                <input type="checkbox" id="beepPerMUToggle" style="vertical-align: middle;">
+                <label for="beepPerMUToggle" style="vertical-align: middle;">Beep per MU (Sim Mode)</label>
+            </span>
+        </div>
+
+        <div class="beam-selector-controls" id="beamSelectorContainer" style="display:none;">
+            <label for="beamSelector">Select Beam:</label>
+            <select id="beamSelector"></select>
+        </div>
+
+        <div class="visualization-section">
+            <h2>Beam's Eye View (BEV)</h2>
+            <canvas id="bevCanvas" width="400" height="400"></canvas>
+            <div class="controls">
+                <button id="playPauseBtn">Play</button>
+                <button id="resetBtn">Reset</button>
+            </div>
+            <div class="param-display">
+                <h3>Current Control Point: <span id="currentCPIndex">0</span> / <span id="totalCPs">0</span></h3>
+                <div class="param-item"><strong>Gantry Angle:</strong> <span id="gantryAngle">N/A</span>°</div>
+                <div class="param-item"><strong>Collimator Angle:</strong> <span id="collimatorAngle">N/A</span>°</div>
+                <div class="param-item" id="simTimeDisplay" style="display:none;"><strong>Simulated Time
+                        Elapsed:</strong> <span id="simTimeElapsed">0.00</span> s</div>
+                <div class="param-item" id="totalSimTimeDisplay" style="display:none;">
+                    <strong>Est. Total Beam Time:</strong>
+                    <span id="totalSimTime">0.00</span> s
+                </div>
+                <p style="color: red; font-size: 0.8em; margin-left: 10px;">(For Illustrative Purpose Only, Not
+                    Representative of Actual Delivery)</p>
+            </div>
+        </div>
+
+        <div class="visualization-section">
+            <h2>Parameter Distribution (Static Radial Plots)</h2>
+            <p style="text-align:center; font-size:0.9em; color:#555;">(Move mouse over plots to scrub through control
+                points)</p>
+            <div class="radial-plot-grid">
+                <div class="radial-plot-container">
+                    <h3>Gantry Speed</h3>
+                    <canvas id="gantrySpeedCanvas" width="220" height="220"></canvas>
+                </div>
+                <div class="radial-plot-container">
+                    <h3>Max MLC Speed</h3>
+                    <canvas id="mlcSpeedCanvas" width="220" height="220"></canvas>
+                </div>
+                <div class="radial-plot-container">
+                    <h3>Collimator Speed</h3>
+                    <canvas id="collimatorSpeedCanvas" width="220" height="220"></canvas>
+                </div>
+                <div class="radial-plot-container">
+                    <h3>Dose Rate</h3>
+                    <canvas id="doseRateCanvas" width="220" height="220"></canvas>
+                </div>
+                <div class="radial-plot-container">
+                    <h3>MIsport</h3>
+                    <canvas id="miCanvas" width="220" height="220"></canvas>
+                </div>
+                <div class="radial-plot-container">
+                    <h3>Local MIt</h3> <canvas id="localMItCanvas" width="220" height="220"></canvas>
+                </div>
+            </div>
+            <div class="slider-controls">
+                <label for="cpSlider">Control Point Selector:</label>
+                <input type="range" id="cpSlider" min="0" max="0" value="0">
+            </div>
+            <div class="param-display">
+                <h3>Calculated Values (Current CP):</h3>
+                <div class="param-item"><strong>Gantry Speed:</strong> <span id="gantrySpeedVal">N/A</span></div>
+                <div class="param-item"><strong>Fastest MLC Speed:</strong> <span id="mlcSpeedVal">N/A</span></div>
+                <div class="param-item"><strong>Collimator Speed:</strong> <span id="collimatorSpeedVal">N/A</span>
+                </div>
+                <div class="param-item"><strong>Fastest Jaw X Speed:</strong> <span id="jawXSpeedVal">N/A</span></div>
+                <div class="param-item"><strong>Fastest Jaw Y Speed:</strong> <span id="jawYSpeedVal">N/A</span></div>
+                <div class="param-item"><strong>Dose Rate (Estimated):</strong> <span id="doseRateVal">N/A</span></div>
+                <div class="param-item"><strong>Local MIt:</strong> <span id="localMItVal">N/A</span></div>
+                <div class="param-item"><strong>MIsport:</strong> <span id="miValSpan">N/A</span></div>
+            </div>
+        </div>
+
+        <div class="visualization-section xy-time-plots-section" id="xyTimePlotsContainer" style="display:none;">
+            <h2>Device Metrics vs. Time (Simulation Mode Only)</h2>
+            <div class="xy-time-plot-grid">
+                <div class="xy-time-plot-container">
+                    <canvas id="gantryMetricsCanvas" class="xy-plot-canvas"></canvas>
+                    <button class="reset-view-btn" data-plot-id="gantryMetrics">Reset View</button>
+                </div>
+                <div class="xy-time-plot-container">
+                    <canvas id="mlcMetricsCanvas" class="xy-plot-canvas"></canvas>
+                    <button class="reset-view-btn" data-plot-id="mlcMetrics">Reset View</button>
+                </div>
+                <div class="xy-time-plot-container">
+                    <canvas id="collimatorMetricsCanvas" class="xy-plot-canvas"></canvas>
+                    <button class="reset-view-btn" data-plot-id="collimatorMetrics">Reset View</button>
+                </div>
+                <div class="xy-time-plot-container">
+                    <canvas id="doseRateTimeCanvas" class="xy-plot-canvas"></canvas>
+                    <button class="reset-view-btn" data-plot-id="doseRateTime">Reset View</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log("DEBUG: DOMContentLoaded event fired. Initializing script.");
+            // Global variables for application state
+            let rtPlanData = null;
+            let selectedBeamIndex = 0;
+            let currentCP = 0;
+            let animationFrameId = null;
+            let isPlaying = false;
+            let isSimulatingDelivery = false;
+            let beepPerMUEnabled = false;
+            let muBeepSynth = null;
+            let totalMuDeliveredForBeeps_currentBeam = 0;
+            let processedData = [];
+            let lastAnimatedCP = 0;
+
+            // DOM Element references
+            const bevCanvas = document.getElementById('bevCanvas');
+            let bevCtx = null;
+            if (bevCanvas) {
+                bevCtx = bevCanvas.getContext('2d');
+            } else {
+                console.error("DEBUG ERROR: bevCanvas element not found!");
+            }
+
+            const overallPlanInfoContainer = document.getElementById('overallPlanInfoContainer');
+            const planPatientNameSpan = document.getElementById('planPatientName');
+            const planPatientIDSpan = document.getElementById('planPatientID');
+            const planLabelSpan = document.getElementById('planLabel');
+            const planTotalBeamsSpan = document.getElementById('planTotalBeams');
+            const planTotalMUSpan = document.getElementById('planTotalMU');
+            const planDoseRateSpan = document.getElementById('planDoseRate');
+            const individualBeamInfoContainer = document.getElementById('individualBeamInfoContainer');
+
+
+            const gantrySpeedCanvasElem = document.getElementById('gantrySpeedCanvas');
+            const mlcSpeedCanvasElem = document.getElementById('mlcSpeedCanvas');
+            const collimatorSpeedCanvasElem = document.getElementById('collimatorSpeedCanvas');
+            const doseRateCanvasElem = document.getElementById('doseRateCanvas');
+            const localMItCanvasElem = document.getElementById('localMItCanvas');
+            const miCanvasElem = document.getElementById('miCanvas');
+
+            const radialCanvases = {
+                gantrySpeed: gantrySpeedCanvasElem,
+                mlcSpeed: mlcSpeedCanvasElem,
+                collimatorSpeed: collimatorSpeedCanvasElem,
+                doseRate: doseRateCanvasElem,
+                localMIt: localMItCanvasElem,
+                mi: miCanvasElem
+            };
+
+            const radialContexts = {
+                gantrySpeed: gantrySpeedCanvasElem ? gantrySpeedCanvasElem.getContext('2d') : null,
+                mlcSpeed: mlcSpeedCanvasElem ? mlcSpeedCanvasElem.getContext('2d') : null,
+                collimatorSpeed: collimatorSpeedCanvasElem ? collimatorSpeedCanvasElem.getContext('2d') : null,
+                doseRate: doseRateCanvasElem ? doseRateCanvasElem.getContext('2d') : null,
+                localMIt: localMItCanvasElem ? localMItCanvasElem.getContext('2d') : null,
+                mi: miCanvasElem ? miCanvasElem.getContext('2d') : null
+            };
+
+            const xyTimePlotsContainer = document.getElementById('xyTimePlotsContainer');
+            const gantryMetricsCanvasElem = document.getElementById('gantryMetricsCanvas');
+            const mlcMetricsCanvasElem = document.getElementById('mlcMetricsCanvas');
+            const collimatorMetricsCanvasElem = document.getElementById('collimatorMetricsCanvas');
+            const doseRateTimeCanvasElem = document.getElementById('doseRateTimeCanvas');
+
+            const xyTimeContexts = {
+                gantryMetrics: gantryMetricsCanvasElem ? gantryMetricsCanvasElem.getContext('2d') : null,
+                mlcMetrics: mlcMetricsCanvasElem ? mlcMetricsCanvasElem.getContext('2d') : null,
+                collimatorMetrics: collimatorMetricsCanvasElem ? collimatorMetricsCanvasElem.getContext('2d') : null,
+                doseRateTime: doseRateTimeCanvasElem ? doseRateTimeCanvasElem.getContext('2d') : null
+            };
+
+            const xyPlotStates = {
+                gantryMetrics: { panX: 0, panY: 0, zoomLevelX: 1, zoomLevelY: 1, isPanning: false, lastMouseX: 0, lastMouseY: 0 },
+                mlcMetrics: { panX: 0, panY: 0, zoomLevelX: 1, zoomLevelY: 1, isPanning: false, lastMouseX: 0, lastMouseY: 0 },
+                collimatorMetrics: { panX: 0, panY: 0, zoomLevelX: 1, zoomLevelY: 1, isPanning: false, lastMouseX: 0, lastMouseY: 0 },
+                doseRateTime: { panX: 0, panY: 0, zoomLevelX: 1, zoomLevelY: 1, isPanning: false, lastMouseX: 0, lastMouseY: 0 }
+            };
+
+
+            for (const key in radialCanvases) {
+                if (!radialCanvases[key]) {
+                    console.error(`DEBUG ERROR: Radial canvas element with ID "${key}Canvas" not found!`);
+                } else if (!radialContexts[key]) {
+                    console.error(`DEBUG ERROR: Failed to get 2D context for radial canvas "${key}Canvas"!`);
+                }
+            }
+            for (const key in xyTimeContexts) {
+                if (!xyTimeContexts[key]) {
+                    console.error(`DEBUG ERROR: XY Time Plot canvas context for "${key}" not found! Check canvas ID.`);
+                }
+            }
+
+
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const toggleSimulationBtn = document.getElementById('toggleSimulationBtn');
+            const beepPerMUToggle = document.getElementById('beepPerMUToggle');
+            const currentCPIndexSpan = document.getElementById('currentCPIndex');
+            const totalCPsSpan = document.getElementById('totalCPs');
+            const gantryAngleSpan = document.getElementById('gantryAngle');
+            const collimatorAngleSpan = document.getElementById('collimatorAngle');
+            const cpSlider = document.getElementById('cpSlider');
+            const beamSelector = document.getElementById('beamSelector');
+            const beamSelectorContainer = document.getElementById('beamSelectorContainer');
+            const simTimeDisplay = document.getElementById('simTimeDisplay');
+            const simTimeElapsedSpan = document.getElementById('simTimeElapsed');
+            const totalSimTimeDisplay = document.getElementById('totalSimTimeDisplay');
+            const totalSimTimeSpan = document.getElementById('totalSimTime');
+            const gantrySpeedValSpan = document.getElementById('gantrySpeedVal');
+            const mlcSpeedValSpan = document.getElementById('mlcSpeedVal');
+            const collimatorSpeedValSpan = document.getElementById('collimatorSpeedVal');
+            const jawXSpeedValSpan = document.getElementById('jawXSpeedVal');
+            const jawYSpeedValSpan = document.getElementById('jawYSpeedVal');
+            const doseRateValSpan = document.getElementById('doseRateVal');
+            const localMItValSpan = document.getElementById('localMItVal');
+            const miValSpan = document.getElementById('miValSpan');
+            const dicomDropZone = document.getElementById('dicomDropZone');
+            const dicomFileInput = document.getElementById('dicomFileInput');
+
+            const maxGantrySpeedInput = document.getElementById('maxGantrySpeedInput');
+            const maxGantryAccelDecelInput = document.getElementById('maxGantryAccelDecelInput');
+            const maxMlcSpeedInput = document.getElementById('maxMlcSpeedInput');
+            const maxMlcAccelDecelInput = document.getElementById('maxMlcAccelDecelInput');
+            const maxCollimatorSpeedInput = document.getElementById('maxCollimatorSpeedInput');
+            const maxCollimatorAccelDecelInput = document.getElementById('maxCollimatorAccelDecelInput');
+            const maxJawSpeedInput = document.getElementById('maxJawSpeedInput');
+            const maxJawAccelDecelInput = document.getElementById('maxJawAccelDecelInput');
+
+            const applySpeedLimitsBtn = document.getElementById('applySpeedLimitsBtn');
+            const clearAllBtn = document.getElementById('clearAllBtn');
+
+
+            const FIXED_ANIMATION_SPEED_MS = 100;
+            let DEFAULT_MAX_GANTRY_SPEED_DEGPS = 6;
+            let DEFAULT_MAX_MLC_SPEED_CMPS = 2.25;
+            const DEFAULT_MAX_COLLIMATOR_SPEED_DEGPS = 9;
+            const DEFAULT_MAX_GANTRY_ACCEL_DECEL_DEGPSS = 12;
+            const DEFAULT_MAX_MLC_ACCEL_DECEL_CMPS2 = 10;
+            const DEFAULT_MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS = 10.0;
+            const DEFAULT_MAX_JAW_SPEED_CMPS = 2.5;
+            const DEFAULT_MAX_JAW_ACCEL_DECEL_CMPS2 = 8.0;
+
+            const MAX_BEEPS_PER_SECOND = 20;
+            const ACCEL_CHECK_FACTOR = 1.0;
+            const MI_SPORT_K_NEIGHBORS = 5;
+            const MI_GANTRY_DIFF_EPSILON = 0.001;
+
+            const K_MCS_COLL = 0.002; // New constant for MCS collimator factor
+            const K_MISPORT_COLL = 0.001; // New constant for MIsport collimator factor
+
+            // Constants for Local MIt calculation
+            const LOCAL_MIT_K_NEIGHBORS = 5;
+            const MIT_ALPHA = 1.5;
+            const MIT_BETA = 1.5;
+            const MIT_GAMMA = 0.1;
+
+
+            let currentMaxGantrySpeed = DEFAULT_MAX_GANTRY_SPEED_DEGPS;
+            let currentMaxMlcSpeedMMPS = DEFAULT_MAX_MLC_SPEED_CMPS * 10;
+            let currentMaxCollimatorSpeed = DEFAULT_MAX_COLLIMATOR_SPEED_DEGPS;
+            let currentMaxGantryAccelDecel = DEFAULT_MAX_GANTRY_ACCEL_DECEL_DEGPSS;
+            let currentMaxMlcAccelDecelMMPS2 = DEFAULT_MAX_MLC_ACCEL_DECEL_CMPS2 * 10;
+            let currentMaxCollimatorAccelDecel = DEFAULT_MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS;
+            let currentMaxJawSpeedMMPS = DEFAULT_MAX_JAW_SPEED_CMPS * 10;
+            let currentMaxJawAccelDecelMMPS2 = DEFAULT_MAX_JAW_ACCEL_DECEL_CMPS2 * 10;
+
+            let maxGantrySpeedOverall = 0;
+            let maxMlcSpeedOverall = 0;
+            let maxCollimatorSpeedOverall = 0;
+            let maxJawXSpeedOverall = 0;
+            let maxJawYSpeedOverall = 0;
+            let maxDoseRateOverall = 0;
+            let maxModulationIndexOverall = 0;
+            let maxLocalMItFactorOverall = 0;
+
+            if (clearAllBtn) {
+                clearAllBtn.addEventListener('click', clearAll);
+            } else {
+                console.error("DEBUG ERROR: clearAllBtn element not found! Cannot attach event listener.");
+            }
+
+            dicomDropZone.addEventListener('dragover', (event) => { event.preventDefault(); dicomDropZone.classList.add('dragover'); });
+            dicomDropZone.addEventListener('dragleave', () => { dicomDropZone.classList.remove('dragover'); });
+            dicomDropZone.addEventListener('drop', (event) => { event.preventDefault(); dicomDropZone.classList.remove('dragover'); const files = event.dataTransfer.files; if (files.length > 0) { handleDicomFile(files[0]); } });
+            dicomFileInput.addEventListener('change', (event) => { const files = event.target.files; if (files.length > 0) { handleDicomFile(files[0]); } });
+
+            function getDicomElementValue(dataSet, tagName, defaultValue = null) {
+                if (dataSet && dataSet[tagName] !== undefined) {
+                    if (Array.isArray(dataSet[tagName]) && dataSet[tagName].length === 1 && typeof dataSet[tagName][0] !== 'object') {
+                        return dataSet[tagName][0];
+                    }
+                    return dataSet[tagName];
+                }
+                return defaultValue;
+            }
+
+            function handleDicomFile(file) {
+                console.log("DEBUG: handleDicomFile called with file:", file.name);
+                if (!file.name.toLowerCase().endsWith('.dcm')) { showMessageModal("File Type Error", "Please select a DICOM (.dcm) file."); return; }
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    console.log("DEBUG: FileReader onload event.");
+                    try {
+                        if (!muBeepSynth && typeof Tone !== 'undefined' && Tone.Synth) {
+                            muBeepSynth = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.0, release: 0.1 } }).toDestination();
+                            console.log("DEBUG: muBeepSynth initialized.");
+                        } else if (muBeepSynth) {
+                            console.log("DEBUG: muBeepSynth already initialized.");
+                        } else {
+                            console.warn("DEBUG: Tone.js or Tone.Synth not available for synth initialization.");
+                        }
+
+                        const arrayBuffer = e.target.result;
+                        if (typeof dcmjs === 'undefined' || !dcmjs.data || !dcmjs.data.DicomMessage || !dcmjs.data.DicomMetaDictionary) { console.error("DEBUG ERROR: dcmjs library is not correctly loaded!"); showMessageModal("Library Error", "Error: dcmjs library not loaded. Cannot parse DICOM file."); clearAll(); return; }
+                        console.log("DEBUG: Attempting to parse DICOM file with dcmjs...");
+                        const dicomDict = dcmjs.data.DicomMessage.readFile(arrayBuffer);
+                        console.log("DEBUG: DICOM file read, naturalizing dataset...");
+                        const naturalizedDataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomDict.dict);
+                        console.log("DEBUG: Dataset naturalized, parsing RT Plan data...");
+                        rtPlanData = parseRtPlanDicom(naturalizedDataset, dicomDict.meta);
+
+                        console.log("DEBUG: rtPlanData parsed:", rtPlanData ? `Success (TopLevelManufModel: '${rtPlanData.manufacturerModelName}', SpeedDefaultID: '${rtPlanData.machineIdentifierForSpeeds}')` : "Failed or empty");
+
+                        if (rtPlanData && rtPlanData.beams && rtPlanData.beams.length > 0) {
+                            updateOverallPlanInfoDisplay(rtPlanData);
+                            setMachineSpecificDefaults(rtPlanData.machineIdentifierForSpeeds);
+                            populateBeamSelector();
+                            selectedBeamIndex = 0; beamSelector.value = selectedBeamIndex;
+                            console.log("DEBUG: Calling initVisualizationForSelectedBeam from handleDicomFile.");
+                            initVisualizationForSelectedBeam();
+                        } else {
+                            showMessageModal("Parsing Error", "Failed to parse DICOM RT Plan or no valid beams found.");
+                            setMachineSpecificDefaults("");
+                            clearAll();
+                        }
+                    } catch (error) {
+                        console.error("DEBUG ERROR: Error parsing DICOM file:", error);
+                        showMessageModal("Parsing Error", `Error parsing DICOM file: ${error.message}. Check console. Ensure valid DICOM RT Plan.`);
+                        setMachineSpecificDefaults("");
+                        clearAll();
+                    }
+                };
+                reader.onerror = function (e) {
+                    console.error("DEBUG ERROR: Error reading file:", e);
+                    showMessageModal("File Read Error", "Error reading the DICOM file.");
+                    setMachineSpecificDefaults("");
+                    clearAll();
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            function parseRtPlanDicom(dataSet, metaSet) {
+                if (!dataSet) { showMessageModal("DICOM Error", "DICOM dataset is empty."); return null; }
+                const rtPlan = {
+                    patientName: getDicomElementValue(dataSet, 'PatientName', 'N/A'),
+                    patientID: getDicomElementValue(dataSet, 'PatientID', 'N/A'),
+                    rtPlanLabel: getDicomElementValue(dataSet, 'RTPlanLabel', 'N/A'),
+                    totalPlanMU: 0,
+                    primaryDoseRate: 'N/A',
+                    beams: [],
+                    manufacturerModelName: getDicomElementValue(dataSet, 'ManufacturerModelName', ''),
+                    machineIdentifierForSpeeds: ''
+                };
+
+                const beamSeq = getDicomElementValue(dataSet, 'BeamSequence', []);
+                if (!beamSeq || beamSeq.length === 0) { showMessageModal("DICOM Error", "BeamSequence not found in DICOM file."); return null; }
+
+                console.log("DEBUG DICOM Parse: Top-level ManufacturerModelName (0008,1090):", rtPlan.manufacturerModelName);
+
+                if (beamSeq[0]) {
+                    rtPlan.machineIdentifierForSpeeds = getDicomElementValue(beamSeq[0], 'ManufacturerModelName', '');
+                    const firstBeamCPSeq = getDicomElementValue(beamSeq[0], 'ControlPointSequence', []);
+                    if (firstBeamCPSeq && firstBeamCPSeq.length > 0 && firstBeamCPSeq[0]) {
+                        const drs = getDicomElementValue(firstBeamCPSeq[0], 'DoseRateSet');
+                        if (drs !== null) rtPlan.primaryDoseRate = parseFloat(drs);
+                    }
+                }
+                console.log("DEBUG DICOM Parse: Identifier for speeds (from 1st beam's 0008,1090 Tag):", rtPlan.machineIdentifierForSpeeds);
+
+                const fracs = getDicomElementValue(dataSet, 'FractionGroupSequence', []);
+                let refBeams = {};
+                if (fracs.length > 0 && fracs[0] && fracs[0].ReferencedBeamSequence) {
+                    getDicomElementValue(fracs[0], 'ReferencedBeamSequence', []).forEach(rb => {
+                        const num = getDicomElementValue(rb, 'ReferencedBeamNumber');
+                        const mu = getDicomElementValue(rb, 'BeamMeterset');
+                        if (num != null && mu != null) refBeams[num.toString()] = parseFloat(mu);
+                    });
+                }
+
+                let calculatedTotalPlanMU = 0;
+
+                beamSeq.forEach((bi, bidx) => {
+                    const beam = { controlPoints: [], mlcDefinitions: [], sectorizedMCS: [] };
+                    const beamSpecificManufacturerModelName = getDicomElementValue(bi, 'ManufacturerModelName', '');
+
+                    if (beamSpecificManufacturerModelName) {
+                        beam.isRDSMachine = beamSpecificManufacturerModelName.toUpperCase().includes("RDS");
+                    } else if (rtPlan.manufacturerModelName) {
+                        beam.isRDSMachine = rtPlan.manufacturerModelName.toUpperCase().includes("RDS");
+                    } else {
+                        beam.isRDSMachine = false;
+                    }
+
+                    beam.beamNumber = getDicomElementValue(bi, 'BeamNumber', (bidx + 1).toString());
+                    let explicitBeamName = getDicomElementValue(bi, 'BeamName');
+                    if (explicitBeamName) {
+                        beam.beamName = explicitBeamName;
+                    } else {
+                        beam.beamName = getDicomElementValue(bi, 'TreatmentMachineName', `Beam ${beam.beamNumber}`);
+                    }
+                    beam.totalMeterset = refBeams[beam.beamNumber.toString()] ||
+                        parseFloat(getDicomElementValue(bi, 'FinalCumulativeMetersetWeight', 0.0)) ||
+                        parseFloat(getDicomElementValue(bi, 'BeamMeterset', 0.0));
+
+                    calculatedTotalPlanMU += beam.totalMeterset;
+
+                    beam.gantryRotationDirection = getDicomElementValue(bi, 'GantryRotationDirection', "NONE");
+
+                    const bldSeq = getDicomElementValue(bi, 'BeamLimitingDeviceSequence', []);
+                    if (bldSeq && bldSeq.length > 0) {
+                        bldSeq.forEach(bldi => {
+                            const type = getDicomElementValue(bldi, 'RTBeamLimitingDeviceType');
+                            if (type && (type.toUpperCase() === "MLCX" || type.toUpperCase().startsWith("MLCX"))) {
+                                const btext = getDicomElementValue(bldi, 'LeafPositionBoundaries');
+                                let bounds = null;
+                                if (btext) {
+                                    if (Array.isArray(btext)) bounds = btext.map(v => parseFloat(v));
+                                    else if (typeof btext === 'string') bounds = btext.replace(/^\[|\]$/g, '').split(/\\|,/).map(v => parseFloat(v.trim()));
+                                }
+                                if (bounds) beam.mlcDefinitions.push({ type: type.toUpperCase(), boundaries: bounds });
+                            }
+                        });
+                    }
+
+                    const cpSeq = getDicomElementValue(bi, 'ControlPointSequence', []);
+                    if (!cpSeq || cpSeq.length === 0) {
+                        console.warn(`DEBUG: Beam ${beam.beamNumber} ('${beam.beamName}') has no CPs. Skipping this beam.`);
+                        return;
+                    }
+
+                    let lastGA = 0, lastCA = 0, lastCMW = 0, lastDRS = null;
+                    cpSeq.forEach((cpi, cidx) => {
+                        const cp = {};
+                        cp.controlPointIndex = cidx;
+                        let ga = getDicomElementValue(cpi, 'GantryAngle'); cp.gantryAngle = parseFloat(ga == null ? (cidx > 0 ? lastGA : 0) : ga); lastGA = cp.gantryAngle;
+                        let ca = getDicomElementValue(cpi, 'BeamLimitingDeviceAngle'); cp.collimatorAngle = parseFloat(ca == null ? (cidx > 0 ? lastCA : 0) : ca); lastCA = cp.collimatorAngle;
+                        let cmw = getDicomElementValue(cpi, 'CumulativeMetersetWeight'); cp.cumulativeMetersetWeight = parseFloat(cmw == null ? (cidx > 0 ? lastCMW : 0) : cmw); lastCMW = cp.cumulativeMetersetWeight;
+                        const cpdur = getDicomElementValue(cpi, 'ControlPointDeliveryDuration'); if (cpdur != null) cp.controlPointDeliveryDuration = parseFloat(cpdur);
+                        let drs = getDicomElementValue(cpi, 'DoseRateSet'); cp.doseRateSet = drs == null ? (cidx > 0 ? lastDRS : null) : parseFloat(drs); lastDRS = cp.doseRateSet;
+
+                        cp.mlcPositionData = []; cp.asymx = null; cp.asymy = null;
+                        getDicomElementValue(cpi, 'BeamLimitingDevicePositionSequence', []).forEach(bldPos => {
+                            const type = getDicomElementValue(bldPos, 'RTBeamLimitingDeviceType');
+                            let posArr = getDicomElementValue(bldPos, 'LeafJawPositions', []);
+                            if (!Array.isArray(posArr) && typeof posArr === 'string') posArr = posArr.split(/\\|,/).map(v => parseFloat(v.trim()));
+                            else if (Array.isArray(posArr)) posArr = posArr.map(v => parseFloat(v));
+                            if (posArr && posArr.length > 0) {
+                                if (type && (type.toUpperCase() === 'MLCX' || type.toUpperCase().startsWith("MLCX"))) cp.mlcPositionData.push({ type: type.toUpperCase(), positions: posArr });
+                                else if (type === 'ASYMX' && posArr.length === 2) cp.asymx = posArr;
+                                else if (type === 'ASYMY' && posArr.length === 2) cp.asymy = posArr;
+                            }
+                        });
+                        beam.controlPoints.push(cp);
+                    });
+                    if (beam.controlPoints.length > 0) { beam.gantryStartAngle = beam.controlPoints[0].gantryAngle; beam.gantryEndAngle = beam.controlPoints[beam.controlPoints.length - 1].gantryAngle; }
+                    else { beam.gantryStartAngle = 0; beam.gantryEndAngle = 0; }
+
+                    beam.mcsValue = calculateMCSForScope(beam); // For overall plan info, now includes collimator factor
+
+                    rtPlan.beams.push(beam);
+                });
+
+                rtPlan.totalPlanMU = calculatedTotalPlanMU;
+
+                rtPlan.beams = rtPlan.beams.filter(b => b.controlPoints && b.controlPoints.length > 0);
+                if (rtPlan.beams.length === 0) { showMessageModal("DICOM Error", "No valid beams with control points found in the plan."); return null; }
+
+                if (!rtPlan.machineIdentifierForSpeeds && rtPlan.manufacturerModelName) {
+                    console.log("DEBUG DICOM Parse: No (0008,1090) in first beam, using top-level ManufacturerModelName for speed defaults:", rtPlan.manufacturerModelName);
+                    rtPlan.machineIdentifierForSpeeds = rtPlan.manufacturerModelName;
+                } else if (!rtPlan.machineIdentifierForSpeeds) {
+                    console.log("DEBUG DICOM Parse: No (0008,1090) found in first beam or at top-level to determine speed defaults.");
+                }
+                return rtPlan;
+            }
+
+            function updateOverallPlanInfoDisplay(planData) {
+                if (planData) {
+                    planPatientNameSpan.textContent = planData.patientName || 'N/A';
+                    planPatientIDSpan.textContent = planData.patientID || 'N/A';
+                    planLabelSpan.textContent = planData.rtPlanLabel || 'N/A';
+                    planTotalBeamsSpan.textContent = planData.beams ? planData.beams.length : 'N/A';
+                    planTotalMUSpan.textContent = planData.totalPlanMU ? planData.totalPlanMU.toFixed(2) : 'N/A';
+                    planDoseRateSpan.textContent = (typeof planData.primaryDoseRate === 'number') ? planData.primaryDoseRate.toFixed(0) : 'N/A';
+
+                    displayIndividualBeamInfoWithMCS(planData.beams);
+
+                    if (overallPlanInfoContainer) overallPlanInfoContainer.style.display = 'block';
+                } else {
+                    planPatientNameSpan.textContent = 'N/A';
+                    planPatientIDSpan.textContent = 'N/A';
+                    planLabelSpan.textContent = 'N/A';
+                    planTotalBeamsSpan.textContent = 'N/A';
+                    planTotalMUSpan.textContent = 'N/A';
+                    planDoseRateSpan.textContent = 'N/A';
+                    individualBeamInfoContainer.innerHTML = '';
+                    if (overallPlanInfoContainer) overallPlanInfoContainer.style.display = 'none';
+                }
+            }
+
+            function displayIndividualBeamInfoWithMCS(beams) {
+                individualBeamInfoContainer.innerHTML = '<h4>Individual Beam Details:</h4><ul></ul>';
+                const ul = individualBeamInfoContainer.querySelector('ul');
+                if (beams && beams.length > 0) {
+                    beams.forEach(beam => {
+                        const li = document.createElement('li');
+                        const mcsText = (typeof beam.mcsValue === 'number') ? beam.mcsValue.toFixed(3) : 'N/A';
+                        li.innerHTML = `<strong>${beam.beamName || 'Beam ' + beam.beamNumber}:</strong> ${beam.totalMeterset.toFixed(2)} MU, ${beam.controlPoints.length} CPs, Overall MCSv (coll-adj): ${mcsText}`;
+                        ul.appendChild(li);
+                    });
+                }
+            }
+
+
+            function setMachineSpecificDefaults(machineIdentifierString) {
+                console.log("DEBUG: Setting machine specific defaults based on identifier:", machineIdentifierString);
+                let modelNameUpper = machineIdentifierString ? machineIdentifierString.toUpperCase() : "";
+
+                const BASE_DEFAULT_GANTRY_SPEED = 6;
+                const BASE_DEFAULT_MLC_SPEED = 2.25;
+
+                let newGantrySpeed = BASE_DEFAULT_GANTRY_SPEED;
+                let newMlcSpeed = BASE_DEFAULT_MLC_SPEED;
+
+                if (modelNameUpper.includes("RDS")) {
+                    newGantrySpeed = 12; newMlcSpeed = 5;
+                    console.log("DEBUG: RDS identifier found. Defaults set to Gantry: 12 °/s, MLC: 5 cm/s");
+                } else if (modelNameUpper.includes("TDS")) {
+                    newGantrySpeed = 6; newMlcSpeed = 2.25;
+                    console.log("DEBUG: TDS identifier found. Defaults set to Gantry: 6 °/s, MLC: 2.25 cm/s");
+                } else {
+                    console.log("DEBUG: Neither RDS nor TDS identifier found in ('" + machineIdentifierString + "'). Using base defaults Gantry:", BASE_DEFAULT_GANTRY_SPEED, "°/s, MLC:", BASE_DEFAULT_MLC_SPEED, "cm/s");
+                }
+
+                DEFAULT_MAX_GANTRY_SPEED_DEGPS = newGantrySpeed;
+                DEFAULT_MAX_MLC_SPEED_CMPS = newMlcSpeed;
+
+                if (maxGantrySpeedInput) maxGantrySpeedInput.value = newGantrySpeed;
+                if (maxMlcSpeedInput) maxMlcSpeedInput.value = newMlcSpeed;
+                if (maxCollimatorSpeedInput) maxCollimatorSpeedInput.value = DEFAULT_MAX_COLLIMATOR_SPEED_DEGPS;
+                if (maxGantryAccelDecelInput) maxGantryAccelDecelInput.value = DEFAULT_MAX_GANTRY_ACCEL_DECEL_DEGPSS;
+                if (maxMlcAccelDecelInput) maxMlcAccelDecelInput.value = DEFAULT_MAX_MLC_ACCEL_DECEL_CMPS2;
+                if (maxCollimatorAccelDecelInput) maxCollimatorAccelDecelInput.value = DEFAULT_MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS;
+                if (maxJawSpeedInput) maxJawSpeedInput.value = DEFAULT_MAX_JAW_SPEED_CMPS;
+                if (maxJawAccelDecelInput) maxJawAccelDecelInput.value = DEFAULT_MAX_JAW_ACCEL_DECEL_CMPS2;
+
+                updateCurrentSpeedLimits();
+            }
+
+            function populateBeamSelector() {
+                console.log("DEBUG: populateBeamSelector called.");
+                beamSelector.innerHTML = '';
+                if (rtPlanData && rtPlanData.beams && rtPlanData.beams.length > 0) {
+                    rtPlanData.beams.forEach((beam, index) => {
+                        const option = document.createElement('option');
+                        option.value = index;
+                        option.textContent = beam.beamName || `Beam ${beam.beamNumber}`;
+                        beamSelector.appendChild(option);
+                    });
+                    beamSelectorContainer.style.display = rtPlanData.beams.length > 1 ? 'flex' : 'none';
+                } else {
+                    beamSelectorContainer.style.display = 'none';
+                }
+            }
+            beamSelector.addEventListener('change', function () {
+                console.log("DEBUG: Beam selector changed.");
+                selectedBeamIndex = parseInt(this.value, 10);
+                initVisualizationForSelectedBeam();
+            });
+            function initVisualizationForSelectedBeam() {
+                console.log("DEBUG: initVisualizationForSelectedBeam called for beam index:", selectedBeamIndex);
+                if (!rtPlanData || !rtPlanData.beams || !rtPlanData.beams[selectedBeamIndex]) { showMessageModal("Data Error", "Selected beam data not found."); clearAll(); return; }
+                isPlaying = false; playPauseBtn.textContent = isSimulatingDelivery ? 'Play Simulation' : 'Play';
+                if (animationFrameId) { clearTimeout(animationFrameId); animationFrameId = null; }
+                currentCP = 0; lastAnimatedCP = 0; totalMuDeliveredForBeeps_currentBeam = 0;
+                initVisualization();
+            }
+
+            function clearAll() {
+                console.log("DEBUG: clearAll called.");
+                rtPlanData = null;
+                if (dicomFileInput) dicomFileInput.value = '';
+                currentCP = 0; lastAnimatedCP = 0; selectedBeamIndex = 0; isPlaying = false; totalMuDeliveredForBeeps_currentBeam = 0;
+
+                if (playPauseBtn) playPauseBtn.textContent = isSimulatingDelivery ? 'Play Simulation' : 'Play';
+                if (animationFrameId) { clearTimeout(animationFrameId); animationFrameId = null; }
+
+                if (bevCtx) bevCtx.clearRect(0, 0, bevCanvas.width, bevCanvas.height);
+                Object.values(radialContexts).forEach(ctx => { if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); });
+                Object.values(xyTimeContexts).forEach(ctx => { if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); });
+
+                if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'none';
+                updateOverallPlanInfoDisplay(null);
+
+
+                if (beamSelector) beamSelector.innerHTML = '';
+                if (beamSelectorContainer) beamSelectorContainer.style.display = 'none';
+
+                if (currentCPIndexSpan) currentCPIndexSpan.textContent = '0';
+                if (totalCPsSpan) totalCPsSpan.textContent = '0';
+                if (gantryAngleSpan) gantryAngleSpan.textContent = 'N/A';
+                if (collimatorAngleSpan) collimatorAngleSpan.textContent = 'N/A';
+
+                if (gantrySpeedValSpan) gantrySpeedValSpan.textContent = 'N/A';
+                if (mlcSpeedValSpan) mlcSpeedValSpan.textContent = 'N/A';
+                if (collimatorSpeedValSpan) collimatorSpeedValSpan.textContent = 'N/A';
+                if (jawXSpeedValSpan) jawXSpeedValSpan.textContent = 'N/A';
+                if (jawYSpeedValSpan) jawYSpeedValSpan.textContent = 'N/A';
+                if (doseRateValSpan) doseRateValSpan.textContent = 'N/A';
+                if (localMItValSpan) localMItValSpan.textContent = 'N/A';
+                if (miValSpan) miValSpan.textContent = 'N/A';
+
+                if (simTimeElapsedSpan) simTimeElapsedSpan.textContent = '0.00';
+                if (totalSimTimeSpan) totalSimTimeSpan.textContent = '0.00';
+                if (cpSlider) { cpSlider.max = 0; cpSlider.value = 0; }
+
+                processedData = [];
+                maxGantrySpeedOverall = 0; maxMlcSpeedOverall = 0; maxCollimatorSpeedOverall = 0; maxDoseRateOverall = 0;
+                maxJawXSpeedOverall = 0; maxJawYSpeedOverall = 0;
+                maxLocalMItFactorOverall = 0.0;
+                maxModulationIndexOverall = 0;
+
+                setMachineSpecificDefaults("");
+                updateParamDisplay();
+            }
+
+            function updateCurrentSpeedLimits() {
+                currentMaxGantrySpeed = parseFloat(maxGantrySpeedInput.value) || DEFAULT_MAX_GANTRY_SPEED_DEGPS;
+                currentMaxGantryAccelDecel = parseFloat(maxGantryAccelDecelInput.value) || DEFAULT_MAX_GANTRY_ACCEL_DECEL_DEGPSS;
+                currentMaxMlcSpeedMMPS = (parseFloat(maxMlcSpeedInput.value) || DEFAULT_MAX_MLC_SPEED_CMPS) * 10;
+                currentMaxMlcAccelDecelMMPS2 = (parseFloat(maxMlcAccelDecelInput.value) || DEFAULT_MAX_MLC_ACCEL_DECEL_CMPS2) * 10;
+                currentMaxCollimatorSpeed = parseFloat(maxCollimatorSpeedInput.value) || DEFAULT_MAX_COLLIMATOR_SPEED_DEGPS;
+                currentMaxCollimatorAccelDecel = parseFloat(maxCollimatorAccelDecelInput.value) || DEFAULT_MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS;
+                currentMaxJawSpeedMMPS = (parseFloat(maxJawSpeedInput.value) || DEFAULT_MAX_JAW_SPEED_CMPS) * 10;
+                currentMaxJawAccelDecelMMPS2 = (parseFloat(maxJawAccelDecelInput.value) || DEFAULT_MAX_JAW_ACCEL_DECEL_CMPS2) * 10;
+
+                console.log("DEBUG: Updated speed limits:", {
+                    currentMaxGantrySpeed, currentMaxGantryAccelDecel,
+                    currentMaxMlcSpeedMMPS, currentMaxMlcAccelDecelMMPS2,
+                    currentMaxCollimatorSpeed, currentMaxCollimatorAccelDecel,
+                    currentMaxJawSpeedMMPS, currentMaxJawAccelDecelMMPS2
+                });
+            }
+            applySpeedLimitsBtn.addEventListener('click', () => {
+                console.log("DEBUG: Apply Speed Limits button clicked.");
+                updateCurrentSpeedLimits();
+                if (rtPlanData && rtPlanData.beams[selectedBeamIndex]) {
+                    initVisualization();
+                    showMessageModal("Settings Applied", "Settings applied and simulation (if active) recalculated.");
+                } else {
+                    showMessageModal("Settings Updated", "Settings updated. Load a plan to see their effect.");
+                }
+            });
+
+            function calculateProfiledMoveTime(distance, maxSpeed, maxAccelDecel) {
+                if (distance <= 0.0001) return 0;
+                if (maxSpeed <= 0) return Infinity;
+                if (maxAccelDecel <= 0) {
+                    return distance / maxSpeed;
+                }
+                const timeToReachMaxSpeed = maxSpeed / maxAccelDecel;
+                const distanceCoveredInFullProfile = maxSpeed * timeToReachMaxSpeed;
+
+                if (distance <= distanceCoveredInFullProfile) {
+                    return 2 * Math.sqrt(distance / maxAccelDecel);
+                } else {
+                    return (distance / maxSpeed) + timeToReachMaxSpeed;
+                }
+            }
+
+
+            function calculateSegmentTimes(beamData, controlPoints, dataToProcess) {
+                console.log("DEBUG: calculateSegmentTimes START (Profiled Jaws/Coll, No Complexity Factor)");
+                if (!beamData || !controlPoints || controlPoints.length === 0 || !dataToProcess || dataToProcess.length !== controlPoints.length) {
+                    console.error("DEBUG ERROR: Invalid input to calculateSegmentTimes"); return 0;
+                }
+
+                dataToProcess.forEach(item => {
+                    item.timeMLC_ideal = 0; item.timeColl_ideal = 0; item.timeDose_ideal = 0;
+                    item.timeGantry_simple = 0; item.timeJawX_ideal = 0; item.timeJawY_ideal = 0;
+                    item.pass1_segmentDuration = 0;
+                    item.pass1_avgGantrySpeed = 0; item.pass1_avgMlcSpeed = 0;
+                    item.pass1_avgCollSpeed = 0; item.pass1_avgJawXSpeed = 0; item.pass1_avgJawYSpeed = 0;
+                    item.timeGantry_profiled = 0; item.timeMLC_profiled = 0;
+                    item.timeColl_profiled = 0; item.timeJawX_profiled = 0; item.timeJawY_profiled = 0;
+                    item.deltaGantryAngle = 0; item.maxLeafTravel = 0; item.deltaCollAngle = 0;
+                    item.maxSingleJawXTravel = 0; item.maxSingleJawYTravel = 0;
+                    item.deltaMUWeight = 0; item.prevCP_doseRateSet = null;
+                });
+
+                for (let k = 1; k < controlPoints.length; k++) {
+                    const currentCP = controlPoints[k];
+                    const prevCP = controlPoints[k - 1];
+                    const segmentDataStore = dataToProcess[k - 1];
+
+                    let dGA = Math.abs(currentCP.gantryAngle - prevCP.gantryAngle);
+                    if (dGA > 180) dGA = 360 - dGA;
+                    segmentDataStore.deltaGantryAngle = dGA;
+
+                    let maxLT = 0;
+                    if (beamData.mlcDefinitions && beamData.mlcDefinitions.length > 0) {
+                        beamData.mlcDefinitions.forEach((mlcDef) => {
+                            const cMLC = currentCP.mlcPositionData.find(p => p.type === mlcDef.type);
+                            const pMLC = prevCP.mlcPositionData.find(p => p.type === mlcDef.type);
+                            if (cMLC && pMLC && cMLC.positions && pMLC.positions && cMLC.positions.length === pMLC.positions.length) {
+                                let maxLTL = 0; const numLP = cMLC.positions.length / 2;
+                                for (let l = 0; l < numLP; l++) {
+                                    maxLTL = Math.max(maxLTL, Math.abs(cMLC.positions[l] - pMLC.positions[l]));
+                                    maxLTL = Math.max(maxLTL, Math.abs(cMLC.positions[l + numLP] - pMLC.positions[l + numLP]));
+                                }
+                                maxLT = Math.max(maxLT, maxLTL);
+                            }
+                        });
+                    }
+                    segmentDataStore.maxLeafTravel = maxLT;
+
+                    segmentDataStore.deltaCollAngle = Math.abs(currentCP.collimatorAngle - prevCP.collimatorAngle);
+                    if (segmentDataStore.deltaCollAngle > 180) segmentDataStore.deltaCollAngle = 360 - segmentDataStore.deltaCollAngle;
+
+                    let maxSingleJawX = 0;
+                    if (prevCP.asymx && currentCP.asymx && prevCP.asymx.length === 2 && currentCP.asymx.length === 2) {
+                        maxSingleJawX = Math.max(Math.abs(currentCP.asymx[0] - prevCP.asymx[0]), Math.abs(currentCP.asymx[1] - prevCP.asymx[1]));
+                    }
+                    segmentDataStore.maxSingleJawXTravel = maxSingleJawX;
+
+                    let maxSingleJawY = 0;
+                    if (prevCP.asymy && currentCP.asymy && prevCP.asymy.length === 2 && currentCP.asymy.length === 2) {
+                        maxSingleJawY = Math.max(Math.abs(currentCP.asymy[0] - prevCP.asymy[0]), Math.abs(currentCP.asymy[1] - prevCP.asymy[1]));
+                    }
+                    segmentDataStore.maxSingleJawYTravel = maxSingleJawY;
+
+                    segmentDataStore.deltaMUWeight = currentCP.cumulativeMetersetWeight - prevCP.cumulativeMetersetWeight;
+                    segmentDataStore.prevCP_doseRateSet = prevCP.doseRateSet;
+
+                    segmentDataStore.timeGantry_simple = (dGA > 0.001 && currentMaxGantrySpeed > 0) ? dGA / currentMaxGantrySpeed : (dGA > 0.001 ? Infinity : 0);
+                    segmentDataStore.timeMLC_ideal = (currentMaxMlcSpeedMMPS > 0 && maxLT > 0.001) ? maxLT / currentMaxMlcSpeedMMPS : 0;
+                    segmentDataStore.timeColl_ideal = (currentMaxCollimatorSpeed > 0 && segmentDataStore.deltaCollAngle > 0.001) ? segmentDataStore.deltaCollAngle / currentMaxCollimatorSpeed : 0;
+                    segmentDataStore.timeJawX_ideal = (currentMaxJawSpeedMMPS > 0 && maxSingleJawX > 0.001) ? maxSingleJawX / currentMaxJawSpeedMMPS : 0;
+                    segmentDataStore.timeJawY_ideal = (currentMaxJawSpeedMMPS > 0 && maxSingleJawY > 0.001) ? maxSingleJawY / currentMaxJawSpeedMMPS : 0;
+
+                    if (segmentDataStore.deltaMUWeight > 0.00001) {
+                        const dMU = (beamData.totalMeterset || 1.0) * segmentDataStore.deltaMUWeight;
+                        if (segmentDataStore.prevCP_doseRateSet !== null && segmentDataStore.prevCP_doseRateSet > 0) {
+                            segmentDataStore.timeDose_ideal = dMU / (segmentDataStore.prevCP_doseRateSet / 60);
+                        } else { segmentDataStore.timeDose_ideal = Infinity; }
+                    } else { segmentDataStore.timeDose_ideal = 0; }
+
+                    let p1_dur = Math.max(
+                        segmentDataStore.timeMLC_ideal, segmentDataStore.timeColl_ideal,
+                        segmentDataStore.timeDose_ideal, segmentDataStore.timeGantry_simple,
+                        segmentDataStore.timeJawX_ideal, segmentDataStore.timeJawY_ideal
+                    );
+                    segmentDataStore.pass1_segmentDuration = (p1_dur === Infinity || isNaN(p1_dur) || p1_dur < 0.00001) ? 0.01 : p1_dur;
+
+                    segmentDataStore.pass1_avgGantrySpeed = (segmentDataStore.pass1_segmentDuration > 0.00001 && dGA > 0.001) ? dGA / segmentDataStore.pass1_segmentDuration : 0;
+                    segmentDataStore.pass1_avgMlcSpeed = (segmentDataStore.pass1_segmentDuration > 0.00001 && maxLT > 0.001) ? maxLT / segmentDataStore.pass1_segmentDuration : 0;
+                    segmentDataStore.pass1_avgCollSpeed = (segmentDataStore.pass1_segmentDuration > 0.00001 && segmentDataStore.deltaCollAngle > 0.001) ? segmentDataStore.deltaCollAngle / segmentDataStore.pass1_segmentDuration : 0;
+                    segmentDataStore.pass1_avgJawXSpeed = (segmentDataStore.pass1_segmentDuration > 0.00001 && maxSingleJawX > 0.001) ? maxSingleJawX / segmentDataStore.pass1_segmentDuration : 0;
+                    segmentDataStore.pass1_avgJawYSpeed = (segmentDataStore.pass1_segmentDuration > 0.00001 && maxSingleJawY > 0.001) ? maxSingleJawY / segmentDataStore.pass1_segmentDuration : 0;
+                }
+
+                let totalBeamSimTime = 0;
+                if (dataToProcess.length > 0) dataToProcess[0].cumulativeSimTime = 0;
+
+                for (let k = 1; k < controlPoints.length; k++) {
+                    const segment_idx = k - 1;
+                    const segmentItem = dataToProcess[segment_idx];
+
+                    let chosen_timeGantry = segmentItem.timeGantry_simple;
+                    if (segmentItem.deltaGantryAngle > 0.001) {
+                        segmentItem.timeGantry_profiled = calculateProfiledMoveTime(segmentItem.deltaGantryAngle, currentMaxGantrySpeed, currentMaxGantryAccelDecel);
+                        const v_start_pass1_avg = (segment_idx === 0) ? 0.0 : dataToProcess[segment_idx - 1].pass1_avgGantrySpeed;
+                        const req_accel = (segmentItem.pass1_segmentDuration > 0.001) ? Math.abs(segmentItem.pass1_avgGantrySpeed - v_start_pass1_avg) / segmentItem.pass1_segmentDuration : 0;
+                        if (req_accel > currentMaxGantryAccelDecel * ACCEL_CHECK_FACTOR) {
+                            chosen_timeGantry = segmentItem.timeGantry_profiled;
+                        }
+                    } else { segmentItem.timeGantry_profiled = 0; }
+
+                    let chosen_timeMLC = segmentItem.timeMLC_ideal;
+                    if (segmentItem.maxLeafTravel > 0.001) {
+                        segmentItem.timeMLC_profiled = calculateProfiledMoveTime(segmentItem.maxLeafTravel, currentMaxMlcSpeedMMPS, currentMaxMlcAccelDecelMMPS2);
+                        const v_start_pass1_avg = (segment_idx === 0) ? 0.0 : dataToProcess[segment_idx - 1].pass1_avgMlcSpeed;
+                        const req_accel = (segmentItem.pass1_segmentDuration > 0.001) ? Math.abs(segmentItem.pass1_avgMlcSpeed - v_start_pass1_avg) / segmentItem.pass1_segmentDuration : 0;
+                        if (req_accel > currentMaxMlcAccelDecelMMPS2 * ACCEL_CHECK_FACTOR) {
+                            chosen_timeMLC = segmentItem.timeMLC_profiled;
+                        }
+                    } else { segmentItem.timeMLC_profiled = 0; }
+
+                    let chosen_timeColl = segmentItem.timeColl_ideal;
+                    if (segmentItem.deltaCollAngle > 0.001) {
+                        segmentItem.timeColl_profiled = calculateProfiledMoveTime(segmentItem.deltaCollAngle, currentMaxCollimatorSpeed, currentMaxCollimatorAccelDecel);
+                        const v_start_pass1_avg = (segment_idx === 0) ? 0.0 : dataToProcess[segment_idx - 1].pass1_avgCollSpeed;
+                        const req_accel = (segmentItem.pass1_segmentDuration > 0.001) ? Math.abs(segmentItem.pass1_avgCollSpeed - v_start_pass1_avg) / segmentItem.pass1_segmentDuration : 0;
+                        if (req_accel > currentMaxCollimatorAccelDecel * ACCEL_CHECK_FACTOR) {
+                            chosen_timeColl = segmentItem.timeColl_profiled;
+                        }
+                    } else { segmentItem.timeColl_profiled = 0; }
+
+                    let chosen_timeJawX = segmentItem.timeJawX_ideal;
+                    if (segmentItem.maxSingleJawXTravel > 0.001) {
+                        segmentItem.timeJawX_profiled = calculateProfiledMoveTime(segmentItem.maxSingleJawXTravel, currentMaxJawSpeedMMPS, currentMaxJawAccelDecelMMPS2);
+                        const v_start_pass1_avg = (segment_idx === 0) ? 0.0 : dataToProcess[segment_idx - 1].pass1_avgJawXSpeed;
+                        const req_accel = (segmentItem.pass1_segmentDuration > 0.001) ? Math.abs(segmentItem.pass1_avgJawXSpeed - v_start_pass1_avg) / segmentItem.pass1_segmentDuration : 0;
+                        if (req_accel > currentMaxJawAccelDecelMMPS2 * ACCEL_CHECK_FACTOR) {
+                            chosen_timeJawX = segmentItem.timeJawX_profiled;
+                        }
+                    } else { segmentItem.timeJawX_profiled = 0; }
+
+                    let chosen_timeJawY = segmentItem.timeJawY_ideal;
+                    if (segmentItem.maxSingleJawYTravel > 0.001) {
+                        segmentItem.timeJawY_profiled = calculateProfiledMoveTime(segmentItem.maxSingleJawYTravel, currentMaxJawSpeedMMPS, currentMaxJawAccelDecelMMPS2);
+                        const v_start_pass1_avg = (segment_idx === 0) ? 0.0 : dataToProcess[segment_idx - 1].pass1_avgJawYSpeed;
+                        const req_accel = (segmentItem.pass1_segmentDuration > 0.001) ? Math.abs(segmentItem.pass1_avgJawYSpeed - v_start_pass1_avg) / segmentItem.pass1_segmentDuration : 0;
+                        if (req_accel > currentMaxJawAccelDecelMMPS2 * ACCEL_CHECK_FACTOR) {
+                            chosen_timeJawY = segmentItem.timeJawY_profiled;
+                        }
+                    } else { segmentItem.timeJawY_profiled = 0; }
+
+                    let final_duration = Math.max(
+                        chosen_timeGantry, chosen_timeMLC, chosen_timeColl,
+                        chosen_timeJawX, chosen_timeJawY,
+                        segmentItem.timeDose_ideal
+                    );
+                    final_duration = (final_duration === Infinity || isNaN(final_duration) || final_duration < 0.00001) ? 0.01 : final_duration;
+
+                    segmentItem.segmentDuration = final_duration;
+
+                    totalBeamSimTime += segmentItem.segmentDuration;
+                    if (dataToProcess[k]) {
+                        dataToProcess[k].cumulativeSimTime = totalBeamSimTime;
+                    }
+                }
+
+                if (dataToProcess.length > 0 && controlPoints.length > 0 && dataToProcess[controlPoints.length - 1]) {
+                    dataToProcess[controlPoints.length - 1].segmentDuration = 0;
+                } else if (dataToProcess.length > 0 && dataToProcess[dataToProcess.length - 1]) {
+                    dataToProcess[dataToProcess.length - 1].segmentDuration = 0;
+                }
+
+                console.log("DEBUG: calculateSegmentTimes END. TotalSimTime for beam (no complexity):", totalBeamSimTime);
+                return totalBeamSimTime;
+            }
+
+
+            function getBankPositions(allLeafPositions, bankId) {
+                if (!allLeafPositions || allLeafPositions.length === 0) return [];
+                const numLeafPairs = allLeafPositions.length / 2;
+                if (bankId === 0) {
+                    return allLeafPositions.slice(0, numLeafPairs);
+                } else {
+                    return allLeafPositions.slice(numLeafPairs);
+                }
+            }
+
+            function getEffectiveMLCPositionsForCP(cp, beamMlcDefinitions) {
+                if (!cp || !cp.mlcPositionData || cp.mlcPositionData.length === 0 ||
+                    !beamMlcDefinitions || beamMlcDefinitions.length === 0) {
+                    return null;
+                }
+
+                let effectiveBankAPositions = null;
+                let effectiveBankBPositions = null;
+                let numLeafPairs = 0;
+                let firstLayerProcessed = false;
+
+                for (const mlcDef of beamMlcDefinitions) {
+                    if (!(mlcDef.type && (mlcDef.type.toUpperCase() === "MLCX" || mlcDef.type.toUpperCase().startsWith("MLCX")))) {
+                        continue;
+                    }
+
+                    const layerMlcData = cp.mlcPositionData.find(m => m.type === mlcDef.type);
+                    if (!layerMlcData || !layerMlcData.positions || layerMlcData.positions.length === 0) {
+                        continue;
+                    }
+
+                    const currentLayerPositions = layerMlcData.positions;
+                    const currentNumLeafPairs = currentLayerPositions.length / 2;
+
+                    if (!firstLayerProcessed) {
+                        if (currentNumLeafPairs === 0) continue;
+                        numLeafPairs = currentNumLeafPairs;
+                        effectiveBankAPositions = currentLayerPositions.slice(0, numLeafPairs);
+                        effectiveBankBPositions = currentLayerPositions.slice(numLeafPairs);
+                        firstLayerProcessed = true;
+                    } else {
+                        if (currentNumLeafPairs !== numLeafPairs) {
+                            console.warn(`DEBUG: MLC layer ${mlcDef.type} has ${currentNumLeafPairs} leaf pairs, inconsistent with previous ${numLeafPairs}. Skipping layer for effective aperture calculation at CP ${cp.controlPointIndex}.`);
+                            continue;
+                        }
+                        for (let i = 0; i < numLeafPairs; i++) {
+                            effectiveBankAPositions[i] = Math.max(effectiveBankAPositions[i], currentLayerPositions[i]);
+                            effectiveBankBPositions[i] = Math.min(effectiveBankBPositions[i], currentLayerPositions[i + numLeafPairs]);
+                        }
+                    }
+                }
+
+                if (!firstLayerProcessed) {
+                    return null;
+                }
+
+                for (let i = 0; i < numLeafPairs; i++) {
+                    if (effectiveBankBPositions[i] < effectiveBankAPositions[i]) {
+                        effectiveBankBPositions[i] = effectiveBankAPositions[i];
+                    }
+                }
+
+                return [...effectiveBankAPositions, ...effectiveBankBPositions];
+            }
+
+
+            function calculateLSVForBankAtCP(leafPositionsBank) {
+                if (!leafPositionsBank || leafPositionsBank.length < 2) {
+                    return 1.0;
+                }
+                const N = leafPositionsBank.length;
+                let minPos = leafPositionsBank[0];
+                let maxPos = leafPositionsBank[0];
+                for (let i = 1; i < N; i++) {
+                    minPos = Math.min(minPos, leafPositionsBank[i]);
+                    maxPos = Math.max(maxPos, leafPositionsBank[i]);
+                }
+                const pos_max_cp_bank = maxPos - minPos;
+
+                if (pos_max_cp_bank < 0.001 || (N - 1) === 0) {
+                    return 1.0;
+                }
+
+                let sum_variability_term = 0;
+                for (let i = 0; i < N - 1; i++) {
+                    sum_variability_term += (pos_max_cp_bank - Math.abs(leafPositionsBank[i] - leafPositionsBank[i + 1]));
+                }
+                const lsv = sum_variability_term / ((N - 1) * pos_max_cp_bank);
+                return isNaN(lsv) ? 1.0 : lsv;
+            }
+
+            function calculateAAVAtCP(currentEffectiveMLCPositions, allEffectiveCPsMlcPositionsForBeam) {
+                if (!currentEffectiveMLCPositions || currentEffectiveMLCPositions.length === 0) return 0.0;
+                const numLeafPairs = currentEffectiveMLCPositions.length / 2;
+                if (numLeafPairs === 0) return 0.0;
+
+
+                let currentTotalOpening = 0;
+                for (let i = 0; i < numLeafPairs; i++) {
+                    const opening = currentEffectiveMLCPositions[i + numLeafPairs] - currentEffectiveMLCPositions[i];
+                    currentTotalOpening += (opening > 0 ? opening : 0);
+                }
+
+                let maxArcTotalOpening = 0;
+                const maxPairOpeningsOverArc = new Array(numLeafPairs).fill(-Infinity);
+
+                for (const cpMlcPositions of allEffectiveCPsMlcPositionsForBeam) {
+                    if (cpMlcPositions && cpMlcPositions.length === currentEffectiveMLCPositions.length) {
+                        for (let i = 0; i < numLeafPairs; i++) {
+                            const opening = cpMlcPositions[i + numLeafPairs] - cpMlcPositions[i];
+                            if (opening > maxPairOpeningsOverArc[i]) {
+                                maxPairOpeningsOverArc[i] = opening;
+                            }
+                        }
+                    }
+                }
+                maxArcTotalOpening = maxPairOpeningsOverArc.reduce((sum, opening) => sum + (opening > 0 && opening > -Infinity ? opening : 0), 0);
+
+
+                if (maxArcTotalOpening < 0.001) return (currentTotalOpening < 0.001 ? 1.0 : 0.0);
+                const aav = currentTotalOpening / maxArcTotalOpening;
+                return isNaN(aav) ? 1.0 : Math.max(0, Math.min(1, aav));
+            }
+
+            function angleInSector(angle, sectorStart, sectorEnd) {
+                const normalizedAngle = (angle % 360 + 360) % 360;
+                if (sectorStart > sectorEnd) {
+                    return normalizedAngle >= sectorStart || normalizedAngle < sectorEnd;
+                }
+                return normalizedAngle >= sectorStart && normalizedAngle < sectorEnd;
+            }
+
+
+            function calculateMCSForScope(beamData, sectorStartAngle = null, sectorEndAngle = null) {
+                const controlPoints = beamData.controlPoints;
+                if (!controlPoints || controlPoints.length < 2) return 1.0;
+
+                const allEffectiveCPsMlcDataForBeam = controlPoints.map(cp_item => {
+                    return getEffectiveMLCPositionsForCP(cp_item, beamData.mlcDefinitions);
+                }).filter(p => p !== null && p.length > 0);
+
+
+                if (allEffectiveCPsMlcDataForBeam.length === 0 || !allEffectiveCPsMlcDataForBeam[0]) {
+                    console.warn("DEBUG MCSForScope: No valid effective MLC data found for the beam.");
+                    return 1.0;
+                }
+
+                let mcsSum = 0;
+                let totalMuWeightInScope = 0;
+
+                for (let i = 0; i < controlPoints.length - 1; i++) {
+                    const cp_i = controlPoints[i];
+                    const cp_i1 = controlPoints[i + 1];
+
+                    if (sectorStartAngle !== null && sectorEndAngle !== null) {
+                        if (!angleInSector(cp_i.gantryAngle, sectorStartAngle, sectorEndAngle)) {
+                            continue;
+                        }
+                    }
+
+                    const mlcPos_i_effective = getEffectiveMLCPositionsForCP(cp_i, beamData.mlcDefinitions);
+                    const mlcPos_i1_effective = getEffectiveMLCPositionsForCP(cp_i1, beamData.mlcDefinitions);
+
+                    if (!mlcPos_i_effective || !mlcPos_i1_effective || mlcPos_i_effective.length !== mlcPos_i1_effective.length) continue;
+                    if (mlcPos_i_effective.length === 0) continue;
+
+                    const lsv_cp_i_bankA = calculateLSVForBankAtCP(getBankPositions(mlcPos_i_effective, 0));
+                    const lsv_cp_i_bankB = calculateLSVForBankAtCP(getBankPositions(mlcPos_i_effective, 1));
+                    const lsv_cp_i = (lsv_cp_i_bankA + lsv_cp_i_bankB) / 2;
+
+                    const lsv_cp_i1_bankA = calculateLSVForBankAtCP(getBankPositions(mlcPos_i1_effective, 0));
+                    const lsv_cp_i1_bankB = calculateLSVForBankAtCP(getBankPositions(mlcPos_i1_effective, 1));
+                    const lsv_cp_i1 = (lsv_cp_i1_bankA + lsv_cp_i1_bankB) / 2;
+
+                    const aav_cp_i = calculateAAVAtCP(mlcPos_i_effective, allEffectiveCPsMlcDataForBeam);
+                    const aav_cp_i1 = calculateAAVAtCP(mlcPos_i1_effective, allEffectiveCPsMlcDataForBeam);
+
+                    const meanAAV = (aav_cp_i + aav_cp_i1) / 2;
+                    const meanLSV = (lsv_cp_i + lsv_cp_i1) / 2;
+
+                    let deltaCollAngleForSegment = Math.abs(cp_i1.collimatorAngle - cp_i.collimatorAngle);
+                    if (deltaCollAngleForSegment > 180) deltaCollAngleForSegment = 360 - deltaCollAngleForSegment;
+
+                    const collimatorRotationFactor = (1 + K_MCS_COLL * deltaCollAngleForSegment);
+
+                    const muWeightSegment = (cp_i1.cumulativeMetersetWeight - cp_i.cumulativeMetersetWeight);
+
+                    if (muWeightSegment > 0.000001) {
+                        mcsSum += (meanAAV * meanLSV * collimatorRotationFactor * muWeightSegment);
+                        totalMuWeightInScope += muWeightSegment;
+                    }
+                }
+
+                if (totalMuWeightInScope < 0.00001) {
+                    return 1.0;
+                }
+
+                return mcsSum / totalMuWeightInScope;
+            }
+
+            function normalizeGantryAngleDiff(g1, g2) {
+                let diff = Math.abs(g1 - g2);
+                if (diff > 180) {
+                    diff = 360 - diff;
+                }
+                return diff;
+            }
+
+            function calculateStdDev(dataArray, key) {
+                const values = dataArray.map(item => item[key]).filter(val => typeof val === 'number' && isFinite(val));
+                if (values.length < 2) return 0;
+                const mean = values.reduce((acc, val) => acc + val, 0) / values.length;
+                const variance = values.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / values.length;
+                return Math.sqrt(variance);
+            }
+
+
+            function calculateModulationIndex(beamData, cpIndexS, K) { // This is MIsport
+                const controlPoints = beamData.controlPoints;
+                const numControlPoints = controlPoints.length;
+                if (numControlPoints < 2) return 0;
+
+                const cpS = controlPoints[cpIndexS];
+                const mlcPosS_effective = getEffectiveMLCPositionsForCP(cpS, beamData.mlcDefinitions);
+                if (!mlcPosS_effective || mlcPosS_effective.length === 0) return 0;
+
+                const numLeafPairs = mlcPosS_effective.length / 2;
+                let totalMI = 0;
+
+                for (let k_neighbor = -K; k_neighbor <= K; k_neighbor++) {
+                    if (k_neighbor === 0) continue;
+
+                    const cpIndexSK = cpIndexS + k_neighbor;
+                    if (cpIndexSK < 0 || cpIndexSK >= numControlPoints) continue;
+
+                    const cpSK = controlPoints[cpIndexSK];
+                    const mlcPosSK_effective = getEffectiveMLCPositionsForCP(cpSK, beamData.mlcDefinitions);
+                    if (!mlcPosSK_effective || mlcPosSK_effective.length !== mlcPosS_effective.length) continue;
+
+                    let sumLeafDiff = 0;
+                    for (let i = 0; i < numLeafPairs; i++) {
+                        sumLeafDiff += Math.abs(mlcPosS_effective[i] - mlcPosSK_effective[i]);
+                        sumLeafDiff += Math.abs(mlcPosS_effective[i + numLeafPairs] - mlcPosSK_effective[i + numLeafPairs]);
+                    }
+
+                    const deltaMU = Math.abs(cpS.cumulativeMetersetWeight - cpSK.cumulativeMetersetWeight) * (beamData.totalMeterset || 1.0);
+                    const deltaGantry = normalizeGantryAngleDiff(cpS.gantryAngle, cpSK.gantryAngle);
+
+                    let deltaCollAngleMi = Math.abs(cpS.collimatorAngle - cpSK.collimatorAngle);
+                    if (deltaCollAngleMi > 180) deltaCollAngleMi = 360 - deltaCollAngleMi;
+                    const collimatorFactorForMIsport = (1 + K_MISPORT_COLL * deltaCollAngleMi);
+
+                    let muPerDegreeFactor = 0;
+                    if (deltaGantry > MI_GANTRY_DIFF_EPSILON) {
+                        muPerDegreeFactor = deltaMU / deltaGantry;
+                    } else if (deltaMU > 0.00001) {
+                        muPerDegreeFactor = 0;
+                    }
+                    totalMI += sumLeafDiff * collimatorFactorForMIsport * muPerDegreeFactor;
+                }
+                return totalMI;
+            }
+
+            function initVisualization() {
+                console.log("DEBUG: initVisualization START. Selected Beam:", selectedBeamIndex, "isSimulatingDelivery:", isSimulatingDelivery);
+                updateCurrentSpeedLimits();
+
+                if (!rtPlanData || !rtPlanData.beams || !rtPlanData.beams[selectedBeamIndex]) { console.log("DEBUG: initVisualization - no plan/beam data."); return; }
+                const beam = rtPlanData.beams[selectedBeamIndex];
+                if (!beam.controlPoints || beam.controlPoints.length === 0) {
+                    showMessageModal("Beam Error", `Beam ${beam.beamNumber} (${beam.beamName || ''}) has no control points.`);
+                    totalCPsSpan.textContent = '0'; cpSlider.max = 0; cpSlider.value = 0; processedData = []; updateParamDisplay();
+                    console.log("DEBUG: initVisualization - no control points for beam.");
+                    if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'none';
+                    return;
+                }
+                const controlPoints = beam.controlPoints;
+                const numControlPoints = controlPoints.length;
+                totalCPsSpan.textContent = numControlPoints;
+                cpSlider.max = numControlPoints > 0 ? numControlPoints - 1 : 0;
+                cpSlider.value = currentCP;
+
+                processedData = controlPoints.map((cp_item, idx) => ({
+                    cp: { ...cp_item, controlPointIndex: idx },
+                    timeMLC_ideal: 0, timeColl_ideal: 0, timeDose_ideal: 0, timeGantry_simple: 0,
+                    timeJawX_ideal: 0, timeJawY_ideal: 0,
+                    pass1_segmentDuration: 0, pass1_avgGantrySpeed: 0, pass1_avgMlcSpeed: 0,
+                    pass1_avgCollSpeed: 0, pass1_avgJawXSpeed: 0, pass1_avgJawYSpeed: 0,
+                    timeGantry_profiled: 0, timeMLC_profiled: 0,
+                    timeColl_profiled: 0, timeJawX_profiled: 0, timeJawY_profiled: 0,
+                    maxLeafTravel: 0, deltaCollAngle: 0, deltaMUWeight: 0, prevCP_doseRateSet: null, deltaGantryAngle: 0,
+                    maxSingleJawXTravel: 0, maxSingleJawYTravel: 0,
+                    segmentDuration: 0, cumulativeSimTime: 0,
+                    gantrySpeed: 0, mlcSpeed: 0, collimatorSpeed: 0, doseRate: 0,
+                    jawXSpeed: 0, jawYSpeed: 0,
+                    gantryAcceleration: 0, mlcAcceleration: 0, collimatorAcceleration: 0,
+                    doseRateText: "N/A", gantrySpeedUnit: "°/CP", mlcSpeedUnit: "mm/CP", collimatorSpeedUnit: "°/CP",
+                    jawXSpeedUnit: "mm/CP", jawYSpeedUnit: "mm/CP",
+                    modulationIndex: 0,
+                    localMItFactor: 0
+                }));
+                console.log("DEBUG: initVisualization - processedData initialized, length:", processedData.length);
+
+                beam.totalCalculatedSimTime = calculateSegmentTimes(beam, controlPoints, processedData);
+                console.log("DEBUG: initVisualization - calculateSegmentTimes returned. TotalSimTime:", beam.totalCalculatedSimTime);
+
+                processedData.forEach((pd_item, index) => {
+                    const cp = pd_item.cp;
+                    const prevCp = index > 0 ? controlPoints[index - 1] : null;
+                    const segmentDataForThisCPSpeed = (index > 0 && processedData[index - 1]) ? processedData[index - 1] : null;
+                    const finalSegmentDurationForThisCPSpeed = (isSimulatingDelivery && segmentDataForThisCPSpeed) ? segmentDataForThisCPSpeed.segmentDuration : 0;
+
+                    const cpTimeDeltaFromDICOM = (prevCp && cp.controlPointDeliveryDuration !== undefined && prevCp.controlPointDeliveryDuration !== undefined) ?
+                        (cp.controlPointDeliveryDuration - prevCp.controlPointDeliveryDuration) : 0;
+                    const hasDICOMTimeData = cpTimeDeltaFromDICOM > 0.0001;
+                    const effectiveDeltaTime = isSimulatingDelivery ? finalSegmentDurationForThisCPSpeed : (hasDICOMTimeData ? cpTimeDeltaFromDICOM : 0);
+
+                    pd_item.gantrySpeed = 0; pd_item.gantrySpeedUnit = "°/CP";
+                    pd_item.mlcSpeed = 0; pd_item.mlcSpeedUnit = "mm/CP";
+                    pd_item.collimatorSpeed = 0; pd_item.collimatorSpeedUnit = "°/CP";
+                    pd_item.jawXSpeed = 0; pd_item.jawXSpeedUnit = "mm/CP";
+                    pd_item.jawYSpeed = 0; pd_item.jawYSpeedUnit = "mm/CP";
+                    pd_item.doseRate = 0;
+                    const muWtUnit = beam.totalMeterset > 0 ? "MU" : "MUwt";
+                    pd_item.doseRateText = index === 0 ? "N/A (CP0)" : `0.00 ${muWtUnit}/CP`;
+
+                    pd_item.gantryAcceleration = 0;
+                    pd_item.mlcAcceleration = 0;
+                    pd_item.collimatorAcceleration = 0;
+
+                    if (prevCp && segmentDataForThisCPSpeed) {
+                        const segmentInfo = segmentDataForThisCPSpeed;
+
+                        const deltaGA = segmentInfo.deltaGantryAngle;
+                        pd_item.gantrySpeed = deltaGA;
+                        if (effectiveDeltaTime > 0.0001) { pd_item.gantrySpeed = deltaGA / effectiveDeltaTime; pd_item.gantrySpeedUnit = "°/s"; }
+
+                        const maxLT = segmentInfo.maxLeafTravel;
+                        pd_item.mlcSpeed = maxLT;
+                        if (effectiveDeltaTime > 0.0001) { pd_item.mlcSpeed = maxLT / effectiveDeltaTime; pd_item.mlcSpeedUnit = "mm/s"; }
+
+
+                        const deltaCA = segmentInfo.deltaCollAngle;
+                        pd_item.collimatorSpeed = deltaCA;
+                        if (effectiveDeltaTime > 0.0001) { pd_item.collimatorSpeed = deltaCA / effectiveDeltaTime; pd_item.collimatorSpeedUnit = "°/s"; }
+
+                        const maxSingleJXTravel = segmentInfo.maxSingleJawXTravel;
+                        pd_item.jawXSpeed = maxSingleJXTravel;
+                        if (effectiveDeltaTime > 0.0001) { pd_item.jawXSpeed = maxSingleJXTravel / effectiveDeltaTime; pd_item.jawXSpeedUnit = "mm/s"; }
+
+                        const maxSingleJYTravel = segmentInfo.maxSingleJawYTravel;
+                        pd_item.jawYSpeed = maxSingleJYTravel;
+                        if (effectiveDeltaTime > 0.0001) { pd_item.jawYSpeed = maxSingleJYTravel / effectiveDeltaTime; pd_item.jawYSpeedUnit = "mm/s"; }
+
+                        const deltaMUW = segmentInfo.deltaMUWeight;
+                        if (deltaMUW > 0.00001) {
+                            const deltaMuEq = (beam.totalMeterset || 1.0) * deltaMUW;
+                            pd_item.doseRate = deltaMuEq; pd_item.doseRateText = `${pd_item.doseRate.toFixed(2)} ${muWtUnit}/CP`;
+                            if (effectiveDeltaTime > 0.0001) { pd_item.doseRate = (deltaMuEq / effectiveDeltaTime) * 60; pd_item.doseRateText = `${pd_item.doseRate.toFixed(2)} ${muWtUnit}/min`; }
+                        } else { pd_item.doseRate = 0; pd_item.doseRateText = `0.00 ${muWtUnit}/${(effectiveDeltaTime > 0.0001 && (isSimulatingDelivery || hasDICOMTimeData)) ? "min" : "CP"}`; }
+
+                        if (index > 0) {
+                            const prev_pd_item = processedData[index - 1];
+                            const segmentDurationForAccelCalc = segmentInfo.segmentDuration;
+
+                            if (segmentDurationForAccelCalc > 0.0001) {
+                                if (pd_item.gantrySpeedUnit.endsWith("/s") && prev_pd_item.gantrySpeedUnit.endsWith("/s")) {
+                                    pd_item.gantryAcceleration = (pd_item.gantrySpeed - prev_pd_item.gantrySpeed) / segmentDurationForAccelCalc;
+                                }
+                                if (pd_item.mlcSpeedUnit.endsWith("/s") && prev_pd_item.mlcSpeedUnit.endsWith("/s")) {
+                                    pd_item.mlcAcceleration = (pd_item.mlcSpeed - prev_pd_item.mlcSpeed) / segmentDurationForAccelCalc;
+                                }
+                                if (pd_item.collimatorSpeedUnit.endsWith("/s") && prev_pd_item.collimatorSpeedUnit.endsWith("/s")) {
+                                    pd_item.collimatorAcceleration = (pd_item.collimatorSpeed - prev_pd_item.collimatorSpeed) / segmentDurationForAccelCalc;
+                                }
+                            }
+                        }
+                    }
+                });
+
+
+                processedData.forEach((pd_item, idx) => {
+                    pd_item.modulationIndex = calculateModulationIndex(beam, idx, MI_SPORT_K_NEIGHBORS);
+                });
+
+                let global_σ_MLC_speed = 0;
+                let global_σ_MLC_accel = 0;
+                if (isSimulatingDelivery) {
+                    const mlcSpeedsInS = processedData
+                        .filter(pd => pd.mlcSpeedUnit && pd.mlcSpeedUnit.endsWith("/s") && typeof pd.mlcSpeed === 'number' && isFinite(pd.mlcSpeed))
+                        .map(pd => ({ val: pd.mlcSpeed }));
+                    const mlcAccelsInS2 = processedData
+                        .filter(pd => pd.mlcSpeedUnit && pd.mlcSpeedUnit.endsWith("/s") && typeof pd.mlcAcceleration === 'number' && isFinite(pd.mlcAcceleration))
+                        .map(pd => ({ val: pd.mlcAcceleration }));
+                    global_σ_MLC_speed = mlcSpeedsInS.length >= 2 ? calculateStdDev(mlcSpeedsInS, 'val') : 0;
+                    global_σ_MLC_accel = mlcAccelsInS2.length >= 2 ? calculateStdDev(mlcAccelsInS2, 'val') : 0;
+                } else {
+                    global_σ_MLC_speed = 0;
+                    global_σ_MLC_accel = 0;
+                }
+                console.log("DEBUG: Corrected Global MLC Speed σ:", global_σ_MLC_speed, "Corrected Global MLC Accel σ:", global_σ_MLC_accel);
+
+
+                processedData.forEach((pd_item_center, s_idx) => {
+                    if (!isSimulatingDelivery) {
+                        pd_item_center.localMItFactor = 0;
+                        return;
+                    }
+
+                    let sumOfWeightedNi = 0;
+                    let actualCpInWindowCount = 0;
+                    const windowStart = Math.max(0, s_idx - LOCAL_MIT_K_NEIGHBORS);
+                    const windowEnd = Math.min(numControlPoints - 1, s_idx + LOCAL_MIT_K_NEIGHBORS);
+
+                    for (let i = windowStart; i <= windowEnd; i++) {
+                        actualCpInWindowCount++;
+                        let N_i = 0;
+                        const currentCpData = processedData[i];
+
+                        const mlcSpeedThreshold = 1.0 * global_σ_MLC_speed;
+                        const mlcAccelThreshold = MIT_ALPHA * 1.0 * global_σ_MLC_accel;
+
+                        if ((global_σ_MLC_speed > 0.001 && currentCpData.mlcSpeed > mlcSpeedThreshold) ||
+                            (global_σ_MLC_accel > 0.001 && Math.abs(currentCpData.mlcAcceleration) > mlcAccelThreshold)) {
+                            N_i = 1;
+                        }
+
+                        let WGA_val = 1.0;
+                        let WMU_val = 1.0;
+                        let WCA_val = 1.0; // New: Collimator Weighting Factor
+
+                        if (N_i === 1) {
+                            const idx_ip1 = i + 1;
+                            const idx_ip2 = i + 2;
+
+                            if (idx_ip2 < numControlPoints && processedData[idx_ip1] && processedData[idx_ip2]) {
+                                let ga_segment_ip1_ip2 = processedData[idx_ip2].gantryAcceleration;
+                                let dr_cp_ip1 = processedData[idx_ip1].doseRate;
+                                let dr_cp_ip2 = processedData[idx_ip2].doseRate;
+                                let drv_segment_ip1_ip2 = dr_cp_ip2 - dr_cp_ip1;
+                                let ca_segment_ip1_ip2 = processedData[idx_ip2].collimatorAcceleration; // New
+
+                                if (processedData[idx_ip2].gantrySpeedUnit.endsWith("/s")) {
+                                    WGA_val = 1 + (MIT_BETA - 1) * (1 - Math.exp(-MIT_GAMMA * Math.abs(ga_segment_ip1_ip2)));
+                                }
+                                if (processedData[idx_ip1].doseRateText.includes("/min") && processedData[idx_ip2].doseRateText.includes("/min")) {
+                                    WMU_val = 1 + (MIT_BETA - 1) * (1 - Math.exp(-MIT_GAMMA * Math.abs(drv_segment_ip1_ip2)));
+                                }
+                                if (processedData[idx_ip2].collimatorSpeedUnit && processedData[idx_ip2].collimatorSpeedUnit.endsWith("/s")) { // New for WCA
+                                    WCA_val = 1 + (MIT_BETA - 1) * (1 - Math.exp(-MIT_GAMMA * Math.abs(ca_segment_ip1_ip2)));
+                                }
+                            }
+                        }
+                        sumOfWeightedNi += N_i * WGA_val * WMU_val * WCA_val; // Include WCA_val
+                    }
+
+                    if (actualCpInWindowCount > 0) {
+                        pd_item_center.localMItFactor = sumOfWeightedNi / actualCpInWindowCount;
+                    } else {
+                        pd_item_center.localMItFactor = 0;
+                    }
+                });
+
+
+                maxGantrySpeedOverall = Math.max(0.01, ...processedData.filter(d => d.gantrySpeedUnit.endsWith("/s")).map(d => d.gantrySpeed).filter(s => !isNaN(s) && isFinite(s)));
+                maxMlcSpeedOverall = Math.max(0.01, ...processedData.filter(d => d.mlcSpeedUnit.endsWith("/s")).map(d => d.mlcSpeed).filter(s => !isNaN(s) && isFinite(s)));
+                maxCollimatorSpeedOverall = Math.max(0.01, ...processedData.filter(d => d.collimatorSpeedUnit.endsWith("/s")).map(d => d.collimatorSpeed).filter(s => !isNaN(s) && isFinite(s)));
+                maxJawXSpeedOverall = Math.max(0.01, ...processedData.filter(d => d.jawXSpeedUnit.endsWith("/s")).map(d => d.jawXSpeed).filter(s => !isNaN(s) && isFinite(s)));
+                maxJawYSpeedOverall = Math.max(0.01, ...processedData.filter(d => d.jawYSpeedUnit.endsWith("/s")).map(d => d.jawYSpeed).filter(s => !isNaN(s) && isFinite(s)));
+                maxDoseRateOverall = Math.max(0.01, ...processedData.filter(d => d.doseRateText.includes("/min")).map(d => d.doseRate).filter(s => !isNaN(s) && isFinite(s)));
+
+                const miSportValuesAll = processedData.map(d => d.modulationIndex).filter(s => !isNaN(s) && isFinite(s));
+                maxModulationIndexOverall = miSportValuesAll.length > 0 ? Math.max(0.01, ...miSportValuesAll) : 0.01;
+
+                const localMItValuesAll = processedData.map(d => d.localMItFactor).filter(s => !isNaN(s) && isFinite(s));
+                maxLocalMItFactorOverall = localMItValuesAll.length > 0 ? Math.max(0.01, ...localMItValuesAll) : (MIT_BETA * MIT_BETA * MIT_BETA); // Adjusted if WCA is multiplicative
+
+                drawAllStaticParameterPlots();
+                drawAllXYTimePlots();
+                updateParamDisplay();
+                setupRadialPlotInteractions();
+                console.log("DEBUG: initVisualization END.");
+            }
+
+            function drawSingleYAxisXYPlot(ctx, dataPoints, xLabel, yLabel, title, color, currentPanX, currentPanY, currentZoomLevelX, currentZoomLevelY) {
+                if (!ctx || !dataPoints || dataPoints.length === 0) {
+                    if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                    return;
+                }
+                ctx.canvas.width = ctx.canvas.clientWidth;
+                ctx.canvas.height = ctx.canvas.clientHeight;
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+                const padding = { top: 50, right: 50, bottom: 60, left: 70 };
+                const basePlotWidth = Math.max(1, ctx.canvas.width - padding.left - padding.right);
+                const basePlotHeight = Math.max(1, ctx.canvas.height - padding.top - padding.bottom);
+
+                let minXData = dataPoints.length > 0 ? Math.min(...dataPoints.map(p => p.x)) : 0;
+                let maxXData = dataPoints.length > 0 ? Math.max(...dataPoints.map(p => p.x)) : 1;
+                if (maxXData === minXData) maxXData += 1;
+
+                const yValues = dataPoints.map(p => p.y).filter(y => isFinite(y));
+                let minYData = 0;
+                let maxYData = yValues.length > 0 ? Math.max(1, ...yValues) : 1;
+
+                let rangeYData = maxYData - minYData;
+                if (rangeYData < 0.001 && maxYData > 0) rangeYData = maxYData;
+                else if (rangeYData < 0.001) rangeYData = 1;
+
+                const effectiveMinY = minYData;
+                let effectiveMaxY = maxYData + rangeYData * 0.1;
+                if (effectiveMaxY === effectiveMinY && effectiveMaxY === 0) effectiveMaxY = 1;
+                else if (effectiveMaxY === effectiveMinY) effectiveMaxY += 0.5;
+
+
+                ctx.save();
+                ctx.font = '15px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = '#333';
+                ctx.fillText(title, ctx.canvas.width / 2, padding.top / 2 + 10);
+
+                ctx.font = '12px Arial';
+                ctx.fillText(xLabel, padding.left + basePlotWidth / 2, ctx.canvas.height - 20);
+
+                ctx.fillStyle = color;
+                ctx.translate(padding.left - 50, padding.top + basePlotHeight / 2);
+                ctx.rotate(-Math.PI / 2);
+                ctx.fillText(yLabel, 0, 0);
+                ctx.restore();
+
+                ctx.save();
+                ctx.translate(padding.left, padding.top);
+
+                ctx.translate(currentPanX, currentPanY);
+                ctx.scale(currentZoomLevelX, currentZoomLevelY);
+
+
+                ctx.beginPath(); ctx.strokeStyle = '#333'; ctx.lineWidth = 1 / Math.min(currentZoomLevelX, currentZoomLevelY);
+                ctx.moveTo(0, basePlotHeight);
+                ctx.lineTo(basePlotWidth, basePlotHeight);
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, basePlotHeight);
+                ctx.stroke();
+
+                if (dataPoints && dataPoints.length > 0) {
+                    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1.5 / Math.min(currentZoomLevelX, currentZoomLevelY);
+                    dataPoints.forEach((p, index) => {
+                        if (!isFinite(p.x) || !isFinite(p.y)) return;
+                        const x = ((p.x - minXData) / (maxXData - minXData)) * basePlotWidth;
+                        const y = basePlotHeight - (((p.y - effectiveMinY) / (effectiveMaxY - effectiveMinY)) * basePlotHeight);
+                        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    });
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = '#333';
+                const numYTicks = 5;
+                ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+                ctx.font = `${11 / currentZoomLevelY}px Arial`;
+                for (let i = 0; i <= numYTicks; i++) {
+                    const val = effectiveMinY + (i / numYTicks) * (effectiveMaxY - effectiveMinY);
+                    const yPos = basePlotHeight - (((val - effectiveMinY) / (effectiveMaxY - effectiveMinY)) * basePlotHeight);
+                    ctx.fillText(val.toFixed(1), -10 / currentZoomLevelX, yPos);
+                    ctx.beginPath();
+                    ctx.moveTo(-5 / currentZoomLevelX, yPos);
+                    ctx.lineTo(0, yPos);
+                    ctx.stroke();
+                }
+
+                ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+                ctx.font = `${11 / currentZoomLevelX}px Arial`;
+                const numXTicks = Math.min(5, Math.floor(maxXData > 0 ? maxXData : 1));
+                for (let i = 0; i <= numXTicks; i++) {
+                    const val = minXData + (i / numXTicks) * (maxXData - minXData);
+                    const xPos = ((val - minXData) / (maxXData - minXData)) * basePlotWidth;
+                    ctx.fillText(val.toFixed(1), xPos, basePlotHeight + (10 / currentZoomLevelY));
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, basePlotHeight);
+                    ctx.lineTo(xPos, basePlotHeight + (5 / currentZoomLevelY));
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+
+            function drawDualYAxisXYPlot(ctx, dataSpeed, dataAccel, xLabel, yLabelSpeed, yLabelAccel, title, colorSpeed, colorAccel, currentPanX, currentPanY, currentZoomLevelX, currentZoomLevelY) {
+                if (!ctx || (!dataSpeed || dataSpeed.length === 0) && (!dataAccel || dataAccel.length === 0)) {
+                    if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                    return;
+                }
+                ctx.canvas.width = ctx.canvas.clientWidth;
+                ctx.canvas.height = ctx.canvas.clientHeight;
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+                const padding = { top: 60, right: 75, bottom: 60, left: 75 };
+                const basePlotWidth = Math.max(1, ctx.canvas.width - padding.left - padding.right);
+                const basePlotHeight = Math.max(1, ctx.canvas.height - padding.top - padding.bottom);
+
+                const allXValues = [...(dataSpeed || []).map(p => p.x), ...(dataAccel || []).map(p => p.x)].filter(x => isFinite(x));
+                let minXData = allXValues.length > 0 ? Math.min(...allXValues) : 0;
+                let maxXData = allXValues.length > 0 ? Math.max(...allXValues) : 1;
+                if (maxXData === minXData) maxXData += 1;
+
+                const yValuesSpeed = (dataSpeed || []).map(p => p.y).filter(y => isFinite(y));
+                let minYSpeedData = 0;
+                let maxYSpeedData = yValuesSpeed.length > 0 ? Math.max(1, ...yValuesSpeed) : 1;
+                let rangeYSpeed = maxYSpeedData - minYSpeedData;
+                if (rangeYSpeed < 0.001 && maxYSpeedData > 0) rangeYSpeed = maxYSpeedData;
+                else if (rangeYSpeed < 0.001) rangeYSpeed = 1;
+                const effectiveMinYSpeed = minYSpeedData;
+                let effectiveMaxYSpeed = maxYSpeedData + rangeYSpeed * 0.1;
+                if (effectiveMaxYSpeed === effectiveMinYSpeed && effectiveMaxYSpeed === 0) effectiveMaxYSpeed = 1;
+                else if (effectiveMaxYSpeed === effectiveMinYSpeed) effectiveMaxYSpeed += 0.5;
+
+                const yValuesAccel = (dataAccel || []).map(p => p.y).filter(y => isFinite(y));
+                let absMaxAccel = yValuesAccel.length > 0 ? Math.max(0.1, ...yValuesAccel.map(y => Math.abs(y))) : 0.1;
+                let minYA_data = -absMaxAccel;
+                let maxYA_data = absMaxAccel;
+                let rangeYAccel = maxYA_data - minYA_data;
+                if (rangeYAccel < 0.001) { minYA_data = -0.5; maxYA_data = 0.5; rangeYAccel = 1; }
+                const accelPadding = rangeYAccel * 0.1;
+                const effectiveMinYAccel = minYA_data - accelPadding;
+                const effectiveMaxYAccel = maxYA_data + accelPadding;
+
+                ctx.save();
+                ctx.font = '15px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = '#333';
+                ctx.fillText(title, ctx.canvas.width / 2, padding.top / 2 + 8);
+
+                ctx.font = '12px Arial';
+                ctx.fillText(xLabel, padding.left + basePlotWidth / 2, ctx.canvas.height - 20);
+
+                ctx.fillStyle = colorSpeed;
+                ctx.translate(padding.left - 58, padding.top + basePlotHeight / 2);
+                ctx.rotate(-Math.PI / 2);
+                ctx.fillText(yLabelSpeed, 0, 0);
+                ctx.restore();
+
+                ctx.save();
+                ctx.textAlign = 'center'; ctx.font = '12px Arial'; ctx.fillStyle = colorAccel;
+                ctx.translate(padding.left + basePlotWidth + 58, padding.top + basePlotHeight / 2);
+                ctx.rotate(Math.PI / 2);
+                ctx.fillText(yLabelAccel, 0, 0);
+                ctx.restore();
+
+                ctx.font = '11px Arial';
+                const legendY = padding.top - 20;
+                ctx.fillStyle = colorSpeed;
+                ctx.fillRect(padding.left, legendY - 10, 10, 10);
+                ctx.fillText('Speed', padding.left + 15, legendY);
+                ctx.fillStyle = colorAccel;
+                ctx.fillRect(padding.left + 80, legendY - 10, 10, 10);
+                ctx.fillText('Accel', padding.left + 95, legendY);
+
+                ctx.save();
+                ctx.translate(padding.left, padding.top);
+                ctx.translate(currentPanX, currentPanY);
+                ctx.scale(currentZoomLevelX, currentZoomLevelY);
+
+
+                ctx.beginPath(); ctx.strokeStyle = '#333'; ctx.lineWidth = 1 / Math.min(currentZoomLevelX, currentZoomLevelY);
+                ctx.moveTo(0, basePlotHeight);
+                ctx.lineTo(basePlotWidth, basePlotHeight);
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, basePlotHeight);
+                ctx.moveTo(basePlotWidth, 0);
+                ctx.lineTo(basePlotWidth, basePlotHeight);
+                ctx.stroke();
+
+                if (dataSpeed && dataSpeed.length > 0) {
+                    ctx.beginPath(); ctx.strokeStyle = colorSpeed; ctx.lineWidth = 1.5 / Math.min(currentZoomLevelX, currentZoomLevelY);
+                    dataSpeed.forEach((p, index) => {
+                        if (!isFinite(p.x) || !isFinite(p.y)) return;
+                        const x = ((p.x - minXData) / (maxXData - minXData)) * basePlotWidth;
+                        const y = basePlotHeight - (((p.y - effectiveMinYSpeed) / (effectiveMaxYSpeed - effectiveMinYSpeed)) * basePlotHeight);
+                        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    });
+                    ctx.stroke();
+                }
+                if (dataAccel && dataAccel.length > 0) {
+                    ctx.beginPath(); ctx.strokeStyle = colorAccel; ctx.lineWidth = 1.5 / Math.min(currentZoomLevelX, currentZoomLevelY);
+                    ctx.setLineDash([5 / Math.min(currentZoomLevelX, currentZoomLevelY), 3 / Math.min(currentZoomLevelX, currentZoomLevelY)]);
+                    dataAccel.forEach((p, index) => {
+                        if (!isFinite(p.x) || !isFinite(p.y)) return;
+                        const x = ((p.x - minXData) / (maxXData - minXData)) * basePlotWidth;
+                        const y = basePlotHeight - (((p.y - effectiveMinYAccel) / (effectiveMaxYAccel - effectiveMinYAccel)) * basePlotHeight);
+                        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    });
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                ctx.fillStyle = '#333';
+                const numYTicks = 5;
+
+                ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+                ctx.font = `${11 / currentZoomLevelY}px Arial`;
+                for (let i = 0; i <= numYTicks; i++) {
+                    const val = effectiveMinYSpeed + (i / numYTicks) * (effectiveMaxYSpeed - effectiveMinYSpeed);
+                    const yPos = basePlotHeight - (((val - effectiveMinYSpeed) / (effectiveMaxYSpeed - effectiveMinYSpeed)) * basePlotHeight);
+                    ctx.fillText(val.toFixed(1), -10 / currentZoomLevelX, yPos);
+                    ctx.beginPath();
+                    ctx.moveTo(-5 / currentZoomLevelX, yPos);
+                    ctx.lineTo(0, yPos);
+                    ctx.stroke();
+                }
+                ctx.textAlign = 'left';
+                for (let i = 0; i <= numYTicks; i++) {
+                    const val = effectiveMinYAccel + (i / numYTicks) * (effectiveMaxYAccel - effectiveMinYAccel);
+                    const yPos = basePlotHeight - (((val - effectiveMinYAccel) / (effectiveMaxYAccel - effectiveMinYAccel)) * basePlotHeight);
+                    ctx.fillText(val.toFixed(1), basePlotWidth + (10 / currentZoomLevelX), yPos);
+                    ctx.beginPath();
+                    ctx.moveTo(basePlotWidth, yPos);
+                    ctx.lineTo(basePlotWidth + (5 / currentZoomLevelX), yPos);
+                    ctx.stroke();
+                }
+                ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+                ctx.font = `${11 / currentZoomLevelX}px Arial`;
+                const numXTicks = Math.min(5, Math.floor(maxXData > 0 ? maxXData : 1));
+                for (let i = 0; i <= numXTicks; i++) {
+                    const val = minXData + (i / numXTicks) * (maxXData - minXData);
+                    const xPos = ((val - minXData) / (maxXData - minXData)) * basePlotWidth;
+                    ctx.fillText(val.toFixed(1), xPos, basePlotHeight + (10 / currentZoomLevelY));
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, basePlotHeight);
+                    ctx.lineTo(xPos, basePlotHeight + (5 / currentZoomLevelY));
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            function drawAllXYTimePlots() {
+                if (!isSimulatingDelivery || !processedData || processedData.length < 1) {
+                    Object.values(xyTimeContexts).forEach(ctx => { if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); });
+                    if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'none';
+                    return;
+                }
+                if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'block';
+
+                const timeDataPoints = processedData.filter(p => typeof p.cumulativeSimTime === 'number');
+                if (timeDataPoints.length < 1) {
+                    Object.values(xyTimeContexts).forEach(ctx => { if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); });
+                    return;
+                }
+
+                const isValidPoint = p => typeof p.x === 'number' && typeof p.y === 'number' && !isNaN(p.y) && isFinite(p.y);
+
+                const mlcSpeedData = timeDataPoints.map(p => ({ x: p.cumulativeSimTime, y: p.mlcSpeed })).filter(isValidPoint);
+                const mlcAccelData = timeDataPoints.map(p => ({ x: p.cumulativeSimTime, y: p.mlcAcceleration })).filter(isValidPoint);
+                if (xyTimeContexts.mlcMetrics) drawDualYAxisXYPlot(xyTimeContexts.mlcMetrics, mlcSpeedData, mlcAccelData, 'Time (s)', 'Speed (mm/s)', 'Accel (mm/s²)', 'MLC Metrics vs. Time', '#9b59b6', '#5e3370', xyPlotStates.mlcMetrics.panX, xyPlotStates.mlcMetrics.panY, xyPlotStates.mlcMetrics.zoomLevelX, xyPlotStates.mlcMetrics.zoomLevelY);
+
+                const gantrySpeedData = timeDataPoints.map(p => ({ x: p.cumulativeSimTime, y: p.gantrySpeed })).filter(isValidPoint);
+                const gantryAccelData = timeDataPoints.map(p => ({ x: p.cumulativeSimTime, y: p.gantryAcceleration })).filter(isValidPoint);
+                if (xyTimeContexts.gantryMetrics) drawDualYAxisXYPlot(xyTimeContexts.gantryMetrics, gantrySpeedData, gantryAccelData, 'Time (s)', 'Speed (°/s)', 'Accel (°/s²)', 'Gantry Metrics vs. Time', '#2ecc71', '#1a743f', xyPlotStates.gantryMetrics.panX, xyPlotStates.gantryMetrics.panY, xyPlotStates.gantryMetrics.zoomLevelX, xyPlotStates.gantryMetrics.zoomLevelY);
+
+                const collimatorSpeedData = timeDataPoints.map(p => ({ x: p.cumulativeSimTime, y: p.collimatorSpeed })).filter(isValidPoint);
+                const collimatorAccelData = timeDataPoints.map(p => ({ x: p.cumulativeSimTime, y: p.collimatorAcceleration })).filter(isValidPoint);
+                if (xyTimeContexts.collimatorMetrics) drawDualYAxisXYPlot(xyTimeContexts.collimatorMetrics, collimatorSpeedData, collimatorAccelData, 'Time (s)', 'Speed (°/s)', 'Accel (°/s²)', 'Collimator Metrics vs. Time', '#03A9F4', '#0277bd', xyPlotStates.collimatorMetrics.panX, xyPlotStates.collimatorMetrics.panY, xyPlotStates.collimatorMetrics.zoomLevelX, xyPlotStates.collimatorMetrics.zoomLevelY);
+
+                const doseRateData = timeDataPoints.map(p => {
+                    let rate = 0;
+                    if (p.doseRateText && p.doseRateText.includes("/min")) {
+                        rate = parseFloat(p.doseRateText.split(" ")[0]);
+                    }
+                    else if (p.doseRateText && p.doseRateText.includes("/CP") && p.cp && typeof p.cp.controlPointIndex === 'number') {
+                        const cpIndex = p.cp.controlPointIndex;
+                        if (cpIndex > 0 && processedData[cpIndex - 1] && processedData[cpIndex - 1].segmentDuration > 0.0001) {
+                            const segmentDuration = processedData[cpIndex - 1].segmentDuration;
+                            const muDeliveredInSegment = p.doseRate;
+                            rate = (muDeliveredInSegment / segmentDuration) * 60;
+                        } else if (cpIndex === 0 && p.doseRate > 0 && processedData[0] && processedData[0].segmentDuration > 0.0001) {
+                            rate = p.doseRate;
+                        }
+                        else {
+                            rate = 0;
+                        }
+                    }
+                    return { x: p.cumulativeSimTime, y: rate };
+                }).filter(isValidPoint);
+
+                if (xyTimeContexts.doseRateTime) drawSingleYAxisXYPlot(xyTimeContexts.doseRateTime, doseRateData, 'Time (s)', 'Dose Rate (MU/min)', 'Dose Rate vs. Time', '#FFC107', xyPlotStates.doseRateTime.panX, xyPlotStates.doseRateTime.panY, xyPlotStates.doseRateTime.zoomLevelX, xyPlotStates.doseRateTime.zoomLevelY);
+
+            }
+
+            Object.keys(xyTimeContexts).forEach(plotKey => {
+                const canvas = xyTimeContexts[plotKey] ? xyTimeContexts[plotKey].canvas : null;
+                if (!canvas) return;
+                const state = xyPlotStates[plotKey];
+                const padding = { top: 60, right: 75, bottom: 60, left: 75 };
+
+                canvas.addEventListener('mousedown', (e) => {
+                    state.isPanning = true;
+                    state.lastMouseX = e.clientX;
+                    state.lastMouseY = e.clientY;
+                });
+                canvas.addEventListener('mousemove', (e) => {
+                    if (!state.isPanning) return;
+                    const dx = e.clientX - state.lastMouseX;
+                    const dy = e.clientY - state.lastMouseY;
+                    state.panX += dx;
+                    state.panY += dy;
+                    state.lastMouseX = e.clientX;
+                    state.lastMouseY = e.clientY;
+                    drawAllXYTimePlots();
+                });
+                canvas.addEventListener('mouseup', () => { state.isPanning = false; });
+                canvas.addEventListener('mouseleave', () => { state.isPanning = false; });
+
+                canvas.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const rect = canvas.getBoundingClientRect();
+                    const mouseX_canvas = e.clientX - rect.left;
+                    const mouseY_canvas = e.clientY - rect.top;
+
+                    const currentPadding = (plotKey === 'doseRateTime') ?
+                        { top: 50, right: 50, bottom: 60, left: 70 } :
+                        { top: 60, right: 75, bottom: 60, left: 75 };
+
+
+                    const mouseX_relativeToPlotOrigin = mouseX_canvas - (currentPadding.left + state.panX);
+                    const mouseY_relativeToPlotOrigin = mouseY_canvas - (currentPadding.top + state.panY);
+
+                    const zoomIntensity = 0.1;
+                    let scaleFactor = (e.deltaY < 0) ? (1 + zoomIntensity) : (1 - zoomIntensity);
+
+                    const oldZoomX = state.zoomLevelX;
+                    const oldZoomY = state.zoomLevelY;
+
+                    if (e.shiftKey) {
+                        state.zoomLevelX *= scaleFactor;
+                        state.panX -= mouseX_relativeToPlotOrigin * (state.zoomLevelX / oldZoomX - 1);
+
+                    } else if (e.ctrlKey || e.metaKey) {
+                        state.zoomLevelY *= scaleFactor;
+                        state.panY -= mouseY_relativeToPlotOrigin * (state.zoomLevelY / oldZoomY - 1);
+                    } else {
+                        state.zoomLevelX *= scaleFactor;
+                        state.zoomLevelY *= scaleFactor;
+                        state.panX -= mouseX_relativeToPlotOrigin * (state.zoomLevelX / oldZoomX - 1);
+                        state.panY -= mouseY_relativeToPlotOrigin * (state.zoomLevelY / oldZoomY - 1);
+                    }
+                    drawAllXYTimePlots();
+                });
+            });
+
+            document.querySelectorAll('.reset-view-btn').forEach(button => {
+                button.addEventListener('click', function () {
+                    const plotId = this.dataset.plotId;
+                    if (xyPlotStates[plotId]) {
+                        xyPlotStates[plotId].panX = 0;
+                        xyPlotStates[plotId].panY = 0;
+                        xyPlotStates[plotId].zoomLevelX = 1;
+                        xyPlotStates[plotId].zoomLevelY = 1;
+                        drawAllXYTimePlots();
+                    }
+                });
+            });
+
+
+            function drawBEV(cpMlcDataArray, collimatorAngle, jawPositions, beamMlcDefinitionsArray, isRDS = false) {
+                if (!bevCtx) { console.warn("DEBUG: bevCtx is null, skipping drawBEV."); return; }
+                const canvasSize = bevCanvas.width;
+                const center = canvasSize / 2;
+                const VISUAL_FIELD_X_MM = 400;
+                const VISUAL_FIELD_Y_MM = 400;
+                const scaleX = canvasSize / VISUAL_FIELD_X_MM;
+                const scaleY = canvasSize / VISUAL_FIELD_Y_MM;
+                const globalScale = Math.min(scaleX, scaleY);
+
+                bevCtx.clearRect(0, 0, canvasSize, canvasSize);
+                bevCtx.save();
+                bevCtx.translate(center, center);
+                if (typeof collimatorAngle === 'number' && !isNaN(collimatorAngle)) {
+                    bevCtx.rotate((collimatorAngle * Math.PI) / 180);
+                }
+
+                const visualFieldMinX_px = -VISUAL_FIELD_X_MM / 2 * globalScale;
+                const visualFieldMaxX_px = VISUAL_FIELD_X_MM / 2 * globalScale;
+                const visualFieldMinY_px = -VISUAL_FIELD_Y_MM / 2 * globalScale;
+                const visualFieldMaxY_px = VISUAL_FIELD_Y_MM / 2 * globalScale;
+
+                bevCtx.fillStyle = 'rgba(230, 230, 230, 0.3)';
+                bevCtx.fillRect(visualFieldMinX_px, visualFieldMinY_px, VISUAL_FIELD_X_MM * globalScale, VISUAL_FIELD_Y_MM * globalScale);
+
+                let jawApertureX1_px = visualFieldMinX_px;
+                let jawApertureX2_px = visualFieldMaxX_px;
+                let jawApertureY1_px = visualFieldMinY_px;
+                let jawApertureY2_px = visualFieldMaxY_px;
+
+                if (!isRDS && jawPositions) {
+                    if (jawPositions.asymx && jawPositions.asymx.length === 2) {
+                        jawApertureX1_px = jawPositions.asymx[0] * globalScale;
+                        jawApertureX2_px = jawPositions.asymx[1] * globalScale;
+                    }
+                    if (jawPositions.asymy && jawPositions.asymy.length === 2) {
+                        jawApertureY1_px = jawPositions.asymy[0] * globalScale;
+                        jawApertureY2_px = jawPositions.asymy[1] * globalScale;
+                    }
+                }
+                bevCtx.fillStyle = 'rgba(0, 255, 0, 0.25)';
+                bevCtx.fillRect(jawApertureX1_px, jawApertureY1_px, jawApertureX2_px - jawApertureX1_px, jawApertureY2_px - jawApertureY1_px);
+
+                function drawSingleMLCLayerWithBoundaries(leafPositions, leafBoundaries, alpha) {
+                    if (leafPositions && Array.isArray(leafPositions) && leafPositions.length > 0 &&
+                        leafBoundaries && Array.isArray(leafBoundaries) &&
+                        leafBoundaries.length === (leafPositions.length / 2) + 1) {
+
+                        const numLeafPairs = leafPositions.length / 2;
+                        bevCtx.fillStyle = `rgba(80, 80, 80, ${alpha})`;
+                        bevCtx.strokeStyle = `rgba(30, 30, 30, ${alpha + 0.15 > 1 ? 1 : alpha + 0.15})`;
+                        bevCtx.lineWidth = 0.5;
+
+                        for (let i = 0; i < numLeafPairs; i++) {
+                            const leafTop_mm = leafBoundaries[i];
+                            const leafBottom_mm = leafBoundaries[i + 1];
+                            const leafY_px_canvas = leafTop_mm * globalScale;
+                            const leafHeight_px_canvas = (leafBottom_mm - leafTop_mm) * globalScale;
+                            const effectiveLeafY_start_px = Math.max(leafY_px_canvas, jawApertureY1_px);
+                            const effectiveLeafY_end_px = Math.min(leafY_px_canvas + leafHeight_px_canvas, jawApertureY2_px);
+                            const effectiveLeafHeight_px = Math.max(0, effectiveLeafY_end_px - effectiveLeafY_start_px);
+
+                            if (effectiveLeafHeight_px <= 0) continue;
+
+                            const leafA_pos_mm = leafPositions[i];
+                            const leafB_pos_mm = leafPositions[i + numLeafPairs];
+                            const leafA_edge_px = leafA_pos_mm * globalScale;
+                            const leafB_edge_px = leafB_pos_mm * globalScale;
+
+                            const leafA_draw_start = Math.max(jawApertureX1_px, visualFieldMinX_px);
+                            const leafA_draw_end = Math.min(leafA_edge_px, jawApertureX2_px);
+                            if (leafA_draw_end > leafA_draw_start) {
+                                bevCtx.fillRect(leafA_draw_start, effectiveLeafY_start_px, leafA_draw_end - leafA_draw_start, effectiveLeafHeight_px);
+                                bevCtx.strokeRect(leafA_draw_start, effectiveLeafY_start_px, leafA_draw_end - leafA_draw_start, effectiveLeafHeight_px);
+                            }
+
+                            const leafB_draw_start = Math.max(leafB_edge_px, jawApertureX1_px);
+                            const leafB_draw_end = Math.min(jawApertureX2_px, visualFieldMaxX_px);
+                            if (leafB_draw_end > leafB_draw_start) {
+                                bevCtx.fillRect(leafB_draw_start, effectiveLeafY_start_px, leafB_draw_end - leafB_draw_start, effectiveLeafHeight_px);
+                                bevCtx.strokeRect(leafB_draw_start, effectiveLeafY_start_px, leafB_draw_end - leafB_draw_start, effectiveLeafHeight_px);
+                            }
+                        }
+                    }
+                }
+
+                let mlcDataActuallyDrawn = false;
+                if (beamMlcDefinitionsArray && beamMlcDefinitionsArray.length > 0 && cpMlcDataArray && cpMlcDataArray.length > 0) {
+                    beamMlcDefinitionsArray.forEach((mlcDef) => {
+                        const cpMlcLayerData = cpMlcDataArray.find(cpLayer => cpLayer.type === mlcDef.type);
+                        if (cpMlcLayerData && cpMlcLayerData.positions && mlcDef.boundaries) {
+                            const alpha = (beamMlcDefinitionsArray.length > 1) ? 0.7 : 0.85;
+                            drawSingleMLCLayerWithBoundaries(cpMlcLayerData.positions, mlcDef.boundaries, alpha);
+                            mlcDataActuallyDrawn = true;
+                        }
+                    });
+                }
+
+                if (!isRDS && jawPositions && (jawPositions.asymx || jawPositions.asymy)) {
+                    bevCtx.strokeStyle = 'rgba(255, 140, 0, 0.9)';
+                    bevCtx.lineWidth = 3;
+                    bevCtx.strokeRect(jawApertureX1_px, jawApertureY1_px, jawApertureX2_px - jawApertureX1_px, jawApertureY2_px - jawApertureY1_px);
+                }
+
+                if (!mlcDataActuallyDrawn && (!jawPositions || (!jawPositions.asymx && !jawPositions.asymy))) {
+                    bevCtx.textAlign = 'center';
+                    bevCtx.textBaseline = 'middle';
+                    bevCtx.fillStyle = '#888';
+                    bevCtx.font = '16px Arial';
+                    bevCtx.fillText('Collimation data N/A', 0, 0);
+                }
+                bevCtx.restore();
+            }
+            function drawSingleRadialPlot(ctx, data, valueKey, maxOverallValue, highlightCP, unitLabel, excludeEndpoints = false) {
+                if (!ctx) { return; }
+                const canvasSize = ctx.canvas.width;
+                const center = canvasSize / 2;
+                const canvasRadius = canvasSize / 2;
+                const outerPlottingRadius = canvasRadius * 0.9;
+                const clockArcRadius = outerPlottingRadius * 0.85;
+                const plotMinRadius = outerPlottingRadius * 0.1;
+                const plotMaxUsableRadius = outerPlottingRadius;
+
+                ctx.clearRect(0, 0, canvasSize, canvasSize);
+
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(center, center, clockArcRadius, 0, 2 * Math.PI);
+                ctx.stroke();
+
+                ctx.fillStyle = '#333';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'top';
+                let displayUnit = unitLabel.includes('/') ? unitLabel.split('/')[1] : unitLabel;
+                if (displayUnit.toLowerCase() === 'cp' ||
+                    displayUnit.toLowerCase() === 'sector' ||
+                    unitLabel.toLowerCase().startsWith("1/mcs") ||
+                    unitLabel.toLowerCase() === "mi" ||
+                    unitLabel.toLowerCase() === "mcs" ||
+                    unitLabel.toLowerCase() === "factor") displayUnit = '';
+                ctx.fillText(`Max: ${maxOverallValue.toFixed(isFinite(maxOverallValue) && maxOverallValue !== 1.0 && maxOverallValue !== 10.0 && !unitLabel.toLowerCase().startsWith("mi") && !unitLabel.toLowerCase().startsWith("mcs") && !unitLabel.toLowerCase().startsWith("factor") ? 2 : (unitLabel.toLowerCase().startsWith("mi") || unitLabel.toLowerCase().startsWith("mcs") || unitLabel.toLowerCase().startsWith("factor") ? 3 : 1))} ${displayUnit.trim()}`, canvasSize - 5, 5);
+
+
+                if (rtPlanData && rtPlanData.beams && rtPlanData.beams[selectedBeamIndex]) {
+                    const beam = rtPlanData.beams[selectedBeamIndex];
+                    if (beam.gantryRotationDirection && beam.gantryStartAngle !== undefined && beam.gantryEndAngle !== undefined) {
+                        ctx.strokeStyle = '#e74c3c';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        const startAngleRadCanvas = (beam.gantryStartAngle - 90) * Math.PI / 180;
+                        const endAngleRadCanvas = (beam.gantryEndAngle - 90) * Math.PI / 180;
+                        let isDICOMClockwise = beam.gantryRotationDirection === "CW";
+
+                        if (beam.gantryRotationDirection === "NONE" || Math.abs(beam.gantryStartAngle - beam.gantryEndAngle) < 0.01) {
+                            const angleRad = (beam.gantryStartAngle - 90) * Math.PI / 180;
+                            const x = center + clockArcRadius * Math.cos(angleRad);
+                            const y = center + clockArcRadius * Math.sin(angleRad);
+                            ctx.beginPath();
+                            ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                            ctx.fillStyle = '#e74c3c';
+                            ctx.fill();
+                        } else {
+                            ctx.arc(center, center, clockArcRadius, startAngleRadCanvas, endAngleRadCanvas, !isDICOMClockwise);
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                ctx.strokeStyle = '#aaa';
+                ctx.lineWidth = 0.5;
+                for (let angle = 0; angle < 360; angle += 45) {
+                    const angleRad = (angle - 90) * Math.PI / 180;
+                    const innerX = center + (clockArcRadius - 6) * Math.cos(angleRad);
+                    const innerY = center + (clockArcRadius - 6) * Math.sin(angleRad);
+                    const outerX = center + (clockArcRadius + 3) * Math.cos(angleRad);
+                    const outerY = center + (clockArcRadius + 3) * Math.sin(angleRad);
+                    ctx.beginPath();
+                    ctx.moveTo(innerX, innerY);
+                    ctx.lineTo(outerX, outerY);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#555';
+                    ctx.font = '10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    const textX = center + (clockArcRadius + 15) * Math.cos(angleRad);
+                    const textY = center + (clockArcRadius + 15) * Math.sin(angleRad);
+                    ctx.fillText(angle.toString(), textX, textY);
+                }
+
+                let plotColor;
+                switch (valueKey) {
+                    case 'gantrySpeed': plotColor = '#2ecc71'; break;
+                    case 'mlcSpeed': plotColor = '#9b59b6'; break;
+                    case 'collimatorSpeed': plotColor = '#03A9F4'; break;
+                    case 'doseRate': plotColor = '#FFC107'; break;
+                    case 'modulationIndex': plotColor = '#e74c3c'; break;
+                    case 'localMItFactor': plotColor = '#f39c12'; break;
+                    default: plotColor = '#ccc';
+                }
+
+                const polygonPoints = [];
+                let dataToDraw = data;
+                if (excludeEndpoints && data.length > 2) {
+                    dataToDraw = data.slice(1, data.length - 1);
+                }
+
+
+                if (dataToDraw && dataToDraw.length > 0) {
+                    dataToDraw.forEach((item, plotIndex) => {
+                        if (!item || !item.cp || typeof item.cp.gantryAngle !== 'number') return;
+                        const gantryAngleDICOM = item.cp.gantryAngle;
+                        const angleRadCanvas = (gantryAngleDICOM - 90) * Math.PI / 180;
+                        let value = item[valueKey];
+                        value = (value === undefined || isNaN(value) || !isFinite(value)) ? 0 : Math.max(0, value);
+
+                        let scaledValue = 0;
+                        if (maxOverallValue > 0.00001) {
+                            scaledValue = value / maxOverallValue;
+                        }
+                        const radialDistance = plotMinRadius + scaledValue * (plotMaxUsableRadius - plotMinRadius);
+
+                        const x = center + radialDistance * Math.cos(angleRadCanvas);
+                        const y = center + radialDistance * Math.sin(angleRadCanvas);
+                        let originalFullDataIndex = data.indexOf(item);
+                        polygonPoints.push({ x, y, angleRad: angleRadCanvas, gantryAngle: gantryAngleDICOM, value: value, originalFullDataIndex: originalFullDataIndex });
+                    });
+                }
+                polygonPoints.sort((a, b) => a.gantryAngle - b.gantryAngle);
+
+
+                if (polygonPoints.length > 1) {
+                    ctx.beginPath();
+                    ctx.moveTo(polygonPoints[0].x, polygonPoints[0].y);
+                    for (let i = 1; i < polygonPoints.length; i++) {
+                        ctx.lineTo(polygonPoints[i].x, polygonPoints[i].y);
+                    }
+                    if ((valueKey === 'modulationIndex' || valueKey === 'localMItFactor') && polygonPoints.length > 2) {
+                        ctx.closePath();
+                    }
+                    ctx.strokeStyle = plotColor;
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    if (polygonPoints.length > 2) {
+                        ctx.beginPath();
+                        ctx.moveTo(center + plotMinRadius * Math.cos(polygonPoints[0].angleRad), center + plotMinRadius * Math.sin(polygonPoints[0].angleRad));
+                        for (let i = 0; i < polygonPoints.length; i++) {
+                            ctx.lineTo(polygonPoints[i].x, polygonPoints[i].y);
+                        }
+                        ctx.lineTo(center + plotMinRadius * Math.cos(polygonPoints[polygonPoints.length - 1].angleRad), center + plotMinRadius * Math.sin(polygonPoints[polygonPoints.length - 1].angleRad));
+                        ctx.closePath();
+                        ctx.fillStyle = plotColor + '33';
+                        ctx.fill();
+                    }
+                } else if (polygonPoints.length === 1) {
+                    ctx.fillStyle = plotColor;
+                    ctx.beginPath();
+                    ctx.arc(polygonPoints[0].x, polygonPoints[0].y, 3, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+
+                ctx.fillStyle = plotColor;
+                polygonPoints.forEach(point => {
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, 2.5, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+
+                if (highlightCP !== -1 && data[highlightCP] && data[highlightCP].cp) {
+                    const highlightedPointInPolygon = polygonPoints.find(p => p.originalFullDataIndex === highlightCP);
+
+                    if (highlightedPointInPolygon) {
+                        ctx.strokeStyle = '#34495e';
+                        ctx.fillStyle = '#34495edd';
+                        ctx.lineWidth = 2.5;
+                        ctx.beginPath();
+                        ctx.arc(highlightedPointInPolygon.x, highlightedPointInPolygon.y, 6, 0, 2 * Math.PI);
+                        ctx.fill();
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            function drawAllStaticParameterPlots() {
+                if (!rtPlanData || !rtPlanData.beams[selectedBeamIndex] || !radialContexts.gantrySpeed) return;
+
+                const firstPd = processedData.length > 0 ? processedData[0] : {};
+
+                drawSingleRadialPlot(radialContexts.gantrySpeed, processedData, 'gantrySpeed', maxGantrySpeedOverall, currentCP, firstPd.gantrySpeedUnit || "°/CP", false);
+                drawSingleRadialPlot(radialContexts.mlcSpeed, processedData, 'mlcSpeed', maxMlcSpeedOverall, currentCP, firstPd.mlcSpeedUnit || "mm/CP", false);
+                drawSingleRadialPlot(radialContexts.collimatorSpeed, processedData, 'collimatorSpeed', maxCollimatorSpeedOverall, currentCP, firstPd.collimatorSpeedUnit || "°/CP", false);
+
+                let doseRateUnitForPlot = "N/A";
+                const currentCPDataForDoseRate = processedData.length > 0 && processedData[currentCP] ? processedData[currentCP] : firstPd;
+                if (currentCPDataForDoseRate.doseRateText) {
+                    if (currentCPDataForDoseRate.doseRateText.includes("MU/min")) doseRateUnitForPlot = "MU/min";
+                    else if (currentCPDataForDoseRate.doseRateText.includes("MU/CP")) doseRateUnitForPlot = "MU/CP";
+                    else if (currentCPDataForDoseRate.doseRateText.includes("MUwt/min")) doseRateUnitForPlot = "MUwt/min";
+                    else if (currentCPDataForDoseRate.doseRateText.includes("MUwt/CP")) doseRateUnitForPlot = "MUwt/CP";
+                }
+                drawSingleRadialPlot(radialContexts.doseRate, processedData, 'doseRate', maxDoseRateOverall, currentCP, doseRateUnitForPlot, false);
+
+                if (radialContexts.localMIt) {
+                    drawSingleRadialPlot(radialContexts.localMIt, processedData, 'localMItFactor', maxLocalMItFactorOverall, currentCP, "Factor", false);
+                }
+
+                if (radialContexts.mi) {
+                    drawSingleRadialPlot(radialContexts.mi, processedData, 'modulationIndex', maxModulationIndexOverall, currentCP, "MIsport", true);
+                }
+            }
+
+            function setupRadialPlotInteractions() {
+                Object.values(radialCanvases).forEach(canvas => {
+                    if (!canvas) return;
+                    canvas.onmousemove = function (event) {
+                        if (isPlaying || !rtPlanData || !processedData || processedData.length === 0) return;
+
+                        const rect = canvas.getBoundingClientRect();
+                        const x = event.clientX - rect.left;
+                        const y = event.clientY - rect.top;
+                        const centerX = canvas.width / 2;
+                        const centerY = canvas.height / 2;
+
+                        let angleRad = Math.atan2(y - centerY, x - centerX);
+                        let angleDeg = (angleRad * 180 / Math.PI + 360 + 90) % 360;
+
+                        let closestCPIndex = -1;
+                        let minAngleDiff = 360;
+
+                        processedData.forEach((pd, index) => {
+                            if (pd && pd.cp) {
+                                const cpGantryAngle = pd.cp.gantryAngle;
+                                let diff = Math.abs(cpGantryAngle - angleDeg);
+                                if (diff > 180) diff = 360 - diff;
+
+                                if (diff < minAngleDiff) {
+                                    minAngleDiff = diff;
+                                    closestCPIndex = index;
+                                }
+                            }
+                        });
+
+                        if (closestCPIndex !== -1 && currentCP !== closestCPIndex) {
+                            currentCP = closestCPIndex;
+                            updateParamDisplay();
+                        }
+                    };
+                });
+            }
+
+            function updateParamDisplay() {
+                if (!rtPlanData || !rtPlanData.beams[selectedBeamIndex] || processedData.length === 0 || !processedData[currentCP] || !processedData[currentCP].cp) {
+                    gantryAngleSpan.textContent = 'N/A'; collimatorAngleSpan.textContent = 'N/A';
+                    gantrySpeedValSpan.textContent = 'N/A'; mlcSpeedValSpan.textContent = 'N/A';
+                    collimatorSpeedValSpan.textContent = 'N/A';
+                    jawXSpeedValSpan.textContent = 'N/A'; jawYSpeedValSpan.textContent = 'N/A';
+                    doseRateValSpan.textContent = 'N/A';
+                    if (localMItValSpan) localMItValSpan.textContent = 'N/A';
+                    if (miValSpan) miValSpan.textContent = 'N/A';
+                    currentCPIndexSpan.textContent = currentCP.toString(); totalCPsSpan.textContent = (processedData.length || 0).toString(); cpSlider.value = currentCP;
+                    simTimeDisplay.style.display = 'none'; totalSimTimeDisplay.style.display = 'none';
+                    if (bevCtx) bevCtx.clearRect(0, 0, bevCanvas.width, bevCanvas.height);
+                    drawAllStaticParameterPlots();
+                    drawAllXYTimePlots();
+                    return;
+                }
+                const currentCPData = processedData[currentCP]; const currentActualCP = currentCPData.cp; const beam = rtPlanData.beams[selectedBeamIndex];
+                gantryAngleSpan.textContent = currentActualCP.gantryAngle.toFixed(2);
+                collimatorAngleSpan.textContent = (currentActualCP.collimatorAngle != null ? currentActualCP.collimatorAngle.toFixed(2) : 'N/A');
+                gantrySpeedValSpan.textContent = `${currentCPData.gantrySpeed.toFixed(2)} ${currentCPData.gantrySpeedUnit}`;
+                mlcSpeedValSpan.textContent = `${currentCPData.mlcSpeed.toFixed(2)} ${currentCPData.mlcSpeedUnit}`;
+                collimatorSpeedValSpan.textContent = `${currentCPData.collimatorSpeed.toFixed(2)} ${currentCPData.collimatorSpeedUnit}`;
+                jawXSpeedValSpan.textContent = `${currentCPData.jawXSpeed.toFixed(2)} ${currentCPData.jawXSpeedUnit}`;
+                jawYSpeedValSpan.textContent = `${currentCPData.jawYSpeed.toFixed(2)} ${currentCPData.jawYSpeedUnit}`;
+                doseRateValSpan.textContent = currentCPData.doseRateText;
+
+                if (localMItValSpan) {
+                    localMItValSpan.textContent = typeof currentCPData.localMItFactor === 'number' ? currentCPData.localMItFactor.toFixed(3) : "N/A";
+                }
+                if (miValSpan) {
+                    miValSpan.textContent = typeof currentCPData.modulationIndex === 'number' ? currentCPData.modulationIndex.toFixed(3) : "N/A";
+                }
+
+
+                currentCPIndexSpan.textContent = currentCP; totalCPsSpan.textContent = processedData.length; cpSlider.value = currentCP;
+                if (isSimulatingDelivery) {
+                    if (currentCPData.cumulativeSimTime !== undefined) { simTimeElapsedSpan.textContent = currentCPData.cumulativeSimTime.toFixed(2); simTimeDisplay.style.display = 'flex'; } else { simTimeDisplay.style.display = 'none'; }
+                    if (beam && beam.totalCalculatedSimTime !== undefined) { totalSimTimeSpan.textContent = beam.totalCalculatedSimTime.toFixed(2); totalSimTimeDisplay.style.display = 'flex'; } else { totalSimTimeDisplay.style.display = 'none'; }
+                } else { simTimeDisplay.style.display = 'none'; totalSimTimeDisplay.style.display = 'none'; }
+                const jawPos = { asymx: currentActualCP.asymx, asymy: currentActualCP.asymy };
+                drawBEV(currentActualCP.mlcPositionData, currentActualCP.collimatorAngle || 0, jawPos, beam.mlcDefinitions, beam.isRDSMachine);
+                drawAllStaticParameterPlots();
+                drawAllXYTimePlots();
+            }
+
+            function animate() {
+                if (isPlaying && processedData.length > 0) {
+                    const previousCPForBeepLogic = currentCP;
+                    currentCP = (currentCP + 1);
+
+                    if (isSimulatingDelivery && currentCP >= processedData.length) {
+                        currentCP = processedData.length - 1;
+                        lastAnimatedCP = currentCP;
+                        updateParamDisplay();
+                        playPauseBtn.click();
+                        console.log("DEBUG: animate - Simulation ended.");
+                        return;
+                    } else if (!isSimulatingDelivery) {
+                        currentCP = currentCP % processedData.length;
+                    }
+
+                    lastAnimatedCP = currentCP;
+                    let delay = FIXED_ANIMATION_SPEED_MS;
+                    let segmentDurationSeconds = FIXED_ANIMATION_SPEED_MS / 1000;
+
+                    if (isSimulatingDelivery && processedData[previousCPForBeepLogic] && processedData[previousCPForBeepLogic].segmentDuration > 0) {
+                        segmentDurationSeconds = processedData[previousCPForBeepLogic].segmentDuration;
+                        delay = Math.max(10, segmentDurationSeconds * 1000);
+                    } else if (isSimulatingDelivery) {
+                        delay = 10;
+                    }
+                    updateParamDisplay();
+
+                    if (isSimulatingDelivery && beepPerMUEnabled && muBeepSynth && rtPlanData && rtPlanData.beams[selectedBeamIndex] && processedData[currentCP]) {
+                        const beam = rtPlanData.beams[selectedBeamIndex];
+                        const muAtEndOfSegment = beam.totalMeterset * processedData[currentCP].cp.cumulativeMetersetWeight;
+                        const integerMuAtEndOfSegment = Math.floor(muAtEndOfSegment);
+                        let beepsToTrigger = integerMuAtEndOfSegment - totalMuDeliveredForBeeps_currentBeam;
+
+                        if (muAtEndOfSegment < totalMuDeliveredForBeeps_currentBeam) {
+                            totalMuDeliveredForBeeps_currentBeam = integerMuAtEndOfSegment;
+                            beepsToTrigger = 0;
+                        }
+
+                        if (beepsToTrigger > 0) {
+                            let maxBeepsPossibleInSegment;
+                            if (segmentDurationSeconds <= 0.001) {
+                                maxBeepsPossibleInSegment = beepsToTrigger > 0 ? 1 : 0;
+                            } else {
+                                maxBeepsPossibleInSegment = Math.floor(segmentDurationSeconds * MAX_BEEPS_PER_SECOND);
+                                if (maxBeepsPossibleInSegment === 0 && beepsToTrigger > 0) maxBeepsPossibleInSegment = 1;
+                            }
+                            const actualBeepsThisSegment = Math.min(beepsToTrigger, maxBeepsPossibleInSegment);
+
+                            if (actualBeepsThisSegment > 0 && muBeepSynth) {
+                                if (typeof Tone !== 'undefined' && Tone.context && Tone.context.state !== 'running') {
+                                    console.warn("DEBUG Beep Logic: Tone.context not running, attempting to start for beeps...");
+                                    Tone.start().catch(e => console.error("DEBUG ERROR: Error starting Tone.js for beeps:", e));
+                                }
+
+                                if (Tone.context.state === 'running') {
+                                    const baseSchedulingTime = Tone.now();
+                                    const effectiveInterval = (segmentDurationSeconds > 0.001 && actualBeepsThisSegment > 1) ? (segmentDurationSeconds / actualBeepsThisSegment) : (1 / MAX_BEEPS_PER_SECOND);
+                                    for (let k_beep = 0; k_beep < actualBeepsThisSegment; k_beep++) {
+                                        const scheduledTime = baseSchedulingTime + 0.001 + (k_beep * effectiveInterval);
+                                        muBeepSynth.triggerAttackRelease("C5", "8n", scheduledTime);
+                                    }
+                                } else {
+                                    console.warn("DEBUG Beep Logic: Tone.context still not running after attempt, cannot trigger beep.");
+                                }
+                            }
+                            totalMuDeliveredForBeeps_currentBeam += actualBeepsThisSegment;
+                        }
+                    }
+                    animationFrameId = setTimeout(() => {
+                        if (isPlaying) requestAnimationFrame(animate);
+                    }, delay);
+
+                } else if (!isPlaying && animationFrameId) {
+                    clearTimeout(animationFrameId);
+                    animationFrameId = null;
+                }
+            }
+
+            toggleSimulationBtn.addEventListener('click', function () {
+                console.log("DEBUG: Toggle Simulation button clicked. isSimulatingDelivery BEFORE toggle:", isSimulatingDelivery);
+                const currentBeam = rtPlanData ? rtPlanData.beams[selectedBeamIndex] : null;
+                if (!rtPlanData || !currentBeam || !currentBeam.controlPoints || currentBeam.controlPoints.length === 0) {
+                    showMessageModal("Data Error", "Please load RT Plan data with control points and select a beam first.");
+                    console.log("DEBUG: Sim toggle aborted: No plan/beam/control points.");
+                    return;
+                }
+
+                isSimulatingDelivery = !isSimulatingDelivery;
+                console.log("DEBUG: isSimulatingDelivery AFTER toggle:", isSimulatingDelivery);
+
+                if (isPlaying) { playPauseBtn.click(); }
+
+                if (isSimulatingDelivery) {
+                    this.textContent = 'Use Fixed Speed Animation'; this.classList.add('active-mode');
+                    playPauseBtn.textContent = 'Play Simulation';
+                    simTimeDisplay.style.display = 'flex'; totalSimTimeDisplay.style.display = 'flex';
+                    if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'block';
+                } else {
+                    this.textContent = 'Simulate Delivery'; this.classList.remove('active-mode');
+                    playPauseBtn.textContent = 'Play';
+                    simTimeDisplay.style.display = 'none'; totalSimTimeDisplay.style.display = 'none';
+                    if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'none';
+                }
+                currentCP = 0; lastAnimatedCP = 0; totalMuDeliveredForBeeps_currentBeam = 0;
+                console.log("DEBUG: Calling initVisualization from toggleSimulationBtn");
+                initVisualization();
+                console.log("DEBUG: Toggle Simulation button processing finished.");
+            });
+            beepPerMUToggle.addEventListener('change', function () {
+                beepPerMUEnabled = this.checked;
+                console.log("DEBUG: Beep per MU toggled:", beepPerMUEnabled);
+                if (!beepPerMUEnabled) {
+                    totalMuDeliveredForBeeps_currentBeam = 0;
+                } else if (rtPlanData && rtPlanData.beams[selectedBeamIndex] && processedData.length > 0 && processedData[currentCP]) {
+                    const beam = rtPlanData.beams[selectedBeamIndex];
+                    const currentActualCP = processedData[currentCP].cp;
+                    totalMuDeliveredForBeeps_currentBeam = Math.floor(beam.totalMeterset * currentActualCP.cumulativeMetersetWeight);
+                    console.log("DEBUG: Beep enabled, initial totalMuDeliveredForBeeps_currentBeam:", totalMuDeliveredForBeeps_currentBeam);
+                }
+            });
+            playPauseBtn.addEventListener('click', () => {
+                console.log("DEBUG: Play/Pause button clicked. isPlaying BEFORE:", isPlaying, "isSimulatingDelivery:", isSimulatingDelivery, "currentCP:", currentCP);
+                if (!rtPlanData || !rtPlanData.beams[selectedBeamIndex] || processedData.length === 0) {
+                    showMessageModal("Data Error", "Please load RT Plan data and select a beam first.");
+                    console.log("DEBUG: Play/Pause aborted - no data."); return;
+                }
+
+                if (typeof Tone !== 'undefined' && Tone.context && Tone.context.state !== 'running') {
+                    console.log("DEBUG: Attempting to start Tone.js audio context via Play button.");
+                    Tone.start().then(() => { console.log("DEBUG: Tone.js audio context started by user interaction (Play button)."); }).catch(e => { console.error("DEBUG ERROR: Error starting Tone.js audio context (Play button):", e); });
+                } else if (typeof Tone !== 'undefined' && Tone.context) {
+                    console.log("DEBUG: Tone.js audio context state:", Tone.context.state);
+                }
+
+                isPlaying = !isPlaying;
+                console.log("DEBUG: Play/Pause button. isPlaying AFTER:", isPlaying);
+
+                if (isSimulatingDelivery) {
+                    playPauseBtn.textContent = isPlaying ? 'Pause Simulation' : 'Play Simulation';
+                    if (isPlaying && currentCP >= processedData.length - 1 && processedData.length > 0) {
+                        console.log("DEBUG: Play/Pause - Resetting simulation to CP 0 because it was at the end.");
+                        currentCP = 0; lastAnimatedCP = 0; totalMuDeliveredForBeeps_currentBeam = 0; updateParamDisplay();
+                    }
+                } else { playPauseBtn.textContent = isPlaying ? 'Pause' : 'Play'; }
+
+                if (isPlaying) {
+                    console.log("DEBUG: Play/Pause - isPlaying is true. Calling animate(). currentCP:", currentCP);
+                    if (beepPerMUEnabled && rtPlanData.beams[selectedBeamIndex] && processedData[currentCP]) {
+                        const beam = rtPlanData.beams[selectedBeamIndex];
+                        totalMuDeliveredForBeeps_currentBeam = Math.floor(beam.totalMeterset * processedData[currentCP].cp.cumulativeMetersetWeight);
+                        console.log("DEBUG: Play started, Beep MU counter reset/initialized to:", totalMuDeliveredForBeeps_currentBeam, "for CP:", currentCP);
+                    }
+                    lastAnimatedCP = currentCP;
+                    animate();
+                } else {
+                    console.log("DEBUG: Play/Pause - isPlaying is false. Clearing animationFrameId.");
+                    if (animationFrameId) { clearTimeout(animationFrameId); animationFrameId = null; }
+                }
+            });
+            resetBtn.addEventListener('click', () => {
+                console.log("DEBUG: Reset button clicked.");
+                if (isPlaying) { playPauseBtn.click(); }
+                currentCP = 0;
+                lastAnimatedCP = 0;
+                totalMuDeliveredForBeeps_currentBeam = 0;
+                if (rtPlanData && rtPlanData.beams[selectedBeamIndex] && processedData.length > 0 && processedData[currentCP]) {
+                    if (beepPerMUEnabled) {
+                        const beam = rtPlanData.beams[selectedBeamIndex];
+                        totalMuDeliveredForBeeps_currentBeam = Math.floor(beam.totalMeterset * processedData[0].cp.cumulativeMetersetWeight);
+                    }
+                }
+                updateParamDisplay();
+                console.log("DEBUG: Animation reset to CP 0.");
+            });
+            cpSlider.addEventListener('input', function () {
+                if (isPlaying) return;
+                currentCP = parseInt(this.value, 10);
+                lastAnimatedCP = currentCP;
+                if (rtPlanData && rtPlanData.beams[selectedBeamIndex] && processedData.length > 0 && processedData[currentCP]) {
+                    if (beepPerMUEnabled) {
+                        const beam = rtPlanData.beams[selectedBeamIndex];
+                        totalMuDeliveredForBeeps_currentBeam = Math.floor(beam.totalMeterset * processedData[currentCP].cp.cumulativeMetersetWeight);
+                        console.log("DEBUG: Slider scrubbed, Beep MU counter updated to:", totalMuDeliveredForBeeps_currentBeam, "for CP:", currentCP);
+                    }
+                }
+                updateParamDisplay();
+            });
+
+            console.log("DEBUG: Initializing page - calling clearAll.");
+            clearAll();
+            console.log("DEBUG: Page initialization complete.");
+        });
+    </script>
+</body>
+
+</html>
