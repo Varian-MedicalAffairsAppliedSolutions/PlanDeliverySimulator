@@ -4,12 +4,6 @@
 **Author:** Taoran Li, PhD  
 **Date:** June 13, 2025
 
----
-
-> © 2025 Taoran Li. All rights reserved. This software is provided "as is" for educational and research purposes only. It is not intended for clinical use, patient diagnosis, or treatment planning. The accuracy of simulations and any derived data is not guaranteed. The user assumes all responsibility for the use of this software.
-
----
-
 ## 1. Overview
 
 The DICOM RT Plan Delivery Simulator is a web-based tool designed to visualize and analyze the delivery sequence of radiotherapy plans. It allows users to:
