@@ -192,6 +192,7 @@
             padding: 10px;
             box-sizing: border-box;
             margin-bottom: 15px;
+            position: relative;
         }
 
         canvas {
@@ -261,6 +262,15 @@
         .speed-limit-controls button:hover,
         .xy-plot-container button:hover {
             background-color: #2980b9;
+        }
+
+        #exportDataBtn {
+            background-color: #16a085;
+            margin-right: 10px;
+        }
+
+        #exportDataBtn:hover {
+            background-color: #117a65;
         }
 
         .mode-controls button.active-mode {
@@ -339,7 +349,17 @@
             background-color: #fdfdfd;
             margin-bottom: 15px;
             box-sizing: border-box;
+            position: relative;
         }
+
+        .file-input-section .top-right-buttons {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
 
         .file-input-section input[type="file"] {
             margin-right: 8px;
@@ -464,16 +484,7 @@
 
 <body>
     <div class="container">
-        <div class="author-info-header">
-            <p><strong>Author:</strong> Taoran Li, PhD</p>
-            <p><strong>Contact:</strong> taoran.li@varian.com</p>
-            <p><strong>Version:</strong> 3.14.3 (Metrics with Collimator)</p>
-            <p><strong>Date:</strong> June 10, 2025</p>
-            <p><strong>Rights & Disclaimer:</strong> © 2025 Taoran Li. All rights reserved. This software is provided
-                "as is" for educational and research purposes only. It is not intended for clinical use, patient
-                diagnosis, or treatment planning. The accuracy of simulations and any derived data is not guaranteed.
-                The user assumes all responsibility for the use of this software.</p>
-        </div>
+
 
         <h1>DICOM RT Plan Delivery Simulator (NOT For Clinical Use)</h1>
         <div class="notes">
@@ -483,9 +494,10 @@
                 Actual Delivery Time.
             </p>
             <p>
-                <strong>Step 1: Load your DICOM RT Plan (<code>.dcm</code>) file.</strong>
+                <strong>Step 1: Load your plan file.</strong>
             <ul>
-                <li>Drag and drop your file onto the designated area below.</li>
+                <li>Drag and drop your DICOM RT Plan (<code>.dcm</code>) or exported JSON (<code>.json</code>) file onto
+                    the designated area below.</li>
                 <li>Alternatively, use the "Choose File" button.</li>
             </ul>
             </p>
@@ -503,10 +515,14 @@
             <p>
                 <strong>Step 4: Choose Playback Mode & Interact.</strong>
             <ul>
-                <li>Use the "Simulate Delivery" / "Use Fixed Speed Animation" button to toggle playback modes.</li>
+                <li>Use the "Simulate Delivery" / "Use Fixed Speed Animation" button to toggle playback modes for a
+                    single beam.</li>
+                <li>Use the "Simulate Full Plan" button to simulate all beams delivered consecutively, including an
+                    animated transition between beams where the MLCs also move.</li>
                 <li>Enable "Beep per MU" for audible feedback during simulation (max 20 beeps/sec).</li>
                 <li>Move your mouse cursor over the Radial Plots or use the slider to scrub through control
-                    points. The "MIsport" plot and "Local MIt" plot (now include collimator factors) use a rolling
+                    points. The "MIsport" (Li & Xing, Med. Phys. 40 (5), May 2013) plot and "Local MIt" (Park et al,
+                    Phys. Med. Biol. 59 (2014) 7315-7340) plot (now include collimator factors) use a rolling
                     window. Both visually exclude the first and last CPs of the beam.
                 </li>
                 <li>XY plots for Speed/Acceleration vs. Time will appear below when "Simulate Delivery" mode is active
@@ -518,14 +534,16 @@
 
         <div class="file-input-section">
             <h2>Load RT Plan Data & Configure Simulation Parameters</h2>
-            <button id="clearAllBtn" style="background-color: #e74c3c; float: right;">Clear All Data &
-                Visuals</button>
+            <div class="top-right-buttons">
+                <button id="exportDataBtn">Export Parsed Data</button>
+                <button id="clearAllBtn" style="background-color: #e74c3c;">Clear All Data</button>
+            </div>
 
             <div class="data-input-group">
-                <h3>Load from DICOM (.dcm) File</h3>
-                <div id="dicomDropZone">Drag & Drop your DICOM RT Plan (.dcm) file here
+                <h3>Load from Plan File</h3>
+                <div id="dicomDropZone">Drag & Drop your DICOM (.dcm) or exported JSON (.json) file here
                     <br> or <br>
-                    <input type="file" id="dicomFileInput" accept=".dcm,application/dicom">
+                    <input type="file" id="dicomFileInput" accept=".dcm,application/dicom,.json,application/json">
                 </div>
             </div>
 
@@ -572,6 +590,7 @@
             <p><strong>Total Beams in Plan:</strong> <span id="planTotalBeams">N/A</span></p>
             <p><strong>Total Plan MU:</strong> <span id="planTotalMU">N/A</span></p>
             <p><strong>Primary Dose Rate (First Beam, CP0):</strong> <span id="planDoseRate">N/A</span> MU/min</p>
+            <p><strong>Est. Total Plan Time (All Beams):</strong> <span id="totalPlanSimTime">N/A</span> s</p>
             <div id="individualBeamInfoContainer">
             </div>
         </div>
@@ -579,6 +598,7 @@
 
         <div class="mode-controls">
             <button id="toggleSimulationBtn">Simulate Delivery</button>
+            <button id="toggleAllBeamsSimBtn">Simulate Full Plan</button>
             <span style="margin-left: 20px;">
                 <input type="checkbox" id="beepPerMUToggle" style="vertical-align: middle;">
                 <label for="beepPerMUToggle" style="vertical-align: middle;">Beep per MU (Sim Mode)</label>
@@ -680,6 +700,16 @@
                 </div>
             </div>
         </div>
+        <div class="author-info-header">
+            <p><strong>Author:</strong> Taoran Li, PhD</p>
+            <p><strong>Contact:</strong> taoran.li@varian.com</p>
+            <p><strong>Version:</strong> 3.9.5 (Full MLC transition calculation and display)</p>
+            <p><strong>Date:</strong> June 13, 2025</p>
+            <p><strong>Rights & Disclaimer:</strong> © 2025 Taoran Li. All rights reserved. This software is provided
+                "as is" for educational and research purposes only. It is not intended for clinical use, patient
+                diagnosis, or treatment planning. The accuracy of simulations and any derived data is not guaranteed.
+                The user assumes all responsibility for the use of this software.</p>
+        </div>
 
     </div>
 
@@ -693,10 +723,16 @@
             let animationFrameId = null;
             let isPlaying = false;
             let isSimulatingDelivery = false;
+            let isSimulatingAllBeams = false;
             let beepPerMUEnabled = false;
             let muBeepSynth = null;
             let totalMuDeliveredForBeeps_currentBeam = 0;
-            let processedData = [];
+            let processedData = []; // For single beam
+            let allBeamsProcessedData = []; // For full plan sim
+            let interBeamTransitionTimes = []; // For full plan sim
+            let currentBeamIndexForFullSim = 0;
+            let totalPlanElapsedTime = 0;
+
             let lastAnimatedCP = 0;
 
             // DOM Element references
@@ -715,6 +751,7 @@
             const planTotalBeamsSpan = document.getElementById('planTotalBeams');
             const planTotalMUSpan = document.getElementById('planTotalMU');
             const planDoseRateSpan = document.getElementById('planDoseRate');
+            const totalPlanSimTimeSpan = document.getElementById('totalPlanSimTime');
             const individualBeamInfoContainer = document.getElementById('individualBeamInfoContainer');
 
 
@@ -781,6 +818,7 @@
             const playPauseBtn = document.getElementById('playPauseBtn');
             const resetBtn = document.getElementById('resetBtn');
             const toggleSimulationBtn = document.getElementById('toggleSimulationBtn');
+            const toggleAllBeamsSimBtn = document.getElementById('toggleAllBeamsSimBtn');
             const beepPerMUToggle = document.getElementById('beepPerMUToggle');
             const currentCPIndexSpan = document.getElementById('currentCPIndex');
             const totalCPsSpan = document.getElementById('totalCPs');
@@ -815,6 +853,7 @@
 
             const applySpeedLimitsBtn = document.getElementById('applySpeedLimitsBtn');
             const clearAllBtn = document.getElementById('clearAllBtn');
+            const exportDataBtn = document.getElementById('exportDataBtn');
 
 
             const FIXED_ANIMATION_SPEED_MS = 100;
@@ -866,11 +905,70 @@
                 console.error("DEBUG ERROR: clearAllBtn element not found! Cannot attach event listener.");
             }
 
+            if (exportDataBtn) {
+                exportDataBtn.addEventListener('click', exportParsedDataAsJson);
+            } else {
+                console.error("DEBUG ERROR: exportDataBtn element not found! Cannot attach event listener.");
+            }
+
+            // Universal file handler for both DICOM and JSON
+            function handleFile(file) {
+                if (!file) return;
+                const fileName = file.name.toLowerCase();
+                if (fileName.endsWith('.dcm')) {
+                    handleDicomFile(file);
+                } else if (fileName.endsWith('.json')) {
+                    handleJsonFile(file);
+                } else {
+                    showMessageModal("File Type Error", "Please select a DICOM (.dcm) or JSON (.json) file.");
+                }
+            }
+
             dicomDropZone.addEventListener('dragover', (event) => { event.preventDefault(); dicomDropZone.classList.add('dragover'); });
             dicomDropZone.addEventListener('dragleave', () => { dicomDropZone.classList.remove('dragover'); });
-            dicomDropZone.addEventListener('drop', (event) => { event.preventDefault(); dicomDropZone.classList.remove('dragover'); const files = event.dataTransfer.files; if (files.length > 0) { handleDicomFile(files[0]); } });
-            dicomFileInput.addEventListener('change', (event) => { const files = event.target.files; if (files.length > 0) { handleDicomFile(files[0]); } });
+            dicomDropZone.addEventListener('drop', (event) => { event.preventDefault(); dicomDropZone.classList.remove('dragover'); const files = event.dataTransfer.files; if (files.length > 0) { handleFile(files[0]); } });
+            dicomFileInput.addEventListener('change', (event) => { const files = event.target.files; if (files.length > 0) { handleFile(files[0]); } });
 
+
+            function handleJsonFile(file) {
+                console.log("DEBUG: handleJsonFile called with file:", file.name);
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    console.log("DEBUG: FileReader onload event for JSON.");
+                    try {
+                        const jsonData = JSON.parse(e.target.result);
+
+                        // The exported JSON has a specific structure. Let's use that.
+                        if (jsonData && jsonData.parsedDicomPlan) {
+                            rtPlanData = jsonData.parsedDicomPlan;
+                            console.log("DEBUG: rtPlanData loaded from JSON:", rtPlanData);
+
+                            if (rtPlanData && rtPlanData.beams && rtPlanData.beams.length > 0) {
+                                postPlanLoadSetup();
+                                showMessageModal("JSON Plan Loaded", "Plan data successfully loaded from JSON file.");
+                            } else {
+                                showMessageModal("JSON Parsing Error", "Failed to parse JSON plan or no valid beams found.");
+                                clearAll();
+                            }
+                        } else {
+                            showMessageModal("JSON Format Error", "The provided JSON file does not have the expected 'parsedDicomPlan' structure.");
+                            clearAll();
+                        }
+                    } catch (error) {
+                        console.error("DEBUG ERROR: Error parsing JSON file:", error);
+                        showMessageModal("JSON Parsing Error", `Error parsing JSON file: ${error.message}.`);
+                        clearAll();
+                    }
+                };
+                reader.onerror = function (e) {
+                    console.error("DEBUG ERROR: Error reading JSON file:", e);
+                    showMessageModal("File Read Error", "Error reading the JSON file.");
+                    clearAll();
+                };
+                reader.readAsText(file); // Read as text for JSON
+            }
+
+            // This function was missing, causing the error. I've added it back.
             function getDicomElementValue(dataSet, tagName, defaultValue = null) {
                 if (dataSet && dataSet[tagName] !== undefined) {
                     if (Array.isArray(dataSet[tagName]) && dataSet[tagName].length === 1 && typeof dataSet[tagName][0] !== 'object') {
@@ -883,24 +981,22 @@
 
             function handleDicomFile(file) {
                 console.log("DEBUG: handleDicomFile called with file:", file.name);
-                if (!file.name.toLowerCase().endsWith('.dcm')) { showMessageModal("File Type Error", "Please select a DICOM (.dcm) file."); return; }
                 const reader = new FileReader();
                 reader.onload = function (e) {
-                    console.log("DEBUG: FileReader onload event.");
+                    console.log("DEBUG: FileReader onload event for DICOM.");
                     try {
                         if (!muBeepSynth && typeof Tone !== 'undefined' && Tone.Synth) {
                             muBeepSynth = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.0, release: 0.1 } }).toDestination();
                             console.log("DEBUG: muBeepSynth initialized.");
-                        } else if (muBeepSynth) {
-                            console.log("DEBUG: muBeepSynth already initialized.");
-                        } else {
-                            console.warn("DEBUG: Tone.js or Tone.Synth not available for synth initialization.");
                         }
 
                         const arrayBuffer = e.target.result;
                         if (typeof dcmjs === 'undefined' || !dcmjs.data || !dcmjs.data.DicomMessage || !dcmjs.data.DicomMetaDictionary) { console.error("DEBUG ERROR: dcmjs library is not correctly loaded!"); showMessageModal("Library Error", "Error: dcmjs library not loaded. Cannot parse DICOM file."); clearAll(); return; }
                         console.log("DEBUG: Attempting to parse DICOM file with dcmjs...");
-                        const dicomDict = dcmjs.data.DicomMessage.readFile(arrayBuffer);
+                        const dicomDict = dcmjs.data.DicomMessage.readFile(arrayBuffer, {
+                            // ignore errors
+                            untilTag: "7FE00010"
+                        });
                         console.log("DEBUG: DICOM file read, naturalizing dataset...");
                         const naturalizedDataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomDict.dict);
                         console.log("DEBUG: Dataset naturalized, parsing RT Plan data...");
@@ -909,12 +1005,7 @@
                         console.log("DEBUG: rtPlanData parsed:", rtPlanData ? `Success (TopLevelManufModel: '${rtPlanData.manufacturerModelName}', SpeedDefaultID: '${rtPlanData.machineIdentifierForSpeeds}')` : "Failed or empty");
 
                         if (rtPlanData && rtPlanData.beams && rtPlanData.beams.length > 0) {
-                            updateOverallPlanInfoDisplay(rtPlanData);
-                            setMachineSpecificDefaults(rtPlanData.machineIdentifierForSpeeds);
-                            populateBeamSelector();
-                            selectedBeamIndex = 0; beamSelector.value = selectedBeamIndex;
-                            console.log("DEBUG: Calling initVisualizationForSelectedBeam from handleDicomFile.");
-                            initVisualizationForSelectedBeam();
+                            postPlanLoadSetup();
                         } else {
                             showMessageModal("Parsing Error", "Failed to parse DICOM RT Plan or no valid beams found.");
                             setMachineSpecificDefaults("");
@@ -934,6 +1025,48 @@
                     clearAll();
                 };
                 reader.readAsArrayBuffer(file);
+            }
+
+            function postPlanLoadSetup() {
+                updateOverallPlanInfoDisplay(rtPlanData);
+                setMachineSpecificDefaults(rtPlanData.machineIdentifierForSpeeds || rtPlanData.manufacturerModelName || "");
+                processAllBeamsForTimings(); // New: process all beams upfront
+                populateBeamSelector();
+                selectedBeamIndex = 0;
+                beamSelector.value = selectedBeamIndex;
+                console.log("DEBUG: Calling initVisualizationForSelectedBeam from postPlanLoadSetup.");
+                initVisualizationForSelectedBeam();
+            }
+
+
+            function exportParsedDataAsJson() {
+                if (!rtPlanData || !processedData) {
+                    showMessageModal("Export Error", "No data available to export. Please load a DICOM file first.");
+                    return;
+                }
+
+                const dataToExport = {
+                    parsedDicomPlan: rtPlanData,
+                    simulationAndCalculationData: isSimulatingAllBeams ? allBeamsProcessedData : processedData
+                };
+
+                const jsonString = JSON.stringify(dataToExport, (key, value) => {
+                    // Handle potential circular references if any, though unlikely with this structure
+                    return value;
+                }, 2); // The '2' argument formats the JSON string with an intent of 2 spaces for readability
+
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'parsed_dicom_data.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                console.log("DEBUG: Parsed data exported as JSON.");
             }
 
             function parseRtPlanDicom(dataSet, metaSet) {
@@ -1079,6 +1212,7 @@
                     planTotalBeamsSpan.textContent = planData.beams ? planData.beams.length : 'N/A';
                     planTotalMUSpan.textContent = planData.totalPlanMU ? planData.totalPlanMU.toFixed(2) : 'N/A';
                     planDoseRateSpan.textContent = (typeof planData.primaryDoseRate === 'number') ? planData.primaryDoseRate.toFixed(0) : 'N/A';
+                    totalPlanSimTimeSpan.textContent = 'N/A'; // Reset on load
 
                     displayIndividualBeamInfoWithMCS(planData.beams);
 
@@ -1090,6 +1224,7 @@
                     planTotalBeamsSpan.textContent = 'N/A';
                     planTotalMUSpan.textContent = 'N/A';
                     planDoseRateSpan.textContent = 'N/A';
+                    totalPlanSimTimeSpan.textContent = 'N/A';
                     individualBeamInfoContainer.innerHTML = '';
                     if (overallPlanInfoContainer) overallPlanInfoContainer.style.display = 'none';
                 }
@@ -1162,12 +1297,17 @@
             beamSelector.addEventListener('change', function () {
                 console.log("DEBUG: Beam selector changed.");
                 selectedBeamIndex = parseInt(this.value, 10);
+                // When user manually changes beam, exit full-plan simulation mode
+                if (isSimulatingAllBeams) {
+                    toggleAllBeamsSimBtn.click();
+                }
                 initVisualizationForSelectedBeam();
             });
             function initVisualizationForSelectedBeam() {
                 console.log("DEBUG: initVisualizationForSelectedBeam called for beam index:", selectedBeamIndex);
                 if (!rtPlanData || !rtPlanData.beams || !rtPlanData.beams[selectedBeamIndex]) { showMessageModal("Data Error", "Selected beam data not found."); clearAll(); return; }
-                isPlaying = false; playPauseBtn.textContent = isSimulatingDelivery ? 'Play Simulation' : 'Play';
+                isPlaying = false;
+                playPauseBtn.textContent = isSimulatingDelivery ? 'Play Simulation' : 'Play';
                 if (animationFrameId) { clearTimeout(animationFrameId); animationFrameId = null; }
                 currentCP = 0; lastAnimatedCP = 0; totalMuDeliveredForBeeps_currentBeam = 0;
                 initVisualization();
@@ -1178,8 +1318,15 @@
                 rtPlanData = null;
                 if (dicomFileInput) dicomFileInput.value = '';
                 currentCP = 0; lastAnimatedCP = 0; selectedBeamIndex = 0; isPlaying = false; totalMuDeliveredForBeeps_currentBeam = 0;
+                isSimulatingDelivery = false;
+                isSimulatingAllBeams = false;
+                toggleSimulationBtn.classList.remove('active-mode');
+                toggleAllBeamsSimBtn.classList.remove('active-mode');
+                toggleAllBeamsSimBtn.textContent = 'Simulate Full Plan';
+                if (beamSelector) beamSelector.disabled = false;
 
-                if (playPauseBtn) playPauseBtn.textContent = isSimulatingDelivery ? 'Play Simulation' : 'Play';
+
+                if (playPauseBtn) playPauseBtn.textContent = 'Play';
                 if (animationFrameId) { clearTimeout(animationFrameId); animationFrameId = null; }
 
                 if (bevCtx) bevCtx.clearRect(0, 0, bevCanvas.width, bevCanvas.height);
@@ -1212,6 +1359,8 @@
                 if (cpSlider) { cpSlider.max = 0; cpSlider.value = 0; }
 
                 processedData = [];
+                allBeamsProcessedData = [];
+                interBeamTransitionTimes = [];
                 maxGantrySpeedOverall = 0; maxMlcSpeedOverall = 0; maxCollimatorSpeedOverall = 0; maxDoseRateOverall = 0;
                 maxJawXSpeedOverall = 0; maxJawYSpeedOverall = 0;
                 maxLocalMItFactorOverall = 0.0;
@@ -1241,9 +1390,15 @@
             applySpeedLimitsBtn.addEventListener('click', () => {
                 console.log("DEBUG: Apply Speed Limits button clicked.");
                 updateCurrentSpeedLimits();
-                if (rtPlanData && rtPlanData.beams[selectedBeamIndex]) {
-                    initVisualization();
-                    showMessageModal("Settings Applied", "Settings applied and simulation (if active) recalculated.");
+                if (rtPlanData) {
+                    processAllBeamsForTimings(); // Recalculate all timings
+                    initVisualization(); // Re-init current view
+                    if (isSimulatingAllBeams) {
+                        // If we were in all-beam mode, restart it with new values
+                        toggleAllBeamsSimBtn.click(); // Turn it off
+                        toggleAllBeamsSimBtn.click(); // and back on to apply changes
+                    }
+                    showMessageModal("Settings Applied", "Settings applied and simulation(s) recalculated.");
                 } else {
                     showMessageModal("Settings Updated", "Settings updated. Load a plan to see their effect.");
                 }
@@ -1290,8 +1445,7 @@
                     const prevCP = controlPoints[k - 1];
                     const segmentDataStore = dataToProcess[k - 1];
 
-                    let dGA = Math.abs(currentCP.gantryAngle - prevCP.gantryAngle);
-                    if (dGA > 180) dGA = 360 - dGA;
+                    let dGA = normalizeGantryAngleDiff(currentCP.gantryAngle, prevCP.gantryAngle);
                     segmentDataStore.deltaGantryAngle = dGA;
 
                     let maxLT = 0;
@@ -1450,58 +1604,66 @@
             }
 
             function getEffectiveMLCPositionsForCP(cp, beamMlcDefinitions) {
-                if (!cp || !cp.mlcPositionData || cp.mlcPositionData.length === 0 ||
-                    !beamMlcDefinitions || beamMlcDefinitions.length === 0) {
+                // Standard case: If there is only one MLC definition, return its positions directly.
+                if (!beamMlcDefinitions || beamMlcDefinitions.length < 2) {
+                    if (cp && cp.mlcPositionData && cp.mlcPositionData.length > 0) {
+                        return cp.mlcPositionData[0].positions;
+                    }
                     return null;
                 }
 
-                let effectiveBankAPositions = null;
-                let effectiveBankBPositions = null;
-                let numLeafPairs = 0;
-                let firstLayerProcessed = false;
+                // RDS Dual-Layer Case: Identify the two different layers
+                const layer1Def = beamMlcDefinitions[0];
+                const layer2Def = beamMlcDefinitions[1];
+                const layer1PosData = cp.mlcPositionData.find(p => p.type === layer1Def.type);
+                const layer2PosData = cp.mlcPositionData.find(p => p.type === layer2Def.type);
 
-                for (const mlcDef of beamMlcDefinitions) {
-                    if (!(mlcDef.type && (mlcDef.type.toUpperCase() === "MLCX" || mlcDef.type.toUpperCase().startsWith("MLCX")))) {
-                        continue;
-                    }
+                if (!layer1PosData || !layer2PosData) {
+                    console.error("DEBUG RDS: Could not find position data for both MLC layers in CP " + cp.controlPointIndex);
+                    return null; // Not enough data to calculate effective aperture
+                }
 
-                    const layerMlcData = cp.mlcPositionData.find(m => m.type === mlcDef.type);
-                    if (!layerMlcData || !layerMlcData.positions || layerMlcData.positions.length === 0) {
-                        continue;
-                    }
+                // --- Create a new, high-resolution virtual leaf structure by combining boundaries ---
+                // The Set automatically handles duplicates
+                const allBoundaries = new Set([...layer1Def.boundaries, ...layer2Def.boundaries]);
+                const virtualBoundaries = Array.from(allBoundaries).sort((a, b) => a - b);
 
-                    const currentLayerPositions = layerMlcData.positions;
-                    const currentNumLeafPairs = currentLayerPositions.length / 2;
+                const virtualPositionsA = [];
+                const virtualPositionsB = [];
 
-                    if (!firstLayerProcessed) {
-                        if (currentNumLeafPairs === 0) continue;
-                        numLeafPairs = currentNumLeafPairs;
-                        effectiveBankAPositions = currentLayerPositions.slice(0, numLeafPairs);
-                        effectiveBankBPositions = currentLayerPositions.slice(numLeafPairs);
-                        firstLayerProcessed = true;
-                    } else {
-                        if (currentNumLeafPairs !== numLeafPairs) {
-                            console.warn(`DEBUG: MLC layer ${mlcDef.type} has ${currentNumLeafPairs} leaf pairs, inconsistent with previous ${numLeafPairs}. Skipping layer for effective aperture calculation at CP ${cp.controlPointIndex}.`);
-                            continue;
+                // For each small virtual leaf, find the most limiting physical leaf from each layer
+                for (let i = 0; i < virtualBoundaries.length - 1; i++) {
+                    const v_leaf_start = virtualBoundaries[i];
+                    const v_leaf_end = virtualBoundaries[i + 1];
+                    const v_leaf_center_y = (v_leaf_start + v_leaf_end) / 2;
+
+                    let pos1_A = -Infinity, pos1_B = Infinity;
+                    let pos2_A = -Infinity, pos2_B = Infinity;
+
+                    // Find containing leaf and its position in Layer 1
+                    for (let j = 0; j < layer1Def.boundaries.length - 1; j++) {
+                        if (v_leaf_center_y >= layer1Def.boundaries[j] && v_leaf_center_y < layer1Def.boundaries[j + 1]) {
+                            pos1_A = layer1PosData.positions[j];
+                            pos1_B = layer1PosData.positions[j + (layer1PosData.positions.length / 2)];
+                            break;
                         }
-                        for (let i = 0; i < numLeafPairs; i++) {
-                            effectiveBankAPositions[i] = Math.max(effectiveBankAPositions[i], currentLayerPositions[i]);
-                            effectiveBankBPositions[i] = Math.min(effectiveBankBPositions[i], currentLayerPositions[i + numLeafPairs]);
+                    }
+
+                    // Find containing leaf and its position in Layer 2
+                    for (let k = 0; k < layer2Def.boundaries.length - 1; k++) {
+                        if (v_leaf_center_y >= layer2Def.boundaries[k] && v_leaf_center_y < layer2Def.boundaries[k + 1]) {
+                            pos2_A = layer2PosData.positions[k];
+                            pos2_B = layer2PosData.positions[k + (layer2PosData.positions.length / 2)];
+                            break;
                         }
                     }
+
+                    // The effective position is the most restrictive (max for Bank A, min for Bank B)
+                    virtualPositionsA.push(Math.max(pos1_A, pos2_A));
+                    virtualPositionsB.push(Math.min(pos1_B, pos2_B));
                 }
 
-                if (!firstLayerProcessed) {
-                    return null;
-                }
-
-                for (let i = 0; i < numLeafPairs; i++) {
-                    if (effectiveBankBPositions[i] < effectiveBankAPositions[i]) {
-                        effectiveBankBPositions[i] = effectiveBankAPositions[i];
-                    }
-                }
-
-                return [...effectiveBankAPositions, ...effectiveBankBPositions];
+                return [...virtualPositionsA, ...virtualPositionsB];
             }
 
 
@@ -1662,27 +1824,37 @@
                 if (numControlPoints < 2) return 0;
 
                 const cpS = controlPoints[cpIndexS];
-                const mlcPosS_effective = getEffectiveMLCPositionsForCP(cpS, beamData.mlcDefinitions);
-                if (!mlcPosS_effective || mlcPosS_effective.length === 0) return 0;
-
-                const numLeafPairs = mlcPosS_effective.length / 2;
                 let totalMI = 0;
 
+                // Iterate through each neighbor control point
                 for (let k_neighbor = -K; k_neighbor <= K; k_neighbor++) {
                     if (k_neighbor === 0) continue;
 
                     const cpIndexSK = cpIndexS + k_neighbor;
                     if (cpIndexSK < 0 || cpIndexSK >= numControlPoints) continue;
-
                     const cpSK = controlPoints[cpIndexSK];
-                    const mlcPosSK_effective = getEffectiveMLCPositionsForCP(cpSK, beamData.mlcDefinitions);
-                    if (!mlcPosSK_effective || mlcPosSK_effective.length !== mlcPosS_effective.length) continue;
 
-                    let sumLeafDiff = 0;
-                    for (let i = 0; i < numLeafPairs; i++) {
-                        sumLeafDiff += Math.abs(mlcPosS_effective[i] - mlcPosSK_effective[i]);
-                        sumLeafDiff += Math.abs(mlcPosS_effective[i + numLeafPairs] - mlcPosSK_effective[i + numLeafPairs]);
+                    let sumOfAllLeafTravelsForNeighbor = 0;
+
+                    // --- START OF CORRECTED LOGIC ---
+                    // Iterate through each PHYSICAL MLC layer (e.g., proximal and distal)
+                    for (const mlcDef of beamData.mlcDefinitions) {
+                        // Find the physical leaf positions for this specific layer at both control points
+                        const mlcPosDataS = cpS.mlcPositionData.find(p => p.type === mlcDef.type);
+                        const mlcPosDataSK = cpSK.mlcPositionData.find(p => p.type === mlcDef.type);
+
+                        // If this layer exists in both control points, calculate its travel
+                        if (mlcPosDataS && mlcPosDataSK && mlcPosDataS.positions.length === mlcPosDataSK.positions.length) {
+                            let sumLeafDiffForLayer = 0;
+                            const numLeafPairs = mlcPosDataS.positions.length / 2;
+                            for (let i = 0; i < mlcPosDataS.positions.length; i++) {
+                                // Sum the travel distance of every single physical leaf in this layer
+                                sumLeafDiffForLayer += Math.abs(mlcPosDataS.positions[i] - mlcPosDataSK.positions[i]);
+                            }
+                            sumOfAllLeafTravelsForNeighbor += sumLeafDiffForLayer;
+                        }
                     }
+                    // --- END OF CORRECTED LOGIC ---
 
                     const deltaMU = Math.abs(cpS.cumulativeMetersetWeight - cpSK.cumulativeMetersetWeight) * (beamData.totalMeterset || 1.0);
                     const deltaGantry = normalizeGantryAngleDiff(cpS.gantryAngle, cpSK.gantryAngle);
@@ -1695,19 +1867,102 @@
                     if (deltaGantry > MI_GANTRY_DIFF_EPSILON) {
                         muPerDegreeFactor = deltaMU / deltaGantry;
                     } else if (deltaMU > 0.00001) {
+                        // This case handles static gantry segments (pure sliding window)
+                        // The original paper's definition results in 0 here, but a non-zero value
+                        // can be used to capture complexity in static fields if desired.
+                        // For now, adhering to the paper's definition.
                         muPerDegreeFactor = 0;
                     }
-                    totalMI += sumLeafDiff * collimatorFactorForMIsport * muPerDegreeFactor;
+
+                    // The total MI is the sum of (total physical leaf travel * weighting factors)
+                    totalMI += sumOfAllLeafTravelsForNeighbor * collimatorFactorForMIsport * muPerDegreeFactor;
                 }
                 return totalMI;
             }
+
+            function calculateInterBeamTime(beam1, beam2) {
+                if (!beam1 || !beam2 || !beam1.controlPoints || beam1.controlPoints.length === 0 || !beam2.controlPoints || beam2.controlPoints.length === 0) {
+                    return 0;
+                }
+                const lastCpB1 = beam1.controlPoints[beam1.controlPoints.length - 1];
+                const firstCpB2 = beam2.controlPoints[0];
+
+                const gantryTravel = normalizeGantryAngleDiff(firstCpB2.gantryAngle, lastCpB1.gantryAngle);
+                let collTravel = Math.abs(firstCpB2.collimatorAngle - lastCpB1.collimatorAngle);
+                if (collTravel > 180) collTravel = 360 - collTravel;
+
+                let maxJawXTravel = 0;
+                if (lastCpB1.asymx && firstCpB2.asymx) {
+                    maxJawXTravel = Math.max(Math.abs(firstCpB2.asymx[0] - lastCpB1.asymx[0]), Math.abs(firstCpB2.asymx[1] - lastCpB1.asymx[1]));
+                }
+                let maxJawYTravel = 0;
+                if (lastCpB1.asymy && firstCpB2.asymy) {
+                    maxJawYTravel = Math.max(Math.abs(firstCpB2.asymy[0] - lastCpB1.asymy[0]), Math.abs(firstCpB2.asymy[1] - lastCpB1.asymy[1]));
+                }
+
+                let maxMlcTravel = 0;
+                // Use the union of MLC definitions to handle different MLCs between beams
+                const allMlcTypes = new Set([...beam1.mlcDefinitions.map(d => d.type), ...beam2.mlcDefinitions.map(d => d.type)]);
+
+                allMlcTypes.forEach(mlcType => {
+                    const mlc1 = lastCpB1.mlcPositionData.find(p => p.type === mlcType);
+                    const mlc2 = firstCpB2.mlcPositionData.find(p => p.type === mlcType);
+                    if (mlc1 && mlc2 && mlc1.positions.length === mlc2.positions.length) {
+                        for (let i = 0; i < mlc1.positions.length; i++) {
+                            maxMlcTravel = Math.max(maxMlcTravel, Math.abs(mlc2.positions[i] - mlc1.positions[i]));
+                        }
+                    }
+                });
+
+                const timeGantry = calculateProfiledMoveTime(gantryTravel, currentMaxGantrySpeed, currentMaxGantryAccelDecel);
+                const timeColl = calculateProfiledMoveTime(collTravel, currentMaxCollimatorSpeed, currentMaxCollimatorAccelDecel);
+                const timeJawX = calculateProfiledMoveTime(maxJawXTravel, currentMaxJawSpeedMMPS, currentMaxJawAccelDecelMMPS2);
+                const timeJawY = calculateProfiledMoveTime(maxJawYTravel, currentMaxJawSpeedMMPS, currentMaxJawAccelDecelMMPS2);
+                const timeMlc = calculateProfiledMoveTime(maxMlcTravel, currentMaxMlcSpeedMMPS, currentMaxMlcAccelDecelMMPS2);
+
+                return Math.max(timeGantry, timeColl, timeJawX, timeJawY, timeMlc);
+            }
+
+
+            function processAllBeamsForTimings() {
+                if (!rtPlanData || !rtPlanData.beams) return;
+                updateCurrentSpeedLimits();
+
+                allBeamsProcessedData = [];
+                interBeamTransitionTimes = [];
+                let cumulativeTime = 0;
+
+                rtPlanData.beams.forEach((beam, index) => {
+                    const singleBeamProcessedData = beam.controlPoints.map((cp, idx) => ({ cp: { ...cp, controlPointIndex: idx } }));
+                    const beamTime = calculateSegmentTimes(beam, beam.controlPoints, singleBeamProcessedData);
+                    beam.totalCalculatedSimTime = beamTime;
+                    allBeamsProcessedData.push(singleBeamProcessedData);
+
+                    // Add transition time if it's not the last beam
+                    if (index < rtPlanData.beams.length - 1) {
+                        const nextBeam = rtPlanData.beams[index + 1];
+                        const transitionTime = calculateInterBeamTime(beam, nextBeam);
+                        interBeamTransitionTimes.push(transitionTime);
+                        cumulativeTime += beamTime + transitionTime;
+                    } else {
+                        cumulativeTime += beamTime;
+                    }
+                });
+
+                totalPlanSimTimeSpan.textContent = cumulativeTime.toFixed(2);
+                console.log("DEBUG: All beams processed. Total plan time:", cumulativeTime);
+            }
+
 
             function initVisualization() {
                 console.log("DEBUG: initVisualization START. Selected Beam:", selectedBeamIndex, "isSimulatingDelivery:", isSimulatingDelivery);
                 updateCurrentSpeedLimits();
 
-                if (!rtPlanData || !rtPlanData.beams || !rtPlanData.beams[selectedBeamIndex]) { console.log("DEBUG: initVisualization - no plan/beam data."); return; }
-                const beam = rtPlanData.beams[selectedBeamIndex];
+                const isFullPlanSim = isSimulatingAllBeams;
+                const currentBeamIdx = isFullPlanSim ? currentBeamIndexForFullSim : selectedBeamIndex;
+
+                if (!rtPlanData || !rtPlanData.beams || !rtPlanData.beams[currentBeamIdx]) { console.log("DEBUG: initVisualization - no plan/beam data."); return; }
+                const beam = rtPlanData.beams[currentBeamIdx];
                 if (!beam.controlPoints || beam.controlPoints.length === 0) {
                     showMessageModal("Beam Error", `Beam ${beam.beamNumber} (${beam.beamName || ''}) has no control points.`);
                     totalCPsSpan.textContent = '0'; cpSlider.max = 0; cpSlider.value = 0; processedData = []; updateParamDisplay();
@@ -1715,35 +1970,30 @@
                     if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'none';
                     return;
                 }
+
+                // Use the pre-calculated data for the current beam
+                if (allBeamsProcessedData.length > currentBeamIdx) {
+                    processedData = allBeamsProcessedData[currentBeamIdx];
+                } else {
+                    // Fallback in case processAllBeamsForTimings hasn't run correctly
+                    console.error("Attempting to visualize beam " + currentBeamIdx + " but allBeamsProcessedData is not populated. Recalculating.");
+                    processAllBeamsForTimings();
+                    if (allBeamsProcessedData.length > currentBeamIdx) {
+                        processedData = allBeamsProcessedData[currentBeamIdx];
+                    } else {
+                        console.error("Fallback failed. Aborting visualization.");
+                        return;
+                    }
+                }
+
+
                 const controlPoints = beam.controlPoints;
                 const numControlPoints = controlPoints.length;
                 totalCPsSpan.textContent = numControlPoints;
                 cpSlider.max = numControlPoints > 0 ? numControlPoints - 1 : 0;
                 cpSlider.value = currentCP;
 
-                processedData = controlPoints.map((cp_item, idx) => ({
-                    cp: { ...cp_item, controlPointIndex: idx },
-                    timeMLC_ideal: 0, timeColl_ideal: 0, timeDose_ideal: 0, timeGantry_simple: 0,
-                    timeJawX_ideal: 0, timeJawY_ideal: 0,
-                    pass1_segmentDuration: 0, pass1_avgGantrySpeed: 0, pass1_avgMlcSpeed: 0,
-                    pass1_avgCollSpeed: 0, pass1_avgJawXSpeed: 0, pass1_avgJawYSpeed: 0,
-                    timeGantry_profiled: 0, timeMLC_profiled: 0,
-                    timeColl_profiled: 0, timeJawX_profiled: 0, timeJawY_profiled: 0,
-                    maxLeafTravel: 0, deltaCollAngle: 0, deltaMUWeight: 0, prevCP_doseRateSet: null, deltaGantryAngle: 0,
-                    maxSingleJawXTravel: 0, maxSingleJawYTravel: 0,
-                    segmentDuration: 0, cumulativeSimTime: 0,
-                    gantrySpeed: 0, mlcSpeed: 0, collimatorSpeed: 0, doseRate: 0,
-                    jawXSpeed: 0, jawYSpeed: 0,
-                    gantryAcceleration: 0, mlcAcceleration: 0, collimatorAcceleration: 0,
-                    doseRateText: "N/A", gantrySpeedUnit: "°/CP", mlcSpeedUnit: "mm/CP", collimatorSpeedUnit: "°/CP",
-                    jawXSpeedUnit: "mm/CP", jawYSpeedUnit: "mm/CP",
-                    modulationIndex: 0,
-                    localMItFactor: 0
-                }));
-                console.log("DEBUG: initVisualization - processedData initialized, length:", processedData.length);
-
-                beam.totalCalculatedSimTime = calculateSegmentTimes(beam, controlPoints, processedData);
-                console.log("DEBUG: initVisualization - calculateSegmentTimes returned. TotalSimTime:", beam.totalCalculatedSimTime);
+                console.log("DEBUG: initVisualization - processedData set, length:", processedData.length);
 
                 processedData.forEach((pd_item, index) => {
                     const cp = pd_item.cp;
@@ -2295,7 +2545,7 @@
             });
 
 
-            function drawBEV(cpMlcDataArray, collimatorAngle, jawPositions, beamMlcDefinitionsArray, isRDS = false) {
+            function drawBEV(cpMlcDataArray, collimatorAngle, gantryAngle, jawPositions, beamMlcDefinitionsArray, isRDS = false) {
                 if (!bevCtx) { console.warn("DEBUG: bevCtx is null, skipping drawBEV."); return; }
                 const canvasSize = bevCanvas.width;
                 const center = canvasSize / 2;
@@ -2407,6 +2657,15 @@
                     bevCtx.fillText('Collimation data N/A', 0, 0);
                 }
                 bevCtx.restore();
+
+                // Draw Gantry Angle Text Overlay
+                bevCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                bevCtx.font = 'bold 12px Arial';
+                bevCtx.textAlign = 'right';
+                bevCtx.textBaseline = 'top';
+                if (typeof gantryAngle === 'number' && !isNaN(gantryAngle)) {
+                    bevCtx.fillText(`G: ${gantryAngle.toFixed(1)}°`, canvasSize - 5, 5);
+                }
             }
             function drawSingleRadialPlot(ctx, data, valueKey, maxOverallValue, highlightCP, unitLabel, excludeEndpoints = false) {
                 if (!ctx) { return; }
@@ -2648,23 +2907,43 @@
                 });
             }
 
-            function updateParamDisplay() {
-                if (!rtPlanData || !rtPlanData.beams[selectedBeamIndex] || processedData.length === 0 || !processedData[currentCP] || !processedData[currentCP].cp) {
-                    gantryAngleSpan.textContent = 'N/A'; collimatorAngleSpan.textContent = 'N/A';
-                    gantrySpeedValSpan.textContent = 'N/A'; mlcSpeedValSpan.textContent = 'N/A';
+            function updateParamDisplay(interpolatedState = null) {
+                if (interpolatedState) {
+                    // Simplified update for transition animation
+                    gantryAngleSpan.textContent = interpolatedState.gantryAngle.toFixed(2);
+                    collimatorAngleSpan.textContent = interpolatedState.collimatorAngle.toFixed(2);
+                    currentCPIndexSpan.textContent = 'Transition';
+                    totalCPsSpan.textContent = 'N/A';
+                    gantrySpeedValSpan.textContent = 'N/A';
+                    mlcSpeedValSpan.textContent = 'N/A';
                     collimatorSpeedValSpan.textContent = 'N/A';
-                    jawXSpeedValSpan.textContent = 'N/A'; jawYSpeedValSpan.textContent = 'N/A';
-                    doseRateValSpan.textContent = 'N/A';
-                    if (localMItValSpan) localMItValSpan.textContent = 'N/A';
-                    if (miValSpan) miValSpan.textContent = 'N/A';
-                    currentCPIndexSpan.textContent = currentCP.toString(); totalCPsSpan.textContent = (processedData.length || 0).toString(); cpSlider.value = currentCP;
-                    simTimeDisplay.style.display = 'none'; totalSimTimeDisplay.style.display = 'none';
-                    if (bevCtx) bevCtx.clearRect(0, 0, bevCanvas.width, bevCanvas.height);
-                    drawAllStaticParameterPlots();
-                    drawAllXYTimePlots();
+                    doseRateValSpan.textContent = 'BEAM OFF';
+                    const jawPos = { asymx: interpolatedState.asymx, asymy: interpolatedState.asymy };
+                    const beamDefs = rtPlanData.beams[currentBeamIndexForFullSim]?.mlcDefinitions || [];
+                    drawBEV(interpolatedState.mlcPositionData, interpolatedState.collimatorAngle, interpolatedState.gantryAngle, jawPos, beamDefs);
                     return;
                 }
-                const currentCPData = processedData[currentCP]; const currentActualCP = currentCPData.cp; const beam = rtPlanData.beams[selectedBeamIndex];
+
+                const currentBeamIdx = isSimulatingAllBeams ? currentBeamIndexForFullSim : selectedBeamIndex;
+                if (!rtPlanData || !rtPlanData.beams[currentBeamIdx] || !allBeamsProcessedData[currentBeamIdx] || allBeamsProcessedData[currentBeamIdx].length === 0) {
+                    // Clear display if data is missing
+                    gantryAngleSpan.textContent = 'N/A'; collimatorAngleSpan.textContent = 'N/A';
+                    gantrySpeedValSpan.textContent = 'N/A'; mlcSpeedValSpan.textContent = 'N/A';
+                    collimatorSpeedValSpan.textContent = 'N/A'; jawXSpeedValSpan.textContent = 'N/A';
+                    jawYSpeedValSpan.textContent = 'N/A'; doseRateValSpan.textContent = 'N/A';
+                    if (localMItValSpan) localMItValSpan.textContent = 'N/A';
+                    if (miValSpan) miValSpan.textContent = 'N/A';
+                    currentCPIndexSpan.textContent = currentCP.toString(); totalCPsSpan.textContent = '0';
+                    cpSlider.value = currentCP; simTimeDisplay.style.display = 'none'; totalSimTimeDisplay.style.display = 'none';
+                    if (bevCtx) bevCtx.clearRect(0, 0, bevCanvas.width, bevCanvas.height);
+                    drawAllStaticParameterPlots(); drawAllXYTimePlots();
+                    return;
+                }
+
+                processedData = allBeamsProcessedData[currentBeamIdx]; // Ensure processedData is for the correct beam
+                if (!processedData[currentCP] || !processedData[currentCP].cp) return; // Exit if current CP data is invalid
+
+                const currentCPData = processedData[currentCP]; const currentActualCP = currentCPData.cp; const beam = rtPlanData.beams[currentBeamIdx];
                 gantryAngleSpan.textContent = currentActualCP.gantryAngle.toFixed(2);
                 collimatorAngleSpan.textContent = (currentActualCP.collimatorAngle != null ? currentActualCP.collimatorAngle.toFixed(2) : 'N/A');
                 gantrySpeedValSpan.textContent = `${currentCPData.gantrySpeed.toFixed(2)} ${currentCPData.gantrySpeedUnit}`;
@@ -2681,96 +2960,210 @@
                     miValSpan.textContent = typeof currentCPData.modulationIndex === 'number' ? currentCPData.modulationIndex.toFixed(3) : "N/A";
                 }
 
-
                 currentCPIndexSpan.textContent = currentCP; totalCPsSpan.textContent = processedData.length; cpSlider.value = currentCP;
                 if (isSimulatingDelivery) {
-                    if (currentCPData.cumulativeSimTime !== undefined) { simTimeElapsedSpan.textContent = currentCPData.cumulativeSimTime.toFixed(2); simTimeDisplay.style.display = 'flex'; } else { simTimeDisplay.style.display = 'none'; }
-                    if (beam && beam.totalCalculatedSimTime !== undefined) { totalSimTimeSpan.textContent = beam.totalCalculatedSimTime.toFixed(2); totalSimTimeDisplay.style.display = 'flex'; } else { totalSimTimeDisplay.style.display = 'none'; }
+                    const timeToShow = isSimulatingAllBeams ? totalPlanElapsedTime : currentCPData.cumulativeSimTime;
+                    if (timeToShow !== undefined) { simTimeElapsedSpan.textContent = timeToShow.toFixed(2); simTimeDisplay.style.display = 'flex'; } else { simTimeDisplay.style.display = 'none'; }
+
+                    const totalTimeForDisplay = isSimulatingAllBeams ? parseFloat(totalPlanSimTimeSpan.textContent) : (beam.totalCalculatedSimTime || 0);
+                    if (totalTimeForDisplay) { totalSimTimeSpan.textContent = totalTimeForDisplay.toFixed(2); totalSimTimeDisplay.style.display = 'flex'; } else { totalSimTimeDisplay.style.display = 'none'; }
                 } else { simTimeDisplay.style.display = 'none'; totalSimTimeDisplay.style.display = 'none'; }
+
                 const jawPos = { asymx: currentActualCP.asymx, asymy: currentActualCP.asymy };
-                drawBEV(currentActualCP.mlcPositionData, currentActualCP.collimatorAngle || 0, jawPos, beam.mlcDefinitions, beam.isRDSMachine);
+                drawBEV(currentActualCP.mlcPositionData, currentActualCP.collimatorAngle || 0, currentActualCP.gantryAngle, jawPos, beam.mlcDefinitions, beam.isRDSMachine);
                 drawAllStaticParameterPlots();
                 drawAllXYTimePlots();
             }
 
+
             function animate() {
-                if (isPlaying && processedData.length > 0) {
+                if (!isPlaying) {
+                    if (animationFrameId) { clearTimeout(animationFrameId); animationFrameId = null; }
+                    return;
+                }
+
+                if (isSimulatingAllBeams) {
+                    animateAllBeams();
+                    return;
+                }
+
+                // --- Standard Single-Beam Animation ---
+                if (processedData.length > 0) {
                     const previousCPForBeepLogic = currentCP;
                     currentCP = (currentCP + 1);
 
                     if (isSimulatingDelivery && currentCP >= processedData.length) {
-                        currentCP = processedData.length - 1;
-                        lastAnimatedCP = currentCP;
-                        updateParamDisplay();
-                        playPauseBtn.click();
-                        console.log("DEBUG: animate - Simulation ended.");
-                        return;
+                        currentCP = processedData.length - 1; lastAnimatedCP = currentCP; updateParamDisplay(); playPauseBtn.click(); console.log("DEBUG: animate - Simulation ended."); return;
                     } else if (!isSimulatingDelivery) {
                         currentCP = currentCP % processedData.length;
                     }
-
                     lastAnimatedCP = currentCP;
-                    let delay = FIXED_ANIMATION_SPEED_MS;
-                    let segmentDurationSeconds = FIXED_ANIMATION_SPEED_MS / 1000;
-
+                    let delay = FIXED_ANIMATION_SPEED_MS; let segmentDurationSeconds = FIXED_ANIMATION_SPEED_MS / 1000;
                     if (isSimulatingDelivery && processedData[previousCPForBeepLogic] && processedData[previousCPForBeepLogic].segmentDuration > 0) {
                         segmentDurationSeconds = processedData[previousCPForBeepLogic].segmentDuration;
                         delay = Math.max(10, segmentDurationSeconds * 1000);
-                    } else if (isSimulatingDelivery) {
-                        delay = 10;
-                    }
+                    } else if (isSimulatingDelivery) { delay = 10; }
                     updateParamDisplay();
-
-                    if (isSimulatingDelivery && beepPerMUEnabled && muBeepSynth && rtPlanData && rtPlanData.beams[selectedBeamIndex] && processedData[currentCP]) {
-                        const beam = rtPlanData.beams[selectedBeamIndex];
-                        const muAtEndOfSegment = beam.totalMeterset * processedData[currentCP].cp.cumulativeMetersetWeight;
-                        const integerMuAtEndOfSegment = Math.floor(muAtEndOfSegment);
-                        let beepsToTrigger = integerMuAtEndOfSegment - totalMuDeliveredForBeeps_currentBeam;
-
-                        if (muAtEndOfSegment < totalMuDeliveredForBeeps_currentBeam) {
-                            totalMuDeliveredForBeeps_currentBeam = integerMuAtEndOfSegment;
-                            beepsToTrigger = 0;
-                        }
-
-                        if (beepsToTrigger > 0) {
-                            let maxBeepsPossibleInSegment;
-                            if (segmentDurationSeconds <= 0.001) {
-                                maxBeepsPossibleInSegment = beepsToTrigger > 0 ? 1 : 0;
-                            } else {
-                                maxBeepsPossibleInSegment = Math.floor(segmentDurationSeconds * MAX_BEEPS_PER_SECOND);
-                                if (maxBeepsPossibleInSegment === 0 && beepsToTrigger > 0) maxBeepsPossibleInSegment = 1;
-                            }
-                            const actualBeepsThisSegment = Math.min(beepsToTrigger, maxBeepsPossibleInSegment);
-
-                            if (actualBeepsThisSegment > 0 && muBeepSynth) {
-                                if (typeof Tone !== 'undefined' && Tone.context && Tone.context.state !== 'running') {
-                                    console.warn("DEBUG Beep Logic: Tone.context not running, attempting to start for beeps...");
-                                    Tone.start().catch(e => console.error("DEBUG ERROR: Error starting Tone.js for beeps:", e));
-                                }
-
-                                if (Tone.context.state === 'running') {
-                                    const baseSchedulingTime = Tone.now();
-                                    const effectiveInterval = (segmentDurationSeconds > 0.001 && actualBeepsThisSegment > 1) ? (segmentDurationSeconds / actualBeepsThisSegment) : (1 / MAX_BEEPS_PER_SECOND);
-                                    for (let k_beep = 0; k_beep < actualBeepsThisSegment; k_beep++) {
-                                        const scheduledTime = baseSchedulingTime + 0.001 + (k_beep * effectiveInterval);
-                                        muBeepSynth.triggerAttackRelease("C5", "8n", scheduledTime);
-                                    }
-                                } else {
-                                    console.warn("DEBUG Beep Logic: Tone.context still not running after attempt, cannot trigger beep.");
-                                }
-                            }
-                            totalMuDeliveredForBeeps_currentBeam += actualBeepsThisSegment;
-                        }
-                    }
-                    animationFrameId = setTimeout(() => {
-                        if (isPlaying) requestAnimationFrame(animate);
-                    }, delay);
-
-                } else if (!isPlaying && animationFrameId) {
-                    clearTimeout(animationFrameId);
-                    animationFrameId = null;
+                    triggerBeeps(segmentDurationSeconds);
+                    animationFrameId = setTimeout(() => { if (isPlaying) requestAnimationFrame(animate); }, delay);
                 }
             }
+
+            function animateAllBeams() {
+                if (!isPlaying) { if (animationFrameId) { clearTimeout(animationFrameId); animationFrameId = null; } return; }
+
+                const currentBeamData = allBeamsProcessedData[currentBeamIndexForFullSim];
+                if (!currentBeamData) { isPlaying = false; return; }
+
+                const previousCPForBeepLogic = currentCP;
+                currentCP++;
+                updateParamDisplay();
+
+                // Check if the current beam is finished
+                if (currentCP >= currentBeamData.length) {
+                    const beamTime = rtPlanData.beams[currentBeamIndexForFullSim].totalCalculatedSimTime;
+                    totalPlanElapsedTime += beamTime;
+
+                    // Check if there's another beam to transition to
+                    if (currentBeamIndexForFullSim < rtPlanData.beams.length - 1) {
+                        const transitionTime = interBeamTransitionTimes[currentBeamIndexForFullSim];
+                        console.log(`DEBUG: End of Beam ${currentBeamIndexForFullSim}. Transitioning for ${transitionTime.toFixed(2)}s.`);
+                        // Animate the transition
+                        animateTransition(currentBeamIndexForFullSim, currentBeamIndexForFullSim + 1);
+                    } else {
+                        // Last beam is finished, end the simulation
+                        console.log("DEBUG: Full plan simulation finished.");
+                        isPlaying = false;
+                        playPauseBtn.textContent = 'Play Full Plan';
+                        // Keep final state displayed
+                        currentCP = currentBeamData.length - 1;
+                        updateParamDisplay();
+                    }
+                } else {
+                    // Continue animating the current beam
+                    const segmentDuration = currentBeamData[previousCPForBeepLogic]?.segmentDuration || 0.01;
+                    totalPlanElapsedTime += segmentDuration;
+                    triggerBeeps(segmentDuration);
+                    animationFrameId = setTimeout(animateAllBeams, segmentDuration * 1000);
+                }
+            }
+
+            function interpolateLinear(start, end, factor) {
+                if (start === null || end === null) return null;
+                return start + (end - start) * factor;
+            }
+
+            function interpolateAngle(start, end, factor) {
+                let delta = end - start;
+                if (delta > 180) delta -= 360;
+                if (delta < -180) delta += 360;
+                return (start + delta * factor + 360) % 360;
+            }
+
+            function animateTransition(fromIndex, toIndex) {
+                const transitionDuration = interBeamTransitionTimes[fromIndex] * 1000;
+                if (transitionDuration <= 0) {
+                    // If no transition time, skip animation and proceed
+                    currentBeamIndexForFullSim++;
+                    currentCP = 0;
+                    selectedBeamIndex = currentBeamIndexForFullSim;
+                    beamSelector.value = selectedBeamIndex;
+                    initVisualization();
+                    animateAllBeams();
+                    return;
+                }
+
+                let startTime = null;
+                const fromBeam = rtPlanData.beams[fromIndex];
+                const toBeam = rtPlanData.beams[toIndex];
+                const lastCp = fromBeam.controlPoints[fromBeam.controlPoints.length - 1];
+                const firstCp = toBeam.controlPoints[0];
+
+                const transitionLoop = (timestamp) => {
+                    if (!isPlaying) { if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; } return; }
+                    if (!startTime) startTime = timestamp;
+                    const elapsedTime = timestamp - startTime;
+                    const factor = Math.min(elapsedTime / transitionDuration, 1.0);
+
+                    // Interpolate all machine parameters
+                    const interpolatedState = {
+                        gantryAngle: interpolateAngle(lastCp.gantryAngle, firstCp.gantryAngle, factor),
+                        collimatorAngle: interpolateAngle(lastCp.collimatorAngle, firstCp.collimatorAngle, factor),
+                        asymx: [interpolateLinear(lastCp.asymx?.[0], firstCp.asymx?.[0], factor), interpolateLinear(lastCp.asymx?.[1], firstCp.asymx?.[1], factor)],
+                        asymy: [interpolateLinear(lastCp.asymy?.[0], firstCp.asymy?.[0], factor), interpolateLinear(lastCp.asymy?.[1], firstCp.asymy?.[1], factor)],
+                        mlcPositionData: []
+                    };
+                    // Interpolate MLCs
+                    const allMlcTypes = new Set([...fromBeam.mlcDefinitions.map(d => d.type), ...toBeam.mlcDefinitions.map(d => d.type)]);
+                    allMlcTypes.forEach(type => {
+                        const mlcStart = lastCp.mlcPositionData.find(p => p.type === type);
+                        const mlcEnd = firstCp.mlcPositionData.find(p => p.type === type);
+                        if (mlcStart && mlcEnd && mlcStart.positions.length === mlcEnd.positions.length) {
+                            const interpPositions = mlcStart.positions.map((pos, i) => interpolateLinear(pos, mlcEnd.positions[i], factor));
+                            interpolatedState.mlcPositionData.push({ type: type, positions: interpPositions });
+                        }
+                    });
+
+                    updateParamDisplay(interpolatedState);
+                    totalPlanElapsedTime += elapsedTime / 1000 - (totalPlanElapsedTime - (fromBeam.totalCalculatedSimTime || 0));
+
+
+                    if (elapsedTime < transitionDuration) {
+                        animationFrameId = requestAnimationFrame(transitionLoop);
+                    } else {
+                        // Transition finished
+                        totalPlanElapsedTime = (fromBeam.totalCalculatedSimTime || 0) + interBeamTransitionTimes[fromIndex];
+                        currentBeamIndexForFullSim++;
+                        currentCP = 0;
+                        selectedBeamIndex = currentBeamIndexForFullSim;
+                        beamSelector.value = selectedBeamIndex;
+                        initVisualization();
+                        animateAllBeams();
+                    }
+                };
+                animationFrameId = requestAnimationFrame(transitionLoop);
+            }
+
+
+
+            function triggerBeeps(segmentDurationSeconds) {
+                if (isSimulatingDelivery && beepPerMUEnabled && muBeepSynth && rtPlanData) {
+                    const currentBeamIdx = isSimulatingAllBeams ? currentBeamIndexForFullSim : selectedBeamIndex;
+                    const beam = rtPlanData.beams[currentBeamIdx];
+                    const currentProcData = allBeamsProcessedData[currentBeamIdx];
+                    if (!beam || !currentProcData || !currentProcData[currentCP]) return;
+
+                    const muAtEndOfSegment = beam.totalMeterset * currentProcData[currentCP].cp.cumulativeMetersetWeight;
+                    const integerMuAtEndOfSegment = Math.floor(muAtEndOfSegment);
+                    let beepsToTrigger = integerMuAtEndOfSegment - totalMuDeliveredForBeeps_currentBeam;
+
+                    if (muAtEndOfSegment < totalMuDeliveredForBeeps_currentBeam) {
+                        totalMuDeliveredForBeeps_currentBeam = integerMuAtEndOfSegment;
+                        beepsToTrigger = 0;
+                    }
+                    if (beepsToTrigger > 0) {
+                        let maxBeepsPossibleInSegment = (segmentDurationSeconds <= 0.001) ? (beepsToTrigger > 0 ? 1 : 0) : Math.floor(segmentDurationSeconds * MAX_BEEPS_PER_SECOND);
+                        if (maxBeepsPossibleInSegment === 0 && beepsToTrigger > 0) maxBeepsPossibleInSegment = 1;
+
+                        const actualBeepsThisSegment = Math.min(beepsToTrigger, maxBeepsPossibleInSegment);
+                        if (actualBeepsThisSegment > 0 && muBeepSynth) {
+                            if (typeof Tone !== 'undefined' && Tone.context && Tone.context.state !== 'running') {
+                                Tone.start().catch(e => console.error("DEBUG ERROR: Error starting Tone.js for beeps:", e));
+                            }
+                            if (Tone.context.state === 'running') {
+                                const baseSchedulingTime = Tone.now();
+                                const effectiveInterval = (segmentDurationSeconds > 0.001 && actualBeepsThisSegment > 1) ? (segmentDurationSeconds / actualBeepsThisSegment) : (1 / MAX_BEEPS_PER_SECOND);
+                                for (let k_beep = 0; k_beep < actualBeepsThisSegment; k_beep++) {
+                                    const scheduledTime = baseSchedulingTime + 0.001 + (k_beep * effectiveInterval);
+                                    muBeepSynth.triggerAttackRelease("C5", "8n", scheduledTime);
+                                }
+                            }
+                        }
+                        totalMuDeliveredForBeeps_currentBeam += actualBeepsThisSegment;
+                    }
+                }
+            }
+
 
             toggleSimulationBtn.addEventListener('click', function () {
                 console.log("DEBUG: Toggle Simulation button clicked. isSimulatingDelivery BEFORE toggle:", isSimulatingDelivery);
@@ -2780,6 +3173,8 @@
                     console.log("DEBUG: Sim toggle aborted: No plan/beam/control points.");
                     return;
                 }
+
+                if (isSimulatingAllBeams) { toggleAllBeamsSimBtn.click(); } // Turn off full plan sim if active
 
                 isSimulatingDelivery = !isSimulatingDelivery;
                 console.log("DEBUG: isSimulatingDelivery AFTER toggle:", isSimulatingDelivery);
@@ -2802,6 +3197,40 @@
                 initVisualization();
                 console.log("DEBUG: Toggle Simulation button processing finished.");
             });
+
+            toggleAllBeamsSimBtn.addEventListener('click', function () {
+                if (!rtPlanData || !rtPlanData.beams || rtPlanData.beams.length < 2) {
+                    showMessageModal("Plan Error", "This feature requires a plan with at least two beams.");
+                    return;
+                }
+
+                if (isSimulatingDelivery && !isSimulatingAllBeams) { toggleSimulationBtn.click(); } // Turn off single beam sim
+
+                isSimulatingAllBeams = !isSimulatingAllBeams;
+                isSimulatingDelivery = isSimulatingAllBeams; // Full plan sim is a type of delivery sim
+
+                if (isPlaying) { playPauseBtn.click(); }
+
+                if (isSimulatingAllBeams) {
+                    this.textContent = 'Stop Full Plan Sim'; this.classList.add('active-mode');
+                    playPauseBtn.textContent = 'Play Full Plan';
+                    beamSelector.disabled = true;
+                    currentBeamIndexForFullSim = 0;
+                    selectedBeamIndex = 0;
+                    beamSelector.value = 0;
+                    currentCP = 0;
+                    totalPlanElapsedTime = 0;
+                    initVisualization(); // Init with the first beam
+                } else {
+                    this.textContent = 'Simulate Full Plan'; this.classList.remove('active-mode');
+                    playPauseBtn.textContent = 'Play';
+                    beamSelector.disabled = false;
+                    // Reset to the beam that was selected before the full sim
+                    initVisualizationForSelectedBeam();
+                }
+            });
+
+
             beepPerMUToggle.addEventListener('change', function () {
                 beepPerMUEnabled = this.checked;
                 console.log("DEBUG: Beep per MU toggled:", beepPerMUEnabled);
@@ -2814,62 +3243,75 @@
                     console.log("DEBUG: Beep enabled, initial totalMuDeliveredForBeeps_currentBeam:", totalMuDeliveredForBeeps_currentBeam);
                 }
             });
+
             playPauseBtn.addEventListener('click', () => {
-                console.log("DEBUG: Play/Pause button clicked. isPlaying BEFORE:", isPlaying, "isSimulatingDelivery:", isSimulatingDelivery, "currentCP:", currentCP);
+                const mode = isSimulatingAllBeams ? "All Beams" : (isSimulatingDelivery ? "Single Beam" : "Fixed Speed");
+                console.log(`DEBUG: Play/Pause clicked. Mode: ${mode}, isPlaying BEFORE: ${isPlaying}, currentCP: ${currentCP}`);
                 if (!rtPlanData || !rtPlanData.beams[selectedBeamIndex] || processedData.length === 0) {
                     showMessageModal("Data Error", "Please load RT Plan data and select a beam first.");
-                    console.log("DEBUG: Play/Pause aborted - no data."); return;
+                    return;
                 }
 
                 if (typeof Tone !== 'undefined' && Tone.context && Tone.context.state !== 'running') {
-                    console.log("DEBUG: Attempting to start Tone.js audio context via Play button.");
-                    Tone.start().then(() => { console.log("DEBUG: Tone.js audio context started by user interaction (Play button)."); }).catch(e => { console.error("DEBUG ERROR: Error starting Tone.js audio context (Play button):", e); });
-                } else if (typeof Tone !== 'undefined' && Tone.context) {
-                    console.log("DEBUG: Tone.js audio context state:", Tone.context.state);
+                    Tone.start().catch(e => console.error("DEBUG ERROR: Error starting Tone.js audio context:", e));
                 }
 
                 isPlaying = !isPlaying;
                 console.log("DEBUG: Play/Pause button. isPlaying AFTER:", isPlaying);
 
-                if (isSimulatingDelivery) {
-                    playPauseBtn.textContent = isPlaying ? 'Pause Simulation' : 'Play Simulation';
-                    if (isPlaying && currentCP >= processedData.length - 1 && processedData.length > 0) {
-                        console.log("DEBUG: Play/Pause - Resetting simulation to CP 0 because it was at the end.");
-                        currentCP = 0; lastAnimatedCP = 0; totalMuDeliveredForBeeps_currentBeam = 0; updateParamDisplay();
+                if (isSimulatingAllBeams) {
+                    playPauseBtn.textContent = isPlaying ? 'Pause Full Plan' : 'Play Full Plan';
+                    if (isPlaying && currentBeamIndexForFullSim >= rtPlanData.beams.length) {
+                        console.log("DEBUG: Play/Pause - Resetting FULL PLAN simulation to start.");
+                        currentBeamIndexForFullSim = 0;
+                        selectedBeamIndex = 0;
+                        beamSelector.value = 0;
+                        currentCP = 0;
+                        totalPlanElapsedTime = 0;
+                        initVisualization();
                     }
-                } else { playPauseBtn.textContent = isPlaying ? 'Pause' : 'Play'; }
+                } else if (isSimulatingDelivery) {
+                    playPauseBtn.textContent = isPlaying ? 'Pause Simulation' : 'Play Simulation';
+                    if (isPlaying && currentCP >= processedData.length - 1) {
+                        currentCP = 0;
+                    }
+                } else {
+                    playPauseBtn.textContent = isPlaying ? 'Pause' : 'Play';
+                }
 
                 if (isPlaying) {
-                    console.log("DEBUG: Play/Pause - isPlaying is true. Calling animate(). currentCP:", currentCP);
                     if (beepPerMUEnabled && rtPlanData.beams[selectedBeamIndex] && processedData[currentCP]) {
                         const beam = rtPlanData.beams[selectedBeamIndex];
                         totalMuDeliveredForBeeps_currentBeam = Math.floor(beam.totalMeterset * processedData[currentCP].cp.cumulativeMetersetWeight);
-                        console.log("DEBUG: Play started, Beep MU counter reset/initialized to:", totalMuDeliveredForBeeps_currentBeam, "for CP:", currentCP);
                     }
                     lastAnimatedCP = currentCP;
                     animate();
                 } else {
-                    console.log("DEBUG: Play/Pause - isPlaying is false. Clearing animationFrameId.");
                     if (animationFrameId) { clearTimeout(animationFrameId); animationFrameId = null; }
                 }
             });
+
             resetBtn.addEventListener('click', () => {
                 console.log("DEBUG: Reset button clicked.");
                 if (isPlaying) { playPauseBtn.click(); }
+
+                if (isSimulatingAllBeams) {
+                    currentBeamIndexForFullSim = 0;
+                    selectedBeamIndex = 0;
+                    beamSelector.value = 0;
+                    totalPlanElapsedTime = 0;
+                }
+
                 currentCP = 0;
                 lastAnimatedCP = 0;
                 totalMuDeliveredForBeeps_currentBeam = 0;
-                if (rtPlanData && rtPlanData.beams[selectedBeamIndex] && processedData.length > 0 && processedData[currentCP]) {
-                    if (beepPerMUEnabled) {
-                        const beam = rtPlanData.beams[selectedBeamIndex];
-                        totalMuDeliveredForBeeps_currentBeam = Math.floor(beam.totalMeterset * processedData[0].cp.cumulativeMetersetWeight);
-                    }
-                }
+                initVisualization(); // Re-init viz for the correct beam (0 for full sim, selected for single)
                 updateParamDisplay();
-                console.log("DEBUG: Animation reset to CP 0.");
+                console.log("DEBUG: Animation reset.");
             });
+
             cpSlider.addEventListener('input', function () {
-                if (isPlaying) return;
+                if (isPlaying || isSimulatingAllBeams) return; // Disable slider during full plan sim
                 currentCP = parseInt(this.value, 10);
                 lastAnimatedCP = currentCP;
                 if (rtPlanData && rtPlanData.beams[selectedBeamIndex] && processedData.length > 0 && processedData[currentCP]) {
