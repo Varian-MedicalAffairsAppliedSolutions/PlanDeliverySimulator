@@ -23,7 +23,25 @@ The tool runs entirely in the browser, ensuring patient data privacy. It aims to
 
 ---
 
-## 2. How to Use
+## 2. System Requirements
+
+This tool is designed to run in a modern web browser and has no other software dependencies.
+
+*   **Recommended Browsers:** For the best performance and compatibility, please use the latest version of:
+    *   **Google Chrome** ([Download](https://www.google.com/chrome/))
+    *   **Mozilla Firefox** ([Download](https://www.mozilla.org/firefox/new/))
+
+*   **Other Supported Browsers:** The simulator is also compatible with:
+    *   Microsoft Edge (latest version)
+    *   Safari (version 14 or newer)
+
+*   **Unsupported:** Internet Explorer is not supported.
+
+For users in environments with software installation restrictions, please contact your IT department to request that a supported browser be installed.
+
+---
+
+## 3. How to Use
 
 ### Step 1: Get Plan Data
 
@@ -34,7 +52,7 @@ You can load plan data in two ways:
     * Alternatively, click the "Choose File" button to select your `.dcm` file.
 
 2.  **Eclipse TPS Method (Direct JSON Export):**
-    * Use the provided ESAPI script in Varian Eclipse to export the plan directly to the required `.json` format, bypassing the need for a DICOM export. (See Section 3 below for details).
+    * Use the provided ESAPI script in Varian Eclipse to export the plan directly to the required `.json` format, bypassing the need for a DICOM export. (See Section 4 below for details).
     * Load the resulting `.json` file using the "Drag & Drop" or "Choose File" function.
 
 ### Step 2: Configure and Interact
@@ -55,11 +73,11 @@ You can load plan data in two ways:
 
 ---
 
-## 3. Varian Eclipse Integration (ESAPI Script)
+## 4. Varian Eclipse Integration (ESAPI Script)
 
 For users of the Varian Eclipse™ Treatment Planning System, the included C# script (`planToJSON_ExactFormat_Enhanced_NoDeps.cs`) provides a direct pathway to get plan data into the simulator without the intermediate step of exporting a DICOM file.
 
-### 3.1. Script Purpose and Features
+### 4.1. Script Purpose and Features
 
 The script runs inside Eclipse and exports the currently loaded treatment plan into a `.json` file that is perfectly formatted for this simulator.
 
@@ -70,13 +88,13 @@ The script runs inside Eclipse and exports the currently loaded treatment plan i
     * Attempts to automatically open the simulator's HTML file in your default web browser.
 * **Advanced MLC Handling:** Correctly processes and formats data for various Varian MLCs, including the dual-layer MLCs found on Halcyon™ and Ethos™ systems.
 
-### 3.2. Prerequisites
+### 4.2. Prerequisites
 
 * Varian Eclipse Treatment Planning System with a license that allows for ESAPI scripting.
 * The `planToJSON_ExactFormat_Enhanced_NoDeps.cs` script file.
 * Appropriate user permissions to run scripts in Eclipse.
 
-### 3.3. How to Use the Script
+### 4.3. How to Use the Script
 
 1.  **Setup:**
     * Place the `planToJSON_ExactFormat_Enhanced_NoDeps.cs` file into your Eclipse ESAPI scripts directory.
@@ -94,17 +112,17 @@ The script runs inside Eclipse and exports the currently loaded treatment plan i
 
 ---
 
-## 4. Simulation and Calculation Details
+## 5. Simulation and Calculation Details
 
-### 4.1. Delivery Time Calculation
+### 5.1. Delivery Time Calculation
 
 The total estimated plan time is the sum of all intra-beam segment durations and all inter-beam transition durations.
 
-#### 4.1.1. Inter-Beam Transition Time
+#### 5.1.1. Inter-Beam Transition Time
 
 When simulating a full plan, the time to move between beams is determined by the **rate-limiting component**—the part of the machine that takes the longest to move from its position at the end of one beam to its starting position for the next. The simulator calculates the realistic, acceleration-aware move time for the gantry, collimator, jaws, and all MLC leaves, and the transition time is the longest of these individual times. Dose is off during this transition.
 
-#### 4.1.2. Intra-Beam Segment Time
+#### 5.1.2. Intra-Beam Segment Time
 
 This mode estimates the time for each step within a beam (from one control point to the next) based on which component is the slowest. It uses a **two-pass algorithm** for a realistic result.
 
@@ -114,9 +132,9 @@ This mode estimates the time for each step within a beam (from one control point
 
 * **Final Segment Duration:** The final, estimated time for the segment is the longest of these more realistic, acceleration-aware component times and the dose delivery time. The total time for the beam is the sum of all these segment durations.
 
-### 4.2. Calculated Complexity Metrics
+### 5.2. Calculated Complexity Metrics
 
-#### 4.2.1. Overall MCSv (Modulation Complexity Score for VMAT)
+#### 5.2.1. Overall MCSv (Modulation Complexity Score for VMAT)
 
 This metric, adapted from the work of Masi et al., scores the complexity of the treatment beam's aperture shapes. It is an average over the entire beam, weighted by the amount of radiation (MU) delivered in each segment. A higher score means more complex. It combines:
 
@@ -124,11 +142,11 @@ This metric, adapted from the work of Masi et al., scores the complexity of the 
 * **Leaf Sequence Variability (LSV):** Measures the "jaggedness" or "smoothness" of the MLC-defined field edge. Smooth, straight edges are less complex than highly irregular, spiky shapes.
 * **Collimator Factor:** The score is increased if the collimator has to rotate significantly during the beam, which adds mechanical complexity.
 
-#### 4.2.2. MIsport (Modulation Index for SPORT)
+#### 5.2.2. MIsport (Modulation Index for SPORT)
 
 Adapted from Li & Xing (2013), this metric quantifies how much the MLC leaves are moving while the gantry is rotating and delivering dose. It is calculated for each control point by looking at its neighbors. High values suggest intricate and rapid leaf motion during delivery, which can be challenging for the machine to perform accurately. This implementation also increases the complexity score if the collimator is rotating at the same time.
 
-#### 4.2.3. Local MIt (Local Modulation Index total)
+#### 5.2.3. Local MIt (Local Modulation Index total)
 
 Inspired by Park et al. (2014), this metric is designed to pinpoint specific, highly dynamic, and challenging moments in the plan. It is only available in the time-based "Simulate Delivery" mode. It works by:
 
@@ -139,7 +157,7 @@ In short, a high Local MIt score identifies spots in the plan where many systems
 
 ---
 
-## 5. References
+## 6. References
 
 * Li, R., & Xing, L. (2013). An adaptive planning strategy for station parameter optimized radiation therapy (SPORT): segmentally boosted VMAT. *Medical Physics, 40*(5), 050701.
 * Masi, L., Doro, R., Favuzza, V., Cipressi, S., & Livi, L. (2013). Impact of plan parameters on the dosimetric accuracy of volumetric modulated arc therapy. *Medical Physics, 40*(7), 071718.

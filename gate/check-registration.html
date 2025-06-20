@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration System Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f7f6;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        button.danger {
+            background-color: #e74c3c;
+        }
+        
+        button.danger:hover {
+            background-color: #c0392b;
+        }
+        
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Registration System Test</h1>
+        
+        <div class="test-section">
+            <h2>Current Registration Status</h2>
+            <div id="statusDisplay"></div>
+            <button onclick="checkStatus()">Check Status</button>
+            <button onclick="clearRegistration()" class="danger">Clear Registration</button>
+        </div>
+        
+        <div class="test-section">
+            <h2>Test Navigation</h2>
+            <button onclick="goToIndex()">Go to Index Page</button>
+            <button onclick="goToRegister()">Go to Registration Page</button>
+            <button onclick="goToSimulator()">Go to Simulator</button>
+        </div>
+        
+        <div class="test-section">
+            <h2>LocalStorage Contents</h2>
+            <pre id="localStorageDisplay"></pre>
+            <button onclick="showLocalStorage()">Refresh LocalStorage Display</button>
+        </div>
+        
+    </div>
+
+    <script>
+        function checkStatus() {
+            const isRegistered = localStorage.getItem('simulator_registered');
+            const timestamp = localStorage.getItem('registration_timestamp');
+            const userData = localStorage.getItem('registration_data');
+            
+            const statusDiv = document.getElementById('statusDisplay');
+            
+            if (isRegistered) {
+                statusDiv.innerHTML = `
+                    <div class="status success">
+                        <strong>✅ Registered</strong><br>
+                        Registration timestamp: ${timestamp || 'Not available'}<br>
+                        User data: ${userData ? 'Available' : 'Not available'}
+                    </div>
+                `;
+            } else {
+                statusDiv.innerHTML = `
+                    <div class="status error">
+                        <strong>❌ Not Registered</strong><br>
+                        User needs to complete registration to access simulator.
+                    </div>
+                `;
+            }
+        }
+        
+        function clearRegistration() {
+            localStorage.removeItem('simulator_registered');
+            localStorage.removeItem('registration_timestamp');
+            localStorage.removeItem('registration_data');
+            alert('Registration cleared!');
+            checkStatus();
+            showLocalStorage();
+        }
+        
+        function goToIndex() {
+            window.location.href = 'index.html';
+        }
+        
+        function goToRegister() {
+            window.location.href = 'register.html';
+        }
+        
+        function goToSimulator() {
+            window.location.href = '../RP_Delivery_Simulator.html';
+        }
+        
+        function showLocalStorage() {
+            const display = document.getElementById('localStorageDisplay');
+            const items = {};
+            
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                items[key] = localStorage.getItem(key);
+            }
+            
+            display.textContent = JSON.stringify(items, null, 2);
+        }
+        
+        function simulateRegistration() {
+            localStorage.setItem('simulator_registered', 'true');
+            localStorage.setItem('registration_timestamp', new Date().toISOString());
+            alert('Registration simulated! You can now access the simulator.');
+            checkStatus();
+            showLocalStorage();
+        }
+        
+        function simulateRegistrationWithData() {
+            const userData = {
+                name: 'Test User',
+                email: 'test@example.com',
+                institution: 'Test Institution',
+                role: 'Researcher',
+                country: 'United States',
+                intendedUse: 'Research purposes',
+                timestamp: new Date().toISOString()
+            };
+            
+            localStorage.setItem('simulator_registered', 'true');
+            localStorage.setItem('registration_timestamp', userData.timestamp);
+            localStorage.setItem('registration_data', JSON.stringify(userData));
+            
+            alert('Registration with data simulated!');
+            checkStatus();
+            showLocalStorage();
+        }
+        
+        // Initialize display
+        window.addEventListener('load', function() {
+            checkStatus();
+            showLocalStorage();
+        });
+    </script>
+</body>
+</html> 

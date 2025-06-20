@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration Required - DICOM RT Plan Delivery Simulator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        
+        .disclaimer {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .disclaimer h3 {
+            color: #856404;
+            margin-top: 0;
+        }
+        
+        .jotform-container {
+            margin: 20px 0;
+            min-height: 600px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .footer a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DICOM RT Plan Delivery Simulator</h1>
+        
+        <div class="disclaimer">
+            <h3>⚠️ Important Notice</h3>
+            <p><strong>This software is for educational and research purposes only. It is NOT validated for clinical use.</strong></p>
+            <p>By proceeding with registration, you acknowledge that:</p>
+            <ul>
+                <li>This tool is intended for educational and research applications only</li>
+                <li>It has not been validated for clinical use</li>
+                <li>Estimated delivery times are not guaranteed to match actual delivery times</li>
+                <li>You will comply with the Varian Limited Use Software License Agreement</li>
+            </ul>
+        </div>
+        
+        <h2>Registration Required</h2>
+        <p>To access the DICOM RT Plan Delivery Simulator, please complete the registration form below. This helps us track usage and ensure compliance with the software license agreement.</p>
+        
+        <div class="jotform-container">
+            <div class="loading" id="loadingMessage">
+                Loading registration form...
+            </div>
+            <!-- JotForm will be embedded here -->
+            <div id="jotform-embed"></div>
+        </div>
+        
+        <div class="footer">
+            <p>By using this software, you agree to be bound by the terms of the <a href="VarianLUSLA.html" target="_blank">Varian Limited Use Software License Agreement</a></p>
+            <p><strong>Author:</strong> Taoran Li, PhD | <strong>Contact:</strong> taoran.li@varian.com</p>
+        </div>
+    </div>
+
+    <script>
+        // JotForm integration
+        (function() {
+            const JOTFORM_ID = '251694838691170';
+            
+            // Create the JotForm embed script
+            const script = document.createElement('script');
+            script.src = 'https://form.jotform.com/jsform/' + JOTFORM_ID;
+            script.async = true;
+            
+            // Handle form submission using JotForm's newer API
+            script.onload = function() {
+                // Hide loading message
+                document.getElementById('loadingMessage').style.display = 'none';
+                
+                // Use JotForm's modern event handling
+                if (window.JFCustomWidget) {
+                    console.log('Using JotForm widget API');
+                    window.JFCustomWidget.subscribe("submit", function(formData) {
+                        console.log('Form submitted via widget API');
+                        completeRegistration();
+                    });
+                }
+                
+                // Listen for form submission using modern event handling
+                window.addEventListener('submit', function(e) {
+                    console.log('Form submit event detected');
+                    if (e.target.getAttribute('action')?.includes('jotform')) {
+                        e.preventDefault();
+                        completeRegistration();
+                    }
+                }, { capture: true });
+                
+                // Add manual completion button as fallback
+                addManualCompletionButton();
+                
+                // Add visibility change detection
+                document.addEventListener('visibilitychange', function() {
+                    if (document.visibilityState === 'visible') {
+                        const formFrame = document.querySelector('iframe[src*="jotform"]');
+                        if (formFrame && formFrame.contentWindow.document.querySelector('form.jotform-form.submitted')) {
+                            console.log('Form detected as submitted via visibility change');
+                            completeRegistration();
+                        }
+                    }
+                });
+            };
+            
+            // Function to complete registration
+            function completeRegistration() {
+                // Prevent multiple redirects
+                if (localStorage.getItem('registration_in_progress')) {
+                    return;
+                }
+                localStorage.setItem('registration_in_progress', 'true');
+                
+                // Store registration completion
+                localStorage.setItem('simulator_registered', 'true');
+                localStorage.setItem('registration_timestamp', new Date().toISOString());
+                
+                // Show success message
+                showSuccessMessage();
+                
+                // Redirect to simulator after a short delay
+                setTimeout(function() {
+                    localStorage.removeItem('registration_in_progress');
+                    window.location.href = '../RP_Delivery_Simulator.html';
+                }, 2000);
+            }
+            
+            // Function to show success message
+            function showSuccessMessage() {
+                const container = document.querySelector('.jotform-container');
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; color: #155724;">
+                        <h3>✅ Registration Successful!</h3>
+                        <p>Thank you for registering. You will be redirected to the simulator shortly...</p>
+                        <p><small>If you are not redirected automatically, <a href="../RP_Delivery_Simulator.html" style="color: #155724; font-weight: bold;">click here</a> to continue.</small></p>
+                    </div>
+                `;
+            }
+            
+            // Function to add manual completion button
+            function addManualCompletionButton() {
+                const container = document.querySelector('.jotform-container');
+                const manualButton = document.createElement('div');
+                manualButton.style.cssText = 'text-align: center; margin-top: 20px; padding: 15px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;';
+                manualButton.innerHTML = `
+                    <p style="margin: 0 0 10px 0; color: #666;">Having trouble with the form?</p>
+                    <button onclick="manualComplete()" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+                        I've Completed the Form - Take Me to Simulator
+                    </button>
+                `;
+                container.appendChild(manualButton);
+            }
+            
+            // Add manual completion function to global scope
+            window.manualComplete = function() {
+                completeRegistration();
+            };
+            
+            // Add script to page
+            document.getElementById('jotform-embed').appendChild(script);
+        })();
+        
+        // Check if already registered
+        window.addEventListener('load', function() {
+            const isRegistered = localStorage.getItem('simulator_registered');
+            if (isRegistered) {
+                // If already registered, redirect directly
+                window.location.href = '../RP_Delivery_Simulator.html';
+            }
+        });
+    </script>
+</body>
+</html> 

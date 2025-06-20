@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DICOM RT Plan Delivery Simulator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f6;
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            max-width: 600px;
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        
+        .description {
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        
+        .disclaimer {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+        
+        .disclaimer h3 {
+            color: #856404;
+            margin-top: 0;
+        }
+        
+        .start-button {
+            background-color: #3498db;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: background-color 0.3s;
+        }
+        
+        .start-button:hover {
+            background-color: #2980b9;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .footer a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DICOM RT Plan Delivery Simulator</h1>
+        
+        <div class="description">
+            <p>A web-based tool for visualizing and analyzing radiotherapy plan delivery sequences. 
+            This simulator provides insights into the mechanical aspects of plan delivery for educational and research applications.</p>
+        </div>
+        
+        <div class="disclaimer">
+            <h3>⚠️ Important Notice</h3>
+            <p><strong>This software is for educational and research purposes only. It is NOT validated for clinical use.</strong></p>
+            <p>By using this simulator, you acknowledge that:</p>
+            <ul>
+                <li>This tool is intended for educational and research applications only</li>
+                <li>It has not been validated for clinical use</li>
+                <li>Estimated delivery times are not guaranteed to match actual delivery times</li>
+                <li>You will comply with the Varian Limited Use Software License Agreement</li>
+            </ul>
+        </div>
+        
+        <a href="register.html" class="start-button">Start Registration & Access Simulator</a>
+        
+        <div class="footer">
+            <p>By using this software, you agree to be bound by the terms of the <a href="VarianLUSLA.html" target="_blank">Varian Limited Use Software License Agreement</a></p>
+            <p><strong>Author:</strong> Taoran Li, PhD | <strong>Contact:</strong> taoran.li@varian.com</p>
+            <p><strong>Version:</strong> 3.9.5</p>
+        </div>
+    </div>
+
+    <script>
+        // Check if already registered and redirect if so
+        window.addEventListener('load', function() {
+            const isRegistered = localStorage.getItem('simulator_registered');
+            if (isRegistered) {
+                // If already registered, redirect directly to simulator
+                window.location.href = '../RP_Delivery_Simulator.html';
+            }
+        });
+    </script>
+</body>
+</html> 
