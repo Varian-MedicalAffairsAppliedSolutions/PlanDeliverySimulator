@@ -1,0 +1,32 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.cache
+*.docstates
+*.tmp
+
+# Build directories
+bin/
+obj/
+Debug/
+Release/
+
+# Visual Studio Code
+.vscode/
+
+# OS Files
+Thumbs.db
+.DS_Store
+
+# IDE files
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Dependencies
+packages/
+node_modules/
