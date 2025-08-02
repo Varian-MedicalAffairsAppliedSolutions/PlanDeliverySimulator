@@ -321,6 +321,10 @@
                 background-color: #117a65;
             }
 
+            #clearAllBtn:hover {
+                background-color: #c0392b;
+            }
+
         .mode-controls button.active-mode {
             background-color: #27ae60;
         }
@@ -792,7 +796,7 @@
             <p><strong>Author:</strong> Taoran Li, PhD</p>
             <p><strong>Contact:</strong> taoran.li@varian.com</p>
             <p><strong>Version:</strong> 3.9.5 (Full MLC transition calculation and display)</p>
-            <p><strong>Date:</strong> June 13, 2025</p>
+            <p><strong>Date:</strong> August 1, 2025</p>
         </div>
 
     </div>
@@ -822,6 +826,388 @@
             let totalPlanElapsedTime = 0;
 
             let lastAnimatedCP = 0;
+
+            // ====================================================================================
+            // ECLIPSE PARAMETER FILE HANDLING FOR AUTOMATIC PLAN LOADING
+            // ====================================================================================
+            // Define the Eclipse plan loading function (called by parameter script)
+            window.loadEclipsePlan = function(params) {
+                console.log("DEBUG: loadEclipsePlan called with params:", params);
+                
+                if (params && params.mode === 'eclipse') {
+                    console.log("DEBUG: Eclipse mode detected from parameter script");
+                    
+                    // Store Eclipse context for later use
+                    window.eclipseContextInfo = {
+                        patientId: params.patientId,
+                        courseId: params.courseId,
+                        planId: params.planId
+                    };
+                    
+                    // Show loading message
+                    showMessageModal("Loading Plan", 
+                        `Loading plan data from Eclipse...\n\n` +
+                        `Patient: ${params.patientId || 'Unknown'}\n` +
+                        `Course: ${params.courseId || 'Unknown'}\n` +
+                        `Plan: ${params.planId || 'Unknown'}\n\n` +
+                        `Please wait...`);
+                    
+                    // Use embedded plan data directly from parameter file
+                    if (params.planData) {
+                        console.log("DEBUG: Using embedded plan data from parameter script");
+                        setTimeout(() => {
+                            try {
+                                const jsonData = JSON.parse(params.planData);
+                                processPlanData(jsonData, params.planFile);
+                            } catch (error) {
+                                console.error("DEBUG ERROR: Error parsing embedded plan data:", error);
+                                // Fallback to file loading
+                                if (params.planFile) {
+                                    console.log("DEBUG: Falling back to file loading");
+                                    loadPlanFromFile(params.planFile);
+                                } else {
+                                    showMessageModal("Plan Loading Error", `Error parsing plan data: ${error.message}`);
+                                }
+                            }
+                        }, 500);
+                    } else if (params.planFile) {
+                        console.log("DEBUG: Using file-based approach");
+                        loadPlanFromFile(params.planFile);
+                    } else {
+                        showMessageModal("Plan Loading Error", "No plan data found in parameter script.");
+                    }
+                }
+            };
+
+            function checkAndLoadPlanFromEclipse() {
+                // Try to load Eclipse launch parameters from JavaScript file
+                console.log("DEBUG: Checking for eclipse-launch-params.js file...");
+                
+                // Create a script element to load the parameter file
+                const script = document.createElement('script');
+                script.src = './eclipse-launch-params.js';
+                script.type = 'text/javascript';
+                
+                script.onload = function() {
+                    console.log("DEBUG: Eclipse parameter script loaded successfully");
+                    // The script will auto-call window.loadEclipsePlan when it loads
+                    // No need for manual call here - the script handles it automatically
+                };
+                
+                script.onerror = function() {
+                    console.log("DEBUG: No Eclipse parameter script found (normal mode)");
+                    // Not an error - just means we're not launched from Eclipse
+                };
+                
+                // Add script to head to load it
+                document.head.appendChild(script);
+            }
+            
+            function loadPlanFromEmbeddedData(encodedPlanData, backupFile) {
+                try {
+                    console.log("DEBUG: Decoding embedded plan data...");
+                    const jsonText = atob(encodedPlanData);
+                    const jsonData = JSON.parse(jsonText);
+                    
+                    processPlanData(jsonData, backupFile);
+                } catch (error) {
+                    console.error("DEBUG ERROR: Error processing embedded plan data:", error);
+                    showMessageModal("Plan Loading Error", 
+                        `Error loading embedded plan data: ${error.message}\n\n` +
+                        `You can manually load the backup file:\n${backupFile || 'Check temp directory'}`);
+                }
+            }
+            
+            function loadPlanFromFile(planFilePath) {
+                console.log("DEBUG: Attempting to load plan file:", planFilePath);
+                
+                // Try multiple approaches to load the file
+                tryFileLoadMethod1(planFilePath)
+                    .catch(error => {
+                        console.log("DEBUG: Method 1 failed, trying method 2:", error.message);
+                        return tryFileLoadMethod2(planFilePath);
+                    })
+                    .catch(error => {
+                        console.log("DEBUG: Method 2 failed, trying method 3:", error.message);
+                        return tryFileLoadMethod3(planFilePath);
+                    })
+                    .catch(error => {
+                        console.error("DEBUG ERROR: All file loading methods failed:", error);
+                        showFileLoadingInstructions(planFilePath);
+                    });
+            }
+            
+            function tryFileLoadMethod1(filePath) {
+                // Method 1: Direct fetch with file:// protocol
+                const fileUrl = 'file:///' + filePath.replace(/\\/g, '/');
+                console.log("DEBUG: Trying fetch with URL:", fileUrl);
+                return fetch(fileUrl).then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.text();
+                }).then(jsonText => {
+                    const jsonData = JSON.parse(jsonText);
+                    processPlanData(jsonData, filePath);
+                });
+            }
+            
+            function tryFileLoadMethod2(filePath) {
+                // Method 2: XMLHttpRequest approach
+                return new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    const fileUrl = 'file:///' + filePath.replace(/\\/g, '/');
+                    console.log("DEBUG: Trying XMLHttpRequest with URL:", fileUrl);
+                    
+                    xhr.onload = function() {
+                        if (xhr.status === 200 || xhr.status === 0) {
+                            try {
+                                const jsonData = JSON.parse(xhr.responseText);
+                                processPlanData(jsonData, filePath);
+                                resolve();
+                            } catch (e) {
+                                reject(new Error('JSON parse error: ' + e.message));
+                            }
+                        } else {
+                            reject(new Error('HTTP ' + xhr.status));
+                        }
+                    };
+                    xhr.onerror = () => reject(new Error('Network error'));
+                    xhr.open('GET', fileUrl, true);
+                    xhr.send();
+                });
+            }
+            
+            function tryFileLoadMethod3(filePath) {
+                // Method 3: Create a file input and auto-select the file
+                return new Promise((resolve, reject) => {
+                    console.log("DEBUG: Trying auto file input method");
+                    
+                    // Create a hidden file input
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = '.json';
+                    fileInput.style.display = 'none';
+                    
+                    fileInput.onchange = function(event) {
+                        const file = event.target.files[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                try {
+                                    const jsonData = JSON.parse(e.target.result);
+                                    processPlanData(jsonData, filePath);
+                                    resolve();
+                                } catch (error) {
+                                    reject(new Error('JSON parse error: ' + error.message));
+                                }
+                            };
+                            reader.onerror = () => reject(new Error('File read error'));
+                            reader.readAsText(file);
+                        } else {
+                            reject(new Error('No file selected'));
+                        }
+                    };
+                    
+                    document.body.appendChild(fileInput);
+                    
+                    // Auto-trigger file selection
+                    setTimeout(() => {
+                        fileInput.click();
+                        setTimeout(() => {
+                            document.body.removeChild(fileInput);
+                            reject(new Error('File selection timeout'));
+                        }, 5000);
+                    }, 100);
+                });
+            }
+            
+            function showFileLoadingInstructions(filePath) {
+                showMessageModal("Manual File Loading Required", 
+                    `Automatic file loading failed due to browser security restrictions.\n\n` +
+                    `Please manually load the plan file:\n\n` +
+                    `1. Use the "Load from Plan File" section below\n` +
+                    `2. Browse to and select this file:\n\n` +
+                    `${filePath}\n\n` +
+                    `The file will be automatically recognized as an Eclipse plan.`);
+                
+                // Highlight the file input section
+                setTimeout(() => {
+                    const fileInputSection = document.querySelector('.file-input-section');
+                    if (fileInputSection) {
+                        fileInputSection.scrollIntoView({ behavior: 'smooth' });
+                        fileInputSection.style.border = '3px solid #e74c3c';
+                        fileInputSection.style.borderRadius = '8px';
+                        setTimeout(() => {
+                            fileInputSection.style.border = '';
+                            fileInputSection.style.borderRadius = '';
+                        }, 5000);
+                    }
+                }, 1000);
+            }
+            
+            function processPlanData(jsonData, sourceInfo) {
+                setTimeout(() => {
+                    if (jsonData && jsonData.parsedDicomPlan) {
+                        rtPlanData = jsonData.parsedDicomPlan;
+                        console.log("DEBUG: rtPlanData loaded successfully:", rtPlanData);
+                        
+                        // Fix patient name parsing - extract from complex structure
+                        if (Array.isArray(rtPlanData.patientName) && rtPlanData.patientName.length > 0 && rtPlanData.patientName[0].Alphabetic) {
+                            rtPlanData.patientName = rtPlanData.patientName[0].Alphabetic;
+                            console.log("DEBUG: Parsed patient name from complex structure:", rtPlanData.patientName);
+                        } else if (typeof rtPlanData.patientName === 'object' && rtPlanData.patientName !== null) {
+                            // Handle other possible object structures
+                            if (rtPlanData.patientName.Alphabetic) {
+                                rtPlanData.patientName = rtPlanData.patientName.Alphabetic;
+                                console.log("DEBUG: Parsed patient name from object.Alphabetic:", rtPlanData.patientName);
+                            } else if (rtPlanData.patientName.name) {
+                                rtPlanData.patientName = rtPlanData.patientName.name;
+                                console.log("DEBUG: Parsed patient name from object.name:", rtPlanData.patientName);
+                            } else {
+                                console.log("DEBUG: Patient name object structure:", rtPlanData.patientName);
+                                rtPlanData.patientName = "Unknown Patient";
+                            }
+                        }
+                        
+                        if (rtPlanData && rtPlanData.beams && rtPlanData.beams.length > 0) {
+                            // Close loading modal and initialize the plan
+                            const modal = document.getElementById('customMessageModal');
+                            if (modal) modal.style.display = 'none';
+                            
+                            // Update file input to show Eclipse auto-loading
+                            updateFileInputForEclipseLoading(sourceInfo);
+                            
+                            // Initialize the plan
+                            postPlanLoadSetup();
+                            
+                            // Show success message with Eclipse context
+                            const context = window.eclipseContextInfo;
+                            showMessageModal("Plan Loaded Successfully", 
+                                `Plan loaded automatically from Eclipse!\n\n` +
+                                `Patient: ${context?.patientId || 'Unknown'}\n` +
+                                `Course: ${context?.courseId || 'Unknown'}\n` +
+                                `Plan: ${context?.planId || 'Unknown'}\n\n` +
+                                `Ready for simulation.`);
+                        } else {
+                            showMessageModal("Plan Loading Error", "Failed to parse plan data or no valid beams found.");
+                            clearAll();
+                        }
+                    } else {
+                        showMessageModal("Plan Format Error", "The plan data does not have the expected structure.");
+                        clearAll();
+                    }
+                }, 500);
+            }
+            
+            function updateFileInputForEclipseLoading(sourceInfo) {
+                const fileInput = document.getElementById('dicomFileInput');
+                const dropZone = document.getElementById('dicomDropZone');
+                const context = window.eclipseContextInfo;
+                
+                if (fileInput && dropZone && context) {
+                    // Create a visual indicator that shows Eclipse auto-loading
+                    const fileName = `${context.patientId}_${context.courseId}_${context.planId}.json`;
+                    
+                    // Update the drop zone to show loaded status
+                    dropZone.innerHTML = `
+                        <div style="color: #27ae60; font-weight: bold; margin-bottom: 10px;">
+                            ✅ Plan Loaded Automatically from Eclipse
+                        </div>
+                        <div style="color: #2c3e50; font-size: 0.9em; margin-bottom: 5px;">
+                            Patient: ${context.patientId} | Course: ${context.courseId} | Plan: ${context.planId}
+                        </div>
+                        <div style="color: #7f8c8d; font-size: 0.8em; margin-bottom: 10px;">
+                            Source: Eclipse Parameter File
+                        </div>
+                        <div style="color: #95a5a6; font-size: 0.75em;">
+                            Backup file: ${sourceInfo || 'Generated automatically'}
+                        </div>
+                        <br>
+                        <button onclick="resetFileInput()" style="
+                            background-color: #3498db; 
+                            color: white; 
+                            border: none; 
+                            padding: 8px 15px; 
+                            border-radius: 4px; 
+                            cursor: pointer; 
+                            font-size: 0.9em;
+                        ">Load Different Plan</button>
+                    `;
+                    
+                    // Style the drop zone to show success state
+                    dropZone.style.backgroundColor = '#d5f4e6';
+                    dropZone.style.border = '2px solid #27ae60';
+                    dropZone.style.borderRadius = '8px';
+                    dropZone.style.padding = '15px';
+                    dropZone.style.textAlign = 'center';
+                    
+                    // Hide the file input since we're showing custom content
+                    fileInput.style.display = 'none';
+                }
+            }
+            
+            function resetFileInput() {
+                const fileInput = document.getElementById('dicomFileInput');
+                const dropZone = document.getElementById('dicomDropZone');
+                
+                console.log("DEBUG: resetFileInput called - clearing Eclipse plan");
+                
+                // Clear Eclipse context info
+                window.eclipseContextInfo = null;
+                
+                if (fileInput && dropZone) {
+                    // Reset to original drop zone content
+                    dropZone.innerHTML = `
+                        Drag & Drop your DICOM (.dcm) or exported JSON (.json) file here
+                        <br> or <br>
+                        <input type="file" id="dicomFileInput" accept=".dcm,application/dicom,.json,application/json">
+                    `;
+                    
+                    // Reset styles to original state
+                    dropZone.style.backgroundColor = '';
+                    dropZone.style.border = '';
+                    dropZone.style.borderRadius = '';
+                    dropZone.style.padding = '';
+                    dropZone.style.textAlign = '';
+                    
+                    // Clear the plan data first
+                    clearAll();
+                    
+                    // Reattach event listeners to the new file input after clearing
+                    setTimeout(() => {
+                        const newFileInput = document.getElementById('dicomFileInput');
+                        const newDropZone = document.getElementById('dicomDropZone');
+                        
+                        if (newFileInput) {
+                            console.log("DEBUG: Reattaching file input event listeners");
+                            newFileInput.addEventListener('change', (event) => { 
+                                const files = event.target.files; 
+                                if (files.length > 0) { 
+                                    handleFile(files[0]); 
+                                } 
+                            });
+                        }
+                        
+                        if (newDropZone) {
+                            // Reattach drag and drop listeners
+                            newDropZone.addEventListener('dragover', (event) => { 
+                                event.preventDefault(); 
+                                newDropZone.classList.add('dragover'); 
+                            });
+                            newDropZone.addEventListener('dragleave', () => { 
+                                newDropZone.classList.remove('dragover'); 
+                            });
+                            newDropZone.addEventListener('drop', (event) => { 
+                                event.preventDefault(); 
+                                newDropZone.classList.remove('dragover'); 
+                                const files = event.dataTransfer.files; 
+                                if (files.length > 0) { 
+                                    handleFile(files[0]); 
+                                } 
+                            });
+                        }
+                    }, 100);
+                }
+            }
 
             // DOM Element references
             const bevCanvas = document.getElementById('bevCanvas');
@@ -1033,7 +1419,20 @@
 
                             if (rtPlanData && rtPlanData.beams && rtPlanData.beams.length > 0) {
                                 postPlanLoadSetup();
-                                showMessageModal("JSON Plan Loaded", "Plan data successfully loaded from JSON file.");
+                                
+                                // Check if this was loaded from Eclipse context (for manual loading)
+                                let successMessage = "Plan data successfully loaded from JSON file.";
+                                if (window.eclipseContextInfo) {
+                                    successMessage = `Plan loaded successfully!\n\n` +
+                                        `Patient: ${window.eclipseContextInfo.patientId}\n` +
+                                        `Course: ${window.eclipseContextInfo.courseId}\n` +
+                                        `Plan: ${window.eclipseContextInfo.planId}\n\n` +
+                                        `Ready for simulation.`;
+                                    // Clear the context info after use
+                                    window.eclipseContextInfo = null;
+                                }
+                                
+                                showMessageModal("JSON Plan Loaded", successMessage);
                             } else {
                                 showMessageModal("JSON Parsing Error", "Failed to parse JSON plan or no valid beams found.");
                                 clearAll();
@@ -1404,7 +1803,71 @@
             function clearAll() {
                 console.log("DEBUG: clearAll called.");
                 rtPlanData = null;
-                if (dicomFileInput) dicomFileInput.value = '';
+                
+                // Clear Eclipse context info if it exists
+                if (window.eclipseContextInfo) {
+                    console.log("DEBUG: Clearing Eclipse context info");
+                    window.eclipseContextInfo = null;
+                }
+                
+                // Reset file input area to normal state if it was showing Eclipse indicator
+                const dropZone = document.getElementById('dicomDropZone');
+                if (dropZone && dropZone.innerHTML.includes('Plan Loaded Automatically from Eclipse')) {
+                    console.log("DEBUG: Resetting file input area from Eclipse state");
+                    
+                    // Reset to original drop zone content
+                    dropZone.innerHTML = `
+                        Drag & Drop your DICOM (.dcm) or exported JSON (.json) file here
+                        <br> or <br>
+                        <input type="file" id="dicomFileInput" accept=".dcm,application/dicom,.json,application/json">
+                    `;
+                    
+                    // Reset styles to original state
+                    dropZone.style.backgroundColor = '';
+                    dropZone.style.border = '';
+                    dropZone.style.borderRadius = '';
+                    dropZone.style.padding = '';
+                    dropZone.style.textAlign = '';
+                    
+                    // Reattach event listeners after a short delay
+                    setTimeout(() => {
+                        const newFileInput = document.getElementById('dicomFileInput');
+                        const newDropZone = document.getElementById('dicomDropZone');
+                        
+                        if (newFileInput) {
+                            console.log("DEBUG: Reattaching file input event listeners in clearAll");
+                            newFileInput.addEventListener('change', (event) => { 
+                                const files = event.target.files; 
+                                if (files.length > 0) { 
+                                    handleFile(files[0]); 
+                                } 
+                            });
+                        }
+                        
+                        if (newDropZone) {
+                            // Reattach drag and drop listeners
+                            newDropZone.addEventListener('dragover', (event) => { 
+                                event.preventDefault(); 
+                                newDropZone.classList.add('dragover'); 
+                            });
+                            newDropZone.addEventListener('dragleave', () => { 
+                                newDropZone.classList.remove('dragover'); 
+                            });
+                            newDropZone.addEventListener('drop', (event) => { 
+                                event.preventDefault(); 
+                                newDropZone.classList.remove('dragover'); 
+                                const files = event.dataTransfer.files; 
+                                if (files.length > 0) { 
+                                    handleFile(files[0]); 
+                                } 
+                            });
+                        }
+                    }, 100);
+                } else {
+                    // Normal file input clearing
+                    if (dicomFileInput) dicomFileInput.value = '';
+                }
+                
                 currentCP = 0; lastAnimatedCP = 0; selectedBeamIndex = 0; isPlaying = false; totalMuDeliveredForBeeps_currentBeam = 0;
                 isSimulatingDelivery = false;
                 isSimulatingAllBeams = false;
@@ -2241,12 +2704,12 @@
                 });
 
 
-                maxGantrySpeedOverall = Math.max(0.01, ...processedData.filter(d => d.gantrySpeedUnit.endsWith("/s")).map(d => d.gantrySpeed).filter(s => !isNaN(s) && isFinite(s)));
-                maxMlcSpeedOverall = Math.max(0.01, ...processedData.filter(d => d.mlcSpeedUnit.endsWith("/s")).map(d => d.mlcSpeed).filter(s => !isNaN(s) && isFinite(s)));
-                maxCollimatorSpeedOverall = Math.max(0.01, ...processedData.filter(d => d.collimatorSpeedUnit.endsWith("/s")).map(d => d.collimatorSpeed).filter(s => !isNaN(s) && isFinite(s)));
-                maxJawXSpeedOverall = Math.max(0.01, ...processedData.filter(d => d.jawXSpeedUnit.endsWith("/s")).map(d => d.jawXSpeed).filter(s => !isNaN(s) && isFinite(s)));
-                maxJawYSpeedOverall = Math.max(0.01, ...processedData.filter(d => d.jawYSpeedUnit.endsWith("/s")).map(d => d.jawYSpeed).filter(s => !isNaN(s) && isFinite(s)));
-                maxDoseRateOverall = Math.max(0.01, ...processedData.filter(d => d.doseRateText.includes("/min")).map(d => d.doseRate).filter(s => !isNaN(s) && isFinite(s)));
+                maxGantrySpeedOverall = Math.max(0.01, ...processedData.map(d => d.gantrySpeed).filter(s => !isNaN(s) && isFinite(s)));
+                maxMlcSpeedOverall = Math.max(0.01, ...processedData.map(d => d.mlcSpeed).filter(s => !isNaN(s) && isFinite(s)));
+                maxCollimatorSpeedOverall = Math.max(0.01, ...processedData.map(d => d.collimatorSpeed).filter(s => !isNaN(s) && isFinite(s)));
+                maxJawXSpeedOverall = Math.max(0.01, ...processedData.map(d => d.jawXSpeed).filter(s => !isNaN(s) && isFinite(s)));
+                maxJawYSpeedOverall = Math.max(0.01, ...processedData.map(d => d.jawYSpeed).filter(s => !isNaN(s) && isFinite(s)));
+                maxDoseRateOverall = Math.max(0.01, ...processedData.map(d => d.doseRate).filter(s => !isNaN(s) && isFinite(s)));
 
                 const miSportValuesAll = processedData.map(d => d.modulationIndex).filter(s => !isNaN(s) && isFinite(s));
                 maxModulationIndexOverall = miSportValuesAll.length > 0 ? Math.max(0.01, ...miSportValuesAll) : 0.01;
@@ -2755,10 +3218,10 @@
                     bevCtx.fillText(`G: ${gantryAngle.toFixed(1)}°`, canvasSize - 5, 5);
                 }
             }
-            function drawSingleRadialPlot(ctx, data, valueKey, maxOverallValue, highlightCP, unitLabel, excludeEndpoints = false) {
-                if (!ctx) { return; }
+            function drawSingleRadialPlot(ctx, data, valueKey, maxOverallValue, highlightCP, unitLabel) {
                 const canvasSize = ctx.canvas.width;
                 const center = canvasSize / 2;
+
                 const canvasRadius = canvasSize / 2;
                 const outerPlottingRadius = canvasRadius * 0.9;
                 const clockArcRadius = outerPlottingRadius * 0.85;
@@ -2773,20 +3236,6 @@
                 ctx.arc(center, center, clockArcRadius, 0, 2 * Math.PI);
                 ctx.stroke();
 
-                ctx.fillStyle = '#333';
-                ctx.font = '10px Arial';
-                ctx.textAlign = 'right';
-                ctx.textBaseline = 'top';
-                let displayUnit = unitLabel.includes('/') ? unitLabel.split('/')[1] : unitLabel;
-                if (displayUnit.toLowerCase() === 'cp' ||
-                    displayUnit.toLowerCase() === 'sector' ||
-                    unitLabel.toLowerCase().startsWith("1/mcs") ||
-                    unitLabel.toLowerCase() === "mi" ||
-                    unitLabel.toLowerCase() === "mcs" ||
-                    unitLabel.toLowerCase() === "factor") displayUnit = '';
-                ctx.fillText(`Max: ${maxOverallValue.toFixed(isFinite(maxOverallValue) && maxOverallValue !== 1.0 && maxOverallValue !== 10.0 && !unitLabel.toLowerCase().startsWith("mi") && !unitLabel.toLowerCase().startsWith("mcs") && !unitLabel.toLowerCase().startsWith("factor") ? 2 : (unitLabel.toLowerCase().startsWith("mi") || unitLabel.toLowerCase().startsWith("mcs") || unitLabel.toLowerCase().startsWith("factor") ? 3 : 1))} ${displayUnit.trim()}`, canvasSize - 5, 5);
-
-
                 if (rtPlanData && rtPlanData.beams && rtPlanData.beams[selectedBeamIndex]) {
                     const beam = rtPlanData.beams[selectedBeamIndex];
                     if (beam.gantryRotationDirection && beam.gantryStartAngle !== undefined && beam.gantryEndAngle !== undefined) {
@@ -2796,7 +3245,6 @@
                         const startAngleRadCanvas = (beam.gantryStartAngle - 90) * Math.PI / 180;
                         const endAngleRadCanvas = (beam.gantryEndAngle - 90) * Math.PI / 180;
                         let isDICOMClockwise = beam.gantryRotationDirection === "CW";
-
                         if (beam.gantryRotationDirection === "NONE" || Math.abs(beam.gantryStartAngle - beam.gantryEndAngle) < 0.01) {
                             const angleRad = (beam.gantryStartAngle - 90) * Math.PI / 180;
                             const x = center + clockArcRadius * Math.cos(angleRad);
@@ -2811,6 +3259,7 @@
                         }
                     }
                 }
+
 
                 ctx.strokeStyle = '#aaa';
                 ctx.lineWidth = 0.5;
@@ -2846,32 +3295,26 @@
                 }
 
                 const polygonPoints = [];
-                let dataToDraw = data;
-                if (excludeEndpoints && data.length > 2) {
-                    dataToDraw = data.slice(1, data.length - 1);
-                }
-
-
-                if (dataToDraw && dataToDraw.length > 0) {
-                    dataToDraw.forEach((item, plotIndex) => {
-                        if (!item || !item.cp || typeof item.cp.gantryAngle !== 'number') return;
-                        const gantryAngleDICOM = item.cp.gantryAngle;
+                if (data && data.length > 0) {
+                    data.forEach((cpData) => {
+                        if (!cpData || !cpData.cp) return;
+                        const gantryAngleDICOM = cpData.cp.gantryAngle;
                         const angleRadCanvas = (gantryAngleDICOM - 90) * Math.PI / 180;
-                        let value = item[valueKey];
-                        value = (value === undefined || isNaN(value) || !isFinite(value)) ? 0 : Math.max(0, value);
+                        let value = cpData[valueKey];
+                        value = (value === undefined || isNaN(value)) ? 0 : Math.max(0, value);
 
                         let scaledValue = 0;
-                        if (maxOverallValue > 0.00001) {
+                        if (maxOverallValue > 0) {
                             scaledValue = value / maxOverallValue;
                         }
                         const radialDistance = plotMinRadius + scaledValue * (plotMaxUsableRadius - plotMinRadius);
 
                         const x = center + radialDistance * Math.cos(angleRadCanvas);
                         const y = center + radialDistance * Math.sin(angleRadCanvas);
-                        let originalFullDataIndex = data.indexOf(item);
-                        polygonPoints.push({ x, y, angleRad: angleRadCanvas, gantryAngle: gantryAngleDICOM, value: value, originalFullDataIndex: originalFullDataIndex });
+                        polygonPoints.push({ x, y, angleRad: angleRadCanvas, gantryAngle: gantryAngleDICOM, value: value });
                     });
                 }
+
                 polygonPoints.sort((a, b) => a.gantryAngle - b.gantryAngle);
 
 
@@ -2881,9 +3324,7 @@
                     for (let i = 1; i < polygonPoints.length; i++) {
                         ctx.lineTo(polygonPoints[i].x, polygonPoints[i].y);
                     }
-                    if ((valueKey === 'modulationIndex' || valueKey === 'localMItFactor') && polygonPoints.length > 2) {
-                        ctx.closePath();
-                    }
+
                     ctx.strokeStyle = plotColor;
                     ctx.lineWidth = 1.5;
                     ctx.stroke();
@@ -2899,6 +3340,8 @@
                         ctx.fillStyle = plotColor + '33';
                         ctx.fill();
                     }
+
+
                 } else if (polygonPoints.length === 1) {
                     ctx.fillStyle = plotColor;
                     ctx.beginPath();
@@ -2914,45 +3357,50 @@
                 });
 
                 if (highlightCP !== -1 && data[highlightCP] && data[highlightCP].cp) {
-                    const highlightedPointInPolygon = polygonPoints.find(p => p.originalFullDataIndex === highlightCP);
+                    const currentCpGantryAngleDICOM = data[highlightCP].cp.gantryAngle;
+                    const highlightedPoint = polygonPoints.find(p => Math.abs(p.gantryAngle - currentCpGantryAngleDICOM) < 0.01);
 
-                    if (highlightedPointInPolygon) {
-                        ctx.strokeStyle = '#34495e';
-                        ctx.fillStyle = '#34495edd';
+                    if (highlightedPoint) {
+                        ctx.strokeStyle = '#E67E22';
+                        ctx.fillStyle = '#E67E22DD';
                         ctx.lineWidth = 2.5;
                         ctx.beginPath();
-                        ctx.arc(highlightedPointInPolygon.x, highlightedPointInPolygon.y, 6, 0, 2 * Math.PI);
+                        ctx.arc(highlightedPoint.x, highlightedPoint.y, 6, 0, 2 * Math.PI);
                         ctx.fill();
                         ctx.stroke();
                     }
                 }
+
+                ctx.fillStyle = '#333';
+                ctx.font = '11px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(unitLabel || "N/A", center, canvasSize - 8);
             }
 
             function drawAllStaticParameterPlots() {
-                if (!rtPlanData || !rtPlanData.beams[selectedBeamIndex] || !radialContexts.gantrySpeed) return;
+                if (!rtPlanData || !rtPlanData.beams[selectedBeamIndex] || processedData.length === 0) return;
+                const firstPd = processedData[0] || {};
 
-                const firstPd = processedData.length > 0 ? processedData[0] : {};
-
-                drawSingleRadialPlot(radialContexts.gantrySpeed, processedData, 'gantrySpeed', maxGantrySpeedOverall, currentCP, firstPd.gantrySpeedUnit || "°/CP", false);
-                drawSingleRadialPlot(radialContexts.mlcSpeed, processedData, 'mlcSpeed', maxMlcSpeedOverall, currentCP, firstPd.mlcSpeedUnit || "mm/CP", false);
-                drawSingleRadialPlot(radialContexts.collimatorSpeed, processedData, 'collimatorSpeed', maxCollimatorSpeedOverall, currentCP, firstPd.collimatorSpeedUnit || "°/CP", false);
+                drawSingleRadialPlot(radialContexts.gantrySpeed, processedData, 'gantrySpeed', maxGantrySpeedOverall, currentCP, firstPd.gantrySpeedUnit || "°/CP");
+                drawSingleRadialPlot(radialContexts.mlcSpeed, processedData, 'mlcSpeed', maxMlcSpeedOverall, currentCP, firstPd.mlcSpeedUnit || "mm/CP");
+                drawSingleRadialPlot(radialContexts.collimatorSpeed, processedData, 'collimatorSpeed', maxCollimatorSpeedOverall, currentCP, firstPd.collimatorSpeedUnit || "°/CP");
 
                 let doseRateUnitForPlot = "N/A";
-                const currentCPDataForDoseRate = processedData.length > 0 && processedData[currentCP] ? processedData[currentCP] : firstPd;
-                if (currentCPDataForDoseRate.doseRateText) {
-                    if (currentCPDataForDoseRate.doseRateText.includes("MU/min")) doseRateUnitForPlot = "MU/min";
-                    else if (currentCPDataForDoseRate.doseRateText.includes("MU/CP")) doseRateUnitForPlot = "MU/CP";
-                    else if (currentCPDataForDoseRate.doseRateText.includes("MUwt/min")) doseRateUnitForPlot = "MUwt/min";
-                    else if (currentCPDataForDoseRate.doseRateText.includes("MUwt/CP")) doseRateUnitForPlot = "MUwt/CP";
+                if (firstPd.doseRateText) {
+                    if (firstPd.doseRateText.includes("MU/min")) doseRateUnitForPlot = "MU/min";
+                    else if (firstPd.doseRateText.includes("MU/CP")) doseRateUnitForPlot = "MU/CP";
+                    else if (firstPd.doseRateText.includes("MUwt/min")) doseRateUnitForPlot = "MUwt/min";
+                    else if (firstPd.doseRateText.includes("MUwt/CP")) doseRateUnitForPlot = "MUwt/CP";
                 }
-                drawSingleRadialPlot(radialContexts.doseRate, processedData, 'doseRate', maxDoseRateOverall, currentCP, doseRateUnitForPlot, false);
+                drawSingleRadialPlot(radialContexts.doseRate, processedData, 'doseRate', maxDoseRateOverall, currentCP, doseRateUnitForPlot);
 
                 if (radialContexts.localMIt) {
-                    drawSingleRadialPlot(radialContexts.localMIt, processedData, 'localMItFactor', maxLocalMItFactorOverall, currentCP, "Factor", false);
+                    drawSingleRadialPlot(radialContexts.localMIt, processedData, 'localMItFactor', maxLocalMItFactorOverall, currentCP, "Factor");
                 }
 
                 if (radialContexts.mi) {
-                    drawSingleRadialPlot(radialContexts.mi, processedData, 'modulationIndex', maxModulationIndexOverall, currentCP, "MIsport", true);
+                    drawSingleRadialPlot(radialContexts.mi, processedData, 'modulationIndex', maxModulationIndexOverall, currentCP, "MIsport");
                 }
             }
 
@@ -3234,10 +3682,7 @@
                         if (maxBeepsPossibleInSegment === 0 && beepsToTrigger > 0) maxBeepsPossibleInSegment = 1;
 
                         const actualBeepsThisSegment = Math.min(beepsToTrigger, maxBeepsPossibleInSegment);
-                        if (actualBeepsThisSegment > 0 && muBeepSynth) {
-                            if (typeof Tone !== 'undefined' && Tone.context && Tone.context.state !== 'running') {
-                                Tone.start().catch(e => console.error("DEBUG ERROR: Error starting Tone.js for beeps:", e));
-                            }
+                        if (actualBeepsThisSegment > 0 && muBeepSynth && typeof Tone !== 'undefined' && Tone.context) {
                             if (Tone.context.state === 'running') {
                                 const baseSchedulingTime = Tone.now();
                                 const effectiveInterval = (segmentDurationSeconds > 0.001 && actualBeepsThisSegment > 1) ? (segmentDurationSeconds / actualBeepsThisSegment) : (1 / MAX_BEEPS_PER_SECOND);
@@ -3245,6 +3690,8 @@
                                     const scheduledTime = baseSchedulingTime + 0.001 + (k_beep * effectiveInterval);
                                     muBeepSynth.triggerAttackRelease("C5", "8n", scheduledTime);
                                 }
+                            } else {
+                                console.log("DEBUG: Cannot play beeps - audio context not running. Toggle beep checkbox or click play to enable audio.");
                             }
                         }
                         totalMuDeliveredForBeeps_currentBeam += actualBeepsThisSegment;
@@ -3324,11 +3771,23 @@
                 console.log("DEBUG: Beep per MU toggled:", beepPerMUEnabled);
                 if (!beepPerMUEnabled) {
                     totalMuDeliveredForBeeps_currentBeam = 0;
-                } else if (rtPlanData && rtPlanData.beams[selectedBeamIndex] && processedData.length > 0 && processedData[currentCP]) {
-                    const beam = rtPlanData.beams[selectedBeamIndex];
-                    const currentActualCP = processedData[currentCP].cp;
-                    totalMuDeliveredForBeeps_currentBeam = Math.floor(beam.totalMeterset * currentActualCP.cumulativeMetersetWeight);
-                    console.log("DEBUG: Beep enabled, initial totalMuDeliveredForBeeps_currentBeam:", totalMuDeliveredForBeeps_currentBeam);
+                } else {
+                    // Start audio context on user interaction (required for beeps)
+                    if (typeof Tone !== 'undefined' && Tone.context && Tone.context.state !== 'running') {
+                        console.log("DEBUG: Starting Tone.js audio context for beeps...");
+                        Tone.start().then(() => {
+                            console.log("DEBUG: Tone.js audio context started successfully");
+                        }).catch(e => {
+                            console.error("DEBUG ERROR: Failed to start Tone.js audio context:", e);
+                        });
+                    }
+                    
+                    if (rtPlanData && rtPlanData.beams[selectedBeamIndex] && processedData.length > 0 && processedData[currentCP]) {
+                        const beam = rtPlanData.beams[selectedBeamIndex];
+                        const currentActualCP = processedData[currentCP].cp;
+                        totalMuDeliveredForBeeps_currentBeam = Math.floor(beam.totalMeterset * currentActualCP.cumulativeMetersetWeight);
+                        console.log("DEBUG: Beep enabled, initial totalMuDeliveredForBeeps_currentBeam:", totalMuDeliveredForBeeps_currentBeam);
+                    }
                 }
             });
 
@@ -3340,8 +3799,14 @@
                     return;
                 }
 
+                // Start audio context on user interaction (required for beeps)
                 if (typeof Tone !== 'undefined' && Tone.context && Tone.context.state !== 'running') {
-                    Tone.start().catch(e => console.error("DEBUG ERROR: Error starting Tone.js audio context:", e));
+                    console.log("DEBUG: Starting Tone.js audio context from play button...");
+                    Tone.start().then(() => {
+                        console.log("DEBUG: Tone.js audio context started successfully from play button");
+                    }).catch(e => {
+                        console.error("DEBUG ERROR: Failed to start Tone.js audio context from play button:", e);
+                    });
                 }
 
                 isPlaying = !isPlaying;
@@ -3414,6 +3879,12 @@
 
             console.log("DEBUG: Initializing page - calling clearAll.");
             clearAll();
+            
+            // Check for Eclipse parameter file and auto-load plan if specified
+            console.log("DEBUG: Checking for Eclipse launch parameters...");
+            console.log("DEBUG: Current URL:", window.location.href);
+            checkAndLoadPlanFromEclipse();
+            
             console.log("DEBUG: Page initialization complete.");
         });
     </script>
