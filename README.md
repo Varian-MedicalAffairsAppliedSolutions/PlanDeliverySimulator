@@ -2,7 +2,7 @@
 
 **Version:** 1.0.43
 **Author:** Taoran Li, PhD  
-**Date:** June 13, 2025
+**Date:** August 1, 2025
 
 ## 1. Overview
 
@@ -75,7 +75,7 @@ You can load plan data in two ways:
 
 ## 4. Varian Eclipse Integration (ESAPI Script)
 
-For users of the Varian Eclipse™ Treatment Planning System, the included C# script (`planToJSON_ExactFormat_Enhanced_NoDeps.cs`) provides a direct pathway to get plan data into the simulator without the intermediate step of exporting a DICOM file.
+For users of the Varian Eclipseâ„¢ Treatment Planning System, the included C# script (`planToJSON_ExactFormat_Enhanced_NoDeps.cs`) provides a direct pathway to get plan data into the simulator without the intermediate step of exporting a DICOM file.
 
 ### 4.1. Script Purpose and Features
 
@@ -86,7 +86,7 @@ The script runs inside Eclipse and exports the currently loaded treatment plan i
     * Saves the exported file to `C:\Temp\`.
     * Automatically copies the entire JSON content to your clipboard.
     * Attempts to automatically open the simulator's HTML file in your default web browser.
-* **Advanced MLC Handling:** Correctly processes and formats data for various Varian MLCs, including the dual-layer MLCs found on Halcyon™ and Ethos™ systems.
+* **Advanced MLC Handling:** Correctly processes and formats data for various Varian MLCs, including the dual-layer MLCs found on Halcyonâ„¢ and Ethosâ„¢ systems.
 
 ### 4.2. Prerequisites
 
@@ -120,7 +120,7 @@ The total estimated plan time is the sum of all intra-beam segment durations and
 
 #### 5.1.1. Inter-Beam Transition Time
 
-When simulating a full plan, the time to move between beams is determined by the **rate-limiting component**—the part of the machine that takes the longest to move from its position at the end of one beam to its starting position for the next. The simulator calculates the realistic, acceleration-aware move time for the gantry, collimator, jaws, and all MLC leaves, and the transition time is the longest of these individual times. Dose is off during this transition.
+When simulating a full plan, the time to move between beams is determined by the **rate-limiting component**â€”the part of the machine that takes the longest to move from its position at the end of one beam to its starting position for the next. The simulator calculates the realistic, acceleration-aware move time for the gantry, collimator, jaws, and all MLC leaves, and the transition time is the longest of these individual times. Dose is off during this transition.
 
 #### 5.1.2. Intra-Beam Segment Time
 
@@ -151,7 +151,7 @@ Adapted from Li & Xing (2013), this metric quantifies how much the MLC leaves ar
 Inspired by Park et al. (2014), this metric is designed to pinpoint specific, highly dynamic, and challenging moments in the plan. It is only available in the time-based "Simulate Delivery" mode. It works by:
 
 1.  **Flagging MLC Activity:** It "flags" any control points where the MLC leaves have to move or accelerate very quickly (based on the plan's overall motion characteristics).
-2.  **Weighting by Other Dynamics:** These "flagged" points of high MLC activity are then assigned a higher complexity score if other machine parts—like the gantry, collimator, or even the dose rate—are also changing rapidly at the same time.
+2.  **Weighting by Other Dynamics:** These "flagged" points of high MLC activity are then assigned a higher complexity score if other machine partsâ€”like the gantry, collimator, or even the dose rateâ€”are also changing rapidly at the same time.
 
 In short, a high Local MIt score identifies spots in the plan where many systems are being pushed toward their operational limits simultaneously, indicating a moment of high delivery complexity.
 
