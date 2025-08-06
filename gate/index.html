@@ -122,6 +122,60 @@
                 window.location.href = '../RP_Delivery_Simulator.html';
             }
         });
+        
+        // Enhanced connection status awareness with actual internet testing
+        function updateConnectionStatus() {
+            const startButton = document.querySelector('.start-button');
+            
+            if (!navigator.onLine) {
+                startButton.textContent = 'Start Registration (Offline Mode Available)';
+                startButton.title = 'Registration available via mobile QR code when offline';
+                return;
+            }
+            
+            // Test actual internet connectivity
+            testBasicConnectivity()
+                .then(function(hasInternet) {
+                    if (hasInternet) {
+                        startButton.textContent = 'Start Registration & Access Simulator';
+                        startButton.title = '';
+                    } else {
+                        startButton.textContent = 'Start Registration (Offline Mode Available)';
+                        startButton.title = 'Network detected but no internet access - mobile registration available';
+                    }
+                })
+                .catch(function() {
+                    startButton.textContent = 'Start Registration (Offline Mode Available)';
+                    startButton.title = 'Unable to verify internet access - mobile registration available';
+                });
+        }
+        
+        // Simple connectivity test for index page
+        function testBasicConnectivity() {
+            return new Promise(function(resolve) {
+                const img = new Image();
+                const timeout = setTimeout(function() {
+                    resolve(false);
+                }, 3000);
+                
+                img.onload = function() {
+                    clearTimeout(timeout);
+                    resolve(true);
+                };
+                
+                img.onerror = function() {
+                    clearTimeout(timeout);
+                    resolve(false);
+                };
+                
+                img.src = 'https://www.google.com/favicon.ico?t=' + Date.now();
+            });
+        }
+        
+        // Update status on load and connection changes
+        window.addEventListener('load', updateConnectionStatus);
+        window.addEventListener('online', updateConnectionStatus);
+        window.addEventListener('offline', updateConnectionStatus);
     </script>
 </body>
 </html> 
