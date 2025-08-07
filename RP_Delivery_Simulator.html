@@ -13,7 +13,9 @@
         // Registration check - must be first
         (function () {
             const isRegistered = localStorage.getItem('simulator_registered');
-            if (!isRegistered) {
+            const token = localStorage.getItem('registration_token');
+            
+            if (!isRegistered || isRegistered !== 'true' || !token || token !== 'AC1AEFCE') {
                 // Redirect to registration page
                 window.location.href = 'gate/register.html';
                 return;
@@ -113,8 +115,8 @@
 
         async function loadCriticalScripts() {
             try {
-                await loadScriptWithFallback('dcmjs.js', 'https://cdn.jsdelivr.net/npm/dcmjs/build/dcmjs.js');
-                await loadScriptWithFallback('Tone.js', 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js');
+                await loadScriptWithFallback('lib/dcmjs.js', 'https://cdn.jsdelivr.net/npm/dcmjs/build/dcmjs.js');
+                await loadScriptWithFallback('lib/Tone.js', 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js');
                 console.log('DEBUG: All critical scripts (dcmjs, Tone.js) loaded.');
             } catch (error) {
                 console.error("DEBUG: Critical script loading error:", error);
@@ -1079,14 +1081,7 @@
                             // Initialize the plan
                             postPlanLoadSetup();
                             
-                            // Show success message with Eclipse context
-                            const context = window.eclipseContextInfo;
-                            showMessageModal("Plan Loaded Successfully", 
-                                `Plan loaded automatically from Eclipse!\n\n` +
-                                `Patient: ${context?.patientId || 'Unknown'}\n` +
-                                `Course: ${context?.courseId || 'Unknown'}\n` +
-                                `Plan: ${context?.planId || 'Unknown'}\n\n` +
-                                `Ready for simulation.`);
+                            // Success message removed - plan loads silently
                         } else {
                             showMessageModal("Plan Loading Error", "Failed to parse plan data or no valid beams found.");
                             clearAll();
@@ -1421,18 +1416,13 @@
                                 postPlanLoadSetup();
                                 
                                 // Check if this was loaded from Eclipse context (for manual loading)
-                                let successMessage = "Plan data successfully loaded from JSON file.";
                                 if (window.eclipseContextInfo) {
-                                    successMessage = `Plan loaded successfully!\n\n` +
-                                        `Patient: ${window.eclipseContextInfo.patientId}\n` +
-                                        `Course: ${window.eclipseContextInfo.courseId}\n` +
-                                        `Plan: ${window.eclipseContextInfo.planId}\n\n` +
-                                        `Ready for simulation.`;
-                                    // Clear the context info after use
+                                    // Clear the context info after use - no message for Eclipse context
                                     window.eclipseContextInfo = null;
+                                } else {
+                                    // Only show message for manual JSON file loading
+                                    showMessageModal("JSON Plan Loaded", "Plan data successfully loaded from JSON file.");
                                 }
-                                
-                                showMessageModal("JSON Plan Loaded", successMessage);
                             } else {
                                 showMessageModal("JSON Parsing Error", "Failed to parse JSON plan or no valid beams found.");
                                 clearAll();
