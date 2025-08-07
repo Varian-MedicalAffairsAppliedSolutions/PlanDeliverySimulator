@@ -51,11 +51,25 @@ namespace VMS.TPS
                 string launcherPath = Path.GetDirectoryName(GetSourceFilePath());
                 string htmlFileName = "RP_Delivery_Simulator.html";
                 
-                // Validates the HTML file path
-                string htmlFilePath = Path.Combine(launcherPath, htmlFileName);
+                // Uncomment and modify the line below to specify a custom path to the HTML file
+                //string htmlFilePath = @"C:\CustomPath\PlanDeliverySimulator\RP_Delivery_Simulator.html";
+                
+                // Look for HTML file in the PlanDeliverySimulator subdirectory relative to launcher
+                string htmlFilePath = Path.Combine(launcherPath, "PlanDeliverySimulator", htmlFileName);
+                
+                // If not found in subdirectory, try same directory as launcher (backward compatibility)
                 if (!File.Exists(htmlFilePath))
                 {
-                    MessageBox.Show(string.Format("Error: The HTML file '{0}' was not found at '{1}'.", htmlFileName, launcherPath),
+                    htmlFilePath = Path.Combine(launcherPath, htmlFileName);
+                }
+                
+                // Final validation
+                if (!File.Exists(htmlFilePath))
+                {
+                    MessageBox.Show(string.Format("Error: The HTML file '{0}' was not found. Searched in:\n- {1}\n- {2}", 
+                                    htmlFileName, 
+                                    Path.Combine(launcherPath, "PlanDeliverySimulator"),
+                                    launcherPath),
                                     "HTML File Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
