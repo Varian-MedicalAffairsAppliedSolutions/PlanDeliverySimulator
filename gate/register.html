@@ -191,15 +191,15 @@
         
         <!-- Online Registration Section -->
         <div id="onlineRegistration" class="online-registration">
-            <h2>Registration Required</h2>
-            <p>To access the DICOM RT Plan Delivery Simulator, please complete the registration form below. This helps us track usage and ensure compliance with the software license agreement.</p>
-            
-            <div class="jotform-container">
-                <div class="loading" id="loadingMessage">
-                    Loading registration form...
-                </div>
-                <!-- JotForm will be embedded here -->
-                <div id="jotform-embed"></div>
+        <h2>Registration Required</h2>
+        <p>To access the DICOM RT Plan Delivery Simulator, please complete the registration form below. This helps us track usage and ensure compliance with the software license agreement.</p>
+        
+        <div class="jotform-container">
+            <div class="loading" id="loadingMessage">
+                Loading registration form...
+            </div>
+            <!-- JotForm will be embedded here -->
+            <div id="jotform-embed"></div>
             </div>
         </div>
         
@@ -393,6 +393,9 @@
                 // Hide loading message
                 document.getElementById('loadingMessage').style.display = 'none';
                 
+                // Add manual continue button as backup
+                addManualContinueButton();
+                
                 // Use JotForm's modern event handling
                 if (window.JFCustomWidget) {
                     console.log('Using JotForm widget API');
@@ -411,9 +414,6 @@
                     }
                 }, { capture: true });
                 
-                // Add manual completion button as fallback
-                addManualCompletionButton();
-                
                 // Add visibility change detection
                 document.addEventListener('visibilitychange', function() {
                     if (document.visibilityState === 'visible') {
@@ -428,23 +428,18 @@
             
             // Function to complete registration
             function completeRegistration() {
-                // Prevent multiple redirects
-                if (localStorage.getItem('registration_in_progress')) {
-                    return;
-                }
-                localStorage.setItem('registration_in_progress', 'true');
-                
                 // Prompt for registration code validation
                 const token = prompt('Please enter your registration code to complete access:');
+                
                 if (!token) {
-                    localStorage.removeItem('registration_in_progress');
                     return;
                 }
                 
+                const normalizedToken = token.trim().toUpperCase();
                 const validToken = 'AC1AEFCE';
-                if (token.trim().toUpperCase() !== validToken) {
+                
+                if (normalizedToken !== validToken) {
                     alert('Invalid registration code. Access denied.');
-                    localStorage.removeItem('registration_in_progress');
                     return;
                 }
                 
@@ -452,14 +447,13 @@
                 localStorage.setItem('simulator_registered', 'true');
                 localStorage.setItem('registration_timestamp', new Date().toISOString());
                 localStorage.setItem('registration_method', 'online_form');
-                localStorage.setItem('registration_token', token.trim().toUpperCase());
+                localStorage.setItem('registration_token', normalizedToken);
                 
                 // Show success message
                 showSuccessMessage();
                 
                 // Redirect to simulator after a short delay
                 setTimeout(function() {
-                    localStorage.removeItem('registration_in_progress');
                     window.location.href = '../RP_Delivery_Simulator.html';
                 }, 2000);
             }
@@ -476,24 +470,28 @@
                 `;
             }
             
-            // Function to add manual completion button
-            function addManualCompletionButton() {
+            // Add a manual completion button for users who complete the form
+            function addManualContinueButton() {
                 const container = document.querySelector('.jotform-container');
-                const manualButton = document.createElement('div');
-                manualButton.style.cssText = 'text-align: center; margin-top: 20px; padding: 15px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;';
-                manualButton.innerHTML = `
-                    <p style="margin: 0 0 10px 0; color: #666;">Having trouble with the form?</p>
-                    <button onclick="manualComplete()" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
-                        I've Completed the Form - Take Me to Simulator
+                const continueButton = document.createElement('div');
+                continueButton.style.cssText = 'text-align: center; margin-top: 20px; padding: 15px; background-color: #f0f8ff; border: 1px solid #4dabf7; border-radius: 4px;';
+                continueButton.innerHTML = `
+                    <p style="margin: 0 0 10px 0; color: #0c5460;"><strong>Completed the registration form?</strong></p>
+                    <button onclick="manualContinue()" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
+                        Continue to Simulator
                     </button>
+                    <p style="margin: 10px 0 0 0; font-size: 0.9em; color: #666;">Click this button after submitting the form above</p>
                 `;
-                container.appendChild(manualButton);
+                container.appendChild(continueButton);
             }
             
-            // Add manual completion function to global scope
-            window.manualComplete = function() {
+            // Manual continue function
+            window.manualContinue = function() {
+                console.log('DEBUG: Manual continue button clicked');
                 completeRegistration();
             };
+            
+            // Manual completion button and function removed for security
             
             // Add script to page
             document.getElementById('jotform-embed').appendChild(script);
@@ -518,7 +516,8 @@
         // Check if already registered and initialize
         window.addEventListener('load', function() {
             const isRegistered = localStorage.getItem('simulator_registered');
-            if (isRegistered) {
+            const token = localStorage.getItem('registration_token');
+            if (isRegistered === 'true' && token === 'AC1AEFCE') {
                 // If already registered, redirect directly
                 window.location.href = '../RP_Delivery_Simulator.html';
                 return;
