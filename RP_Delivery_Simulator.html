@@ -533,6 +533,107 @@
                 min-width: 220px;
             }
         }
+
+        /* Speed Dials CSS */
+        .dial-grid {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            gap: 15px;
+            border-bottom: 1px dashed #eee;
+            margin-bottom: 10px;
+        }
+
+        .dial-container {
+            text-align: center;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .dial-container p {
+            margin: 5px 0;
+            font-size: 0.9em;
+            color: #444;
+        }
+
+        .dial-container p strong {
+            color: #2c3e50;
+        }
+
+        /* The main gauge background */
+        .dial {
+            position: relative;
+            width: 150px;
+            height: 75px;
+            /* Half height to create a semi-circle */
+            background-color: #f0f0f0;
+            border: 8px solid #333;
+            border-color: #333 #333 #e0e0e0 #333;
+            /* Light bottom border to create depth */
+            border-radius: 150px 150px 0 0;
+            /* Semi-circle shape */
+            box-shadow: inset 0 -5px 10px rgba(0, 0, 0, 0.1);
+            margin: 0 auto 5px auto;
+        }
+
+        /* The needle of the dial */
+        .dial-needle {
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            width: 3px;
+            height: 65px;
+            /* Adjusted for the semi-circle height */
+            background-color: #e74c3c;
+            transform-origin: bottom;
+            transform: translateX(-50%) rotate(-90deg);
+            /* Start at 9 o'clock (minimum position) */
+            transition: transform 0.3s ease-in-out;
+            border-radius: 2px 2px 0 0;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Tooltip CSS */
+        .tooltip-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip-text {
+            visibility: hidden;
+            width: 250px;
+            background-color: rgba(255, 255, 255, 0.95);
+            color: #333;
+            text-align: center;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            padding: 8px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -125px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 12px;
+            line-height: 1.3;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 0.95;
+        }
+
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: rgba(255, 255, 255, 0.95) transparent transparent transparent;
+        }
     </style>
 </head>
 
@@ -682,11 +783,13 @@
 
 
         <div class="mode-controls">
-            <button id="toggleSimulationBtn">Simulate Delivery</button>
-            <button id="toggleAllBeamsSimBtn">Simulate Full Plan</button>
-            <span style="margin-left: 20px;">
+            <span>
                 <input type="checkbox" id="beepPerMUToggle" style="vertical-align: middle;">
-                <label for="beepPerMUToggle" style="vertical-align: middle;">Beep per MU (Sim Mode)</label>
+                <label for="beepPerMUToggle" style="vertical-align: middle;">Beep per MU</label>
+            </span>
+            <span style="margin-left: 20px;">
+                <button id="playPauseBtn">Play Simulation</button>
+                <button id="resetBtn">Reset</button>
             </span>
         </div>
 
@@ -698,21 +801,17 @@
         <div class="visualization-section">
             <h2>Beam's Eye View (BEV)</h2>
             <canvas id="bevCanvas" width="400" height="400"></canvas>
-            <div class="controls">
-                <button id="playPauseBtn">Play</button>
-                <button id="resetBtn">Reset</button>
-            </div>
             <div class="param-display">
                 <h3>Current Control Point: <span id="currentCPIndex">0</span> / <span id="totalCPs">0</span></h3>
                 <div class="param-item"><strong>Gantry Angle:</strong> <span id="gantryAngle">N/A</span>°</div>
                 <div class="param-item"><strong>Collimator Angle:</strong> <span id="collimatorAngle">N/A</span>°</div>
-                <div class="param-item" id="simTimeDisplay" style="display:none;">
+                <div class="param-item" id="simTimeDisplay" style="display:flex;">
                     <strong>
                         Simulated Time
                         Elapsed:
                     </strong> <span id="simTimeElapsed">0.00</span> s
                 </div>
-                <div class="param-item" id="totalSimTimeDisplay" style="display:none;">
+                <div class="param-item" id="totalSimTimeDisplay" style="display:flex;">
                     <strong>Est. Total Beam Time:</strong>
                     <span id="totalSimTime">0.00</span> s
                 </div>
@@ -721,6 +820,41 @@
                     Representative of Actual Delivery)
                 </p>
             </div>
+        </div>
+
+        <div class="visualization-section">
+            <h2>Speed Dials (Simulation Mode Only)</h2>
+            <div class="dial-grid" id="speedDialsContainer" style="display:none;">
+                <div class="dial-container">
+                    <div class="dial">
+                        <div class="dial-needle" id="gantryNeedle"></div>
+                    </div>
+                    <p><strong>Gantry Speed</strong></p>
+                    <p><span id="gantrySpeedDialVal">0.0</span> °/s</p>
+                </div>
+                <div class="dial-container">
+                    <div class="dial">
+                        <div class="dial-needle" id="mlcNeedle"></div>
+                    </div>
+                    <p><strong>MLC Speed</strong></p>
+                    <p><span id="mlcSpeedDialVal">0.0</span> mm/s</p>
+                </div>
+                <div class="dial-container">
+                    <div class="dial">
+                        <div class="dial-needle" id="collimatorNeedle"></div>
+                    </div>
+                    <p><strong>Collimator Speed</strong></p>
+                    <p><span id="collimatorSpeedDialVal">0.0</span> °/s</p>
+                </div>
+                <div class="dial-container">
+                    <div class="dial">
+                        <div class="dial-needle" id="doseRateNeedle"></div>
+                    </div>
+                    <p><strong>Dose Rate</strong></p>
+                    <p><span id="doseRateDialVal">0.0</span> MU/min</p>
+                </div>
+            </div>
+            <p style="color: red; font-size: 0.8em; margin-left: 10px;" id="speedDialsNote" style="display:none;">(Speed dials show real-time component speeds during simulation)</p>
         </div>
 
         <div class="visualization-section">
@@ -743,6 +877,13 @@
                     <canvas id="collimatorSpeedCanvas" width="220" height="220"></canvas>
                 </div>
                 <div class="radial-plot-container">
+                    <div class="tooltip-container">
+                        <h3>CP vs Angle</h3>
+                        <span class="tooltip-text">Number of control points within a 1-degree gantry angle window, normalized to CPs per degree.</span>
+                    </div>
+                    <canvas id="cpDensityCanvas" width="220" height="220"></canvas>
+                </div>
+                <div class="radial-plot-container">
                     <h3>Dose Rate</h3>
                     <canvas id="doseRateCanvas" width="220" height="220"></canvas>
                 </div>
@@ -751,7 +892,32 @@
                     <canvas id="miCanvas" width="220" height="220"></canvas>
                 </div>
                 <div class="radial-plot-container">
-                    <h3>Local MIt</h3> <canvas id="localMItCanvas" width="220" height="220"></canvas>
+                    <div class="tooltip-container">
+                        <h3>Local MIt</h3>
+                        <span class="tooltip-text">Local modulation index within a time window; reflects interplay between complexity and machine constraints within a localized time window of the simulation.</span>
+                    </div>
+                    <canvas id="localMItCanvas" width="220" height="220"></canvas>
+                </div>
+                <div class="radial-plot-container">
+                    <div class="tooltip-container">
+                        <h3>SAS (Small Aperture)</h3>
+                        <span class="tooltip-text">Small Aperture Score: Proportion of area in small MLC apertures, normalized to the plan's maximum.</span>
+                    </div>
+                    <canvas id="sasCanvas" width="220" height="220"></canvas>
+                </div>
+                <div class="radial-plot-container">
+                    <div class="tooltip-container">
+                        <h3>AAV (Area Variability)</h3>
+                        <span class="tooltip-text">Normalized variation in MLC aperture area across control points, indicating modulation and complexity.</span>
+                    </div>
+                    <canvas id="aavCanvas" width="220" height="220"></canvas>
+                </div>
+                <div class="radial-plot-container">
+                    <div class="tooltip-container">
+                        <h3>MCSv (Modulation)</h3>
+                        <span class="tooltip-text">Modulation Complexity Score: standard deviation of MLC leaf positions, assessing overall modulation complexity.</span>
+                    </div>
+                    <canvas id="mcsCanvas" width="220" height="220"></canvas>
                 </div>
             </div>
             <div class="slider-controls">
@@ -773,9 +939,13 @@
             </div>
         </div>
 
-        <div class="visualization-section xy-time-plots-section" id="xyTimePlotsContainer" style="display:none;">
+        <div class="visualization-section xy-time-plots-section" id="xyTimePlotsContainer" style="display:block;">
             <h2>Device Metrics vs. Time (Simulation Mode Only)</h2>
             <div class="xy-time-plot-grid">
+                <div class="xy-time-plot-container">
+                    <canvas id="componentCapabilityCanvas" class="xy-plot-canvas"></canvas>
+                    <button class="reset-view-btn" data-plot-id="componentCapability" disabled>Reset View</button>
+                </div>
                 <div class="xy-time-plot-container">
                     <canvas id="gantryMetricsCanvas" class="xy-plot-canvas"></canvas>
                     <button class="reset-view-btn" data-plot-id="gantryMetrics">Reset View</button>
@@ -816,7 +986,7 @@
             let currentCP = 0;
             let animationFrameId = null;
             let isPlaying = false;
-            let isSimulatingDelivery = false;
+            let isSimulatingDelivery = true; // Always enabled automatically
             let isSimulatingAllBeams = false;
             let beepPerMUEnabled = false;
             let muBeepSynth = null;
@@ -1227,26 +1397,38 @@
             const gantrySpeedCanvasElem = document.getElementById('gantrySpeedCanvas');
             const mlcSpeedCanvasElem = document.getElementById('mlcSpeedCanvas');
             const collimatorSpeedCanvasElem = document.getElementById('collimatorSpeedCanvas');
+            const cpDensityCanvasElem = document.getElementById('cpDensityCanvas');
             const doseRateCanvasElem = document.getElementById('doseRateCanvas');
             const localMItCanvasElem = document.getElementById('localMItCanvas');
             const miCanvasElem = document.getElementById('miCanvas');
+            const sasCanvasElem = document.getElementById('sasCanvas');
+            const aavCanvasElem = document.getElementById('aavCanvas');
+            const mcsCanvasElem = document.getElementById('mcsCanvas');
 
             const radialCanvases = {
                 gantrySpeed: gantrySpeedCanvasElem,
                 mlcSpeed: mlcSpeedCanvasElem,
                 collimatorSpeed: collimatorSpeedCanvasElem,
+                cpDensity: cpDensityCanvasElem,
                 doseRate: doseRateCanvasElem,
                 localMIt: localMItCanvasElem,
-                mi: miCanvasElem
+                mi: miCanvasElem,
+                sas: sasCanvasElem,
+                aav: aavCanvasElem,
+                mcs: mcsCanvasElem
             };
 
             const radialContexts = {
                 gantrySpeed: gantrySpeedCanvasElem ? gantrySpeedCanvasElem.getContext('2d') : null,
                 mlcSpeed: mlcSpeedCanvasElem ? mlcSpeedCanvasElem.getContext('2d') : null,
                 collimatorSpeed: collimatorSpeedCanvasElem ? collimatorSpeedCanvasElem.getContext('2d') : null,
+                cpDensity: cpDensityCanvasElem ? cpDensityCanvasElem.getContext('2d') : null,
                 doseRate: doseRateCanvasElem ? doseRateCanvasElem.getContext('2d') : null,
                 localMIt: localMItCanvasElem ? localMItCanvasElem.getContext('2d') : null,
-                mi: miCanvasElem ? miCanvasElem.getContext('2d') : null
+                mi: miCanvasElem ? miCanvasElem.getContext('2d') : null,
+                sas: sasCanvasElem ? sasCanvasElem.getContext('2d') : null,
+                aav: aavCanvasElem ? aavCanvasElem.getContext('2d') : null,
+                mcs: mcsCanvasElem ? mcsCanvasElem.getContext('2d') : null
             };
 
             const xyTimePlotsContainer = document.getElementById('xyTimePlotsContainer');
@@ -1261,6 +1443,17 @@
                 collimatorMetrics: collimatorMetricsCanvasElem ? collimatorMetricsCanvasElem.getContext('2d') : null,
                 doseRateTime: doseRateTimeCanvasElem ? doseRateTimeCanvasElem.getContext('2d') : null
             };
+
+            // Speed dials elements
+            const speedDialsContainer = document.getElementById('speedDialsContainer');
+            const gantryNeedle = document.getElementById('gantryNeedle');
+            const mlcNeedle = document.getElementById('mlcNeedle');
+            const collimatorNeedle = document.getElementById('collimatorNeedle');
+            const doseRateNeedle = document.getElementById('doseRateNeedle');
+            const gantrySpeedDialValSpan = document.getElementById('gantrySpeedDialVal');
+            const mlcSpeedDialValSpan = document.getElementById('mlcSpeedDialVal');
+            const collimatorSpeedDialValSpan = document.getElementById('collimatorSpeedDialVal');
+            const doseRateDialValSpan = document.getElementById('doseRateDialVal');
 
             const xyPlotStates = {
                 gantryMetrics: { panX: 0, panY: 0, zoomLevelX: 1, zoomLevelY: 1, isPanning: false, lastMouseX: 0, lastMouseY: 0 },
@@ -1286,8 +1479,7 @@
 
             const playPauseBtn = document.getElementById('playPauseBtn');
             const resetBtn = document.getElementById('resetBtn');
-            const toggleSimulationBtn = document.getElementById('toggleSimulationBtn');
-            const toggleAllBeamsSimBtn = document.getElementById('toggleAllBeamsSimBtn');
+            // Toggle buttons removed - simulation always enabled
             const beepPerMUToggle = document.getElementById('beepPerMUToggle');
             const currentCPIndexSpan = document.getElementById('currentCPIndex');
             const totalCPsSpan = document.getElementById('totalCPs');
@@ -1784,7 +1976,7 @@
                 console.log("DEBUG: initVisualizationForSelectedBeam called for beam index:", selectedBeamIndex);
                 if (!rtPlanData || !rtPlanData.beams || !rtPlanData.beams[selectedBeamIndex]) { showMessageModal("Data Error", "Selected beam data not found."); clearAll(); return; }
                 isPlaying = false;
-                playPauseBtn.textContent = isSimulatingDelivery ? 'Play Simulation' : 'Play';
+                playPauseBtn.textContent = 'Play Simulation';
                 if (animationFrameId) { clearTimeout(animationFrameId); animationFrameId = null; }
                 currentCP = 0; lastAnimatedCP = 0; totalMuDeliveredForBeeps_currentBeam = 0;
                 initVisualization();
@@ -1859,22 +2051,18 @@
                 }
                 
                 currentCP = 0; lastAnimatedCP = 0; selectedBeamIndex = 0; isPlaying = false; totalMuDeliveredForBeeps_currentBeam = 0;
-                isSimulatingDelivery = false;
-                isSimulatingAllBeams = false;
-                toggleSimulationBtn.classList.remove('active-mode');
-                toggleAllBeamsSimBtn.classList.remove('active-mode');
-                toggleAllBeamsSimBtn.textContent = 'Simulate Full Plan';
+                // Simulation always enabled - no need to reset modes
                 if (beamSelector) beamSelector.disabled = false;
 
 
-                if (playPauseBtn) playPauseBtn.textContent = 'Play';
+                if (playPauseBtn) playPauseBtn.textContent = 'Play Simulation';
                 if (animationFrameId) { clearTimeout(animationFrameId); animationFrameId = null; }
 
                 if (bevCtx) bevCtx.clearRect(0, 0, bevCanvas.width, bevCanvas.height);
                 Object.values(radialContexts).forEach(ctx => { if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); });
                 Object.values(xyTimeContexts).forEach(ctx => { if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); });
 
-                if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'none';
+                // XY Time Plots always visible in simulation mode
                 updateOverallPlanInfoDisplay(null);
 
 
@@ -2508,7 +2696,7 @@
                     showMessageModal("Beam Error", `Beam ${beam.beamNumber} (${beam.beamName || ''}) has no control points.`);
                     totalCPsSpan.textContent = '0'; cpSlider.max = 0; cpSlider.value = 0; processedData = []; updateParamDisplay();
                     console.log("DEBUG: initVisualization - no control points for beam.");
-                    if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'none';
+                    // XY Time Plots always visible in simulation mode
                     return;
                 }
 
@@ -2710,6 +2898,7 @@
                 drawAllStaticParameterPlots();
                 drawAllXYTimePlots();
                 updateParamDisplay();
+                updateSpeedDials(); // Initialize speed dials
                 setupRadialPlotInteractions();
                 console.log("DEBUG: initVisualization END.");
             }
@@ -2959,12 +3148,11 @@
             }
 
             function drawAllXYTimePlots() {
-                if (!isSimulatingDelivery || !processedData || processedData.length < 1) {
+                if (!processedData || processedData.length < 1) {
                     Object.values(xyTimeContexts).forEach(ctx => { if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); });
-                    if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'none';
                     return;
                 }
-                if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'block';
+                // XY Time Plots always visible in simulation mode
 
                 const timeDataPoints = processedData.filter(p => typeof p.cumulativeSimTime === 'number');
                 if (timeDataPoints.length < 1) {
@@ -3433,6 +3621,59 @@
                 });
             }
 
+            function updateSpeedDials() {
+                if (!processedData[currentCP] || !rtPlanData) {
+                    // Reset dials when no data available
+                    if (gantryNeedle) gantryNeedle.style.transform = 'rotate(-90deg)';
+                    if (mlcNeedle) mlcNeedle.style.transform = 'rotate(-90deg)';
+                    if (collimatorNeedle) collimatorNeedle.style.transform = 'rotate(-90deg)';
+                    if (doseRateNeedle) doseRateNeedle.style.transform = 'rotate(-90deg)';
+                    if (gantrySpeedDialValSpan) gantrySpeedDialValSpan.textContent = '0.0';
+                    if (mlcSpeedDialValSpan) mlcSpeedDialValSpan.textContent = '0.0';
+                    if (collimatorSpeedDialValSpan) collimatorSpeedDialValSpan.textContent = '0.0';
+                    if (doseRateDialValSpan) doseRateDialValSpan.textContent = '0.0';
+                    if (speedDialsContainer) speedDialsContainer.style.display = 'none';
+                    return;
+                }
+                
+                if (speedDialsContainer) speedDialsContainer.style.display = 'flex';
+                
+                const currentCPData = processedData[currentCP];
+                
+                // Gantry Dial
+                if (gantryNeedle && gantrySpeedDialValSpan && currentCPData.gantrySpeed !== undefined) {
+                    const gantryPercent = Math.min(currentCPData.gantrySpeed / currentMaxGantrySpeed, 1);
+                    const gantryAngle = (gantryPercent * 180) - 90; // Map 0-1 to -90 to 90 degrees
+                    gantryNeedle.style.transform = `rotate(${gantryAngle}deg)`;
+                    gantrySpeedDialValSpan.textContent = currentCPData.gantrySpeed.toFixed(1);
+                }
+                
+                // MLC Dial
+                if (mlcNeedle && mlcSpeedDialValSpan && currentCPData.mlcSpeed !== undefined) {
+                    const mlcPercent = Math.min(currentCPData.mlcSpeed / currentMaxMlcSpeedMMPS, 1);
+                    const mlcAngle = (mlcPercent * 180) - 90;
+                    mlcNeedle.style.transform = `rotate(${mlcAngle}deg)`;
+                    mlcSpeedDialValSpan.textContent = currentCPData.mlcSpeed.toFixed(1);
+                }
+                
+                // Collimator Dial
+                if (collimatorNeedle && collimatorSpeedDialValSpan && currentCPData.collimatorSpeed !== undefined) {
+                    const collPercent = Math.min(currentCPData.collimatorSpeed / currentMaxCollimatorSpeed, 1);
+                    const collAngle = (collPercent * 180) - 90;
+                    collimatorNeedle.style.transform = `rotate(${collAngle}deg)`;
+                    collimatorSpeedDialValSpan.textContent = currentCPData.collimatorSpeed.toFixed(1);
+                }
+                
+                // Dose Rate Dial
+                if (doseRateNeedle && doseRateDialValSpan && currentCPData.doseRate !== undefined) {
+                    const planDoseRate = rtPlanData.primaryDoseRate || currentMaxDoseRate;
+                    const doseRatePercent = Math.min(currentCPData.doseRate / planDoseRate, 1);
+                    const doseRateAngle = (doseRatePercent * 180) - 90;
+                    doseRateNeedle.style.transform = `rotate(${doseRateAngle}deg)`;
+                    doseRateDialValSpan.textContent = currentCPData.doseRate.toFixed(1);
+                }
+            }
+
             function updateParamDisplay(interpolatedState = null) {
                 if (interpolatedState) {
                     // Simplified update for transition animation
@@ -3460,7 +3701,7 @@
                     if (localMItValSpan) localMItValSpan.textContent = 'N/A';
                     if (miValSpan) miValSpan.textContent = 'N/A';
                     currentCPIndexSpan.textContent = currentCP.toString(); totalCPsSpan.textContent = '0';
-                    cpSlider.value = currentCP; simTimeDisplay.style.display = 'none'; totalSimTimeDisplay.style.display = 'none';
+                    cpSlider.value = currentCP; // Time displays always visible in simulation mode
                     if (bevCtx) bevCtx.clearRect(0, 0, bevCanvas.width, bevCanvas.height);
                     drawAllStaticParameterPlots(); drawAllXYTimePlots();
                     return;
@@ -3493,7 +3734,7 @@
 
                     const totalTimeForDisplay = isSimulatingAllBeams ? parseFloat(totalPlanSimTimeSpan.textContent) : (beam.totalCalculatedSimTime || 0);
                     if (totalTimeForDisplay) { totalSimTimeSpan.textContent = totalTimeForDisplay.toFixed(2); totalSimTimeDisplay.style.display = 'flex'; } else { totalSimTimeDisplay.style.display = 'none'; }
-                } else { simTimeDisplay.style.display = 'none'; totalSimTimeDisplay.style.display = 'none'; }
+                // Time displays always visible in automatic simulation mode
 
                 const jawPos = { asymx: currentActualCP.asymx, asymy: currentActualCP.asymy };
                 drawBEV(currentActualCP.mlcPositionData, currentActualCP.collimatorAngle || 0, currentActualCP.gantryAngle, jawPos, beam.mlcDefinitions, beam.isRDSMachine);
@@ -3530,6 +3771,7 @@
                         delay = Math.max(10, segmentDurationSeconds * 1000);
                     } else if (isSimulatingDelivery) { delay = 10; }
                     updateParamDisplay();
+                    updateSpeedDials(); // Update speed dials
                     triggerBeeps(segmentDurationSeconds);
                     animationFrameId = setTimeout(() => { if (isPlaying) requestAnimationFrame(animate); }, delay);
                 }
@@ -3690,70 +3932,9 @@
             }
 
 
-            toggleSimulationBtn.addEventListener('click', function () {
-                console.log("DEBUG: Toggle Simulation button clicked. isSimulatingDelivery BEFORE toggle:", isSimulatingDelivery);
-                const currentBeam = rtPlanData ? rtPlanData.beams[selectedBeamIndex] : null;
-                if (!rtPlanData || !currentBeam || !currentBeam.controlPoints || currentBeam.controlPoints.length === 0) {
-                    showMessageModal("Data Error", "Please load RT Plan data with control points and select a beam first.");
-                    console.log("DEBUG: Sim toggle aborted: No plan/beam/control points.");
-                    return;
-                }
+            // Toggle simulation button removed - simulation always enabled
 
-                if (isSimulatingAllBeams) { toggleAllBeamsSimBtn.click(); } // Turn off full plan sim if active
-
-                isSimulatingDelivery = !isSimulatingDelivery;
-                console.log("DEBUG: isSimulatingDelivery AFTER toggle:", isSimulatingDelivery);
-
-                if (isPlaying) { playPauseBtn.click(); }
-
-                if (isSimulatingDelivery) {
-                    this.textContent = 'Use Fixed Speed Animation'; this.classList.add('active-mode');
-                    playPauseBtn.textContent = 'Play Simulation';
-                    simTimeDisplay.style.display = 'flex'; totalSimTimeDisplay.style.display = 'flex';
-                    if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'block';
-                } else {
-                    this.textContent = 'Simulate Delivery'; this.classList.remove('active-mode');
-                    playPauseBtn.textContent = 'Play';
-                    simTimeDisplay.style.display = 'none'; totalSimTimeDisplay.style.display = 'none';
-                    if (xyTimePlotsContainer) xyTimePlotsContainer.style.display = 'none';
-                }
-                currentCP = 0; lastAnimatedCP = 0; totalMuDeliveredForBeeps_currentBeam = 0;
-                console.log("DEBUG: Calling initVisualization from toggleSimulationBtn");
-                initVisualization();
-                console.log("DEBUG: Toggle Simulation button processing finished.");
-            });
-
-            toggleAllBeamsSimBtn.addEventListener('click', function () {
-                if (!rtPlanData || !rtPlanData.beams || rtPlanData.beams.length < 2) {
-                    showMessageModal("Plan Error", "This feature requires a plan with at least two beams.");
-                    return;
-                }
-
-                if (isSimulatingDelivery && !isSimulatingAllBeams) { toggleSimulationBtn.click(); } // Turn off single beam sim
-
-                isSimulatingAllBeams = !isSimulatingAllBeams;
-                isSimulatingDelivery = isSimulatingAllBeams; // Full plan sim is a type of delivery sim
-
-                if (isPlaying) { playPauseBtn.click(); }
-
-                if (isSimulatingAllBeams) {
-                    this.textContent = 'Stop Full Plan Sim'; this.classList.add('active-mode');
-                    playPauseBtn.textContent = 'Play Full Plan';
-                    beamSelector.disabled = true;
-                    currentBeamIndexForFullSim = 0;
-                    selectedBeamIndex = 0;
-                    beamSelector.value = 0;
-                    currentCP = 0;
-                    totalPlanElapsedTime = 0;
-                    initVisualization(); // Init with the first beam
-                } else {
-                    this.textContent = 'Simulate Full Plan'; this.classList.remove('active-mode');
-                    playPauseBtn.textContent = 'Play';
-                    beamSelector.disabled = false;
-                    // Reset to the beam that was selected before the full sim
-                    initVisualizationForSelectedBeam();
-                }
-            });
+            // Full plan simulation button removed - keeping original functionality for now
 
 
             beepPerMUToggle.addEventListener('change', function () {
@@ -3878,10 +4059,6 @@
             console.log("DEBUG: Page initialization complete.");
         });
     </script>
-</body>
-
-</html>
-
 </body>
 
 </html>
