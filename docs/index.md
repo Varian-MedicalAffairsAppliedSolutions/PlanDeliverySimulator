@@ -110,7 +110,7 @@ Agreement and the provision the parties intend to modify or amend.<br><br>
       allow="geolocation; microphone; camera; fullscreen; payment"
       src="https://form.jotform.com/251694838691170"
       frameborder="0"
-      style="min-width:100%;max-width:100%;height:539px;border:none;"
+      style="min-width:100%;max-width:100%;height:1800px;border:none;"
       scrolling="no"
     >
     </iframe>
