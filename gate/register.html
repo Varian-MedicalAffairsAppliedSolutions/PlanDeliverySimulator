@@ -350,10 +350,10 @@
             
             if (token === validToken) {
                 // Mark as registered
-                localStorage.setItem('simulator_registered', 'true');
-                localStorage.setItem('registration_timestamp', new Date().toISOString());
-                localStorage.setItem('registration_method', 'mobile_qr');
-                localStorage.setItem('registration_token', token);
+                localStorage.setItem('plandelivery_registered', 'true');
+                localStorage.setItem('plandelivery_registration_timestamp', new Date().toISOString());
+                localStorage.setItem('plandelivery_registration_method', 'mobile_qr');
+                localStorage.setItem('plandelivery_registration_token', token);
                 
                 // Show success message
                 showOfflineSuccessMessage();
@@ -444,10 +444,10 @@
                 }
                 
                 // Store registration completion
-                localStorage.setItem('simulator_registered', 'true');
-                localStorage.setItem('registration_timestamp', new Date().toISOString());
-                localStorage.setItem('registration_method', 'online_form');
-                localStorage.setItem('registration_token', normalizedToken);
+                localStorage.setItem('plandelivery_registered', 'true');
+                localStorage.setItem('plandelivery_registration_timestamp', new Date().toISOString());
+                localStorage.setItem('plandelivery_registration_method', 'online_form');
+                localStorage.setItem('plandelivery_registration_token', normalizedToken);
                 
                 // Show success message
                 showSuccessMessage();
@@ -515,8 +515,8 @@
         
         // Check if already registered and initialize
         window.addEventListener('load', function() {
-            const isRegistered = localStorage.getItem('simulator_registered');
-            const token = localStorage.getItem('registration_token');
+            const isRegistered = localStorage.getItem('plandelivery_registered');
+            const token = localStorage.getItem('plandelivery_registration_token');
             if (isRegistered === 'true' && token === 'AC1AEFCE') {
                 // If already registered, redirect directly
                 window.location.href = '../RP_Delivery_Simulator.html';
