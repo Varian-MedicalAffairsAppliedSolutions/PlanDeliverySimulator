@@ -116,8 +116,8 @@
     <script>
         // Check if already registered and redirect if so
         window.addEventListener('load', function() {
-            const isRegistered = localStorage.getItem('simulator_registered');
-            const token = localStorage.getItem('registration_token');
+            const isRegistered = localStorage.getItem('plandelivery_registered');
+            const token = localStorage.getItem('plandelivery_registration_token');
             if (isRegistered === 'true' && token === 'AC1AEFCE') {
                 // If already registered, redirect directly to simulator
                 window.location.href = '../RP_Delivery_Simulator.html';
