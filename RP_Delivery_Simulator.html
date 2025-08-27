@@ -12,8 +12,8 @@
     <script>
         // Registration check - must be first
         (function () {
-            const isRegistered = localStorage.getItem('simulator_registered');
-            const token = localStorage.getItem('registration_token');
+            const isRegistered = localStorage.getItem('plandelivery_registered');
+            const token = localStorage.getItem('plandelivery_registration_token');
             
             if (!isRegistered || isRegistered !== 'true' || !token || token !== 'AC1AEFCE') {
                 // Redirect to registration page
