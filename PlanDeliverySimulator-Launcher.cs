@@ -190,6 +190,13 @@ if (typeof window.loadEclipsePlan === 'function') {{
             Beam firstBeam = plan.Beams.FirstOrDefault(b => !b.IsSetupField);
             sb.AppendLine(FormatProperty("primaryDoseRate", firstBeam != null ? firstBeam.DoseRate : 0, 2, false));
 
+            // Add top-level machine identification so the simulator can set defaults (RDS vs TDS)
+            string topLevelModelName = (firstBeam != null && firstBeam.MLC != null && !string.IsNullOrEmpty(firstBeam.MLC.Model)) ? firstBeam.MLC.Model : string.Empty;
+            bool isRdsTop = !string.IsNullOrEmpty(topLevelModelName) && topLevelModelName.ToUpper().Contains("SX");
+            string topLevelIdentifier = isRdsTop ? "RDS" : "TDS";
+            sb.AppendLine(FormatProperty("manufacturerModelName", string.IsNullOrWhiteSpace(topLevelModelName) ? topLevelIdentifier : topLevelModelName, 2, false));
+            sb.AppendLine(FormatProperty("machineIdentifierForSpeeds", topLevelIdentifier, 2, false));
+
             var beamStrings = plan.Beams.Where(b => !b.IsSetupField)
                 .Select(b => BuildBeamJson(b, 3))
                 .ToList();
@@ -223,7 +230,11 @@ if (typeof window.loadEclipsePlan === 'function') {{
             sb.AppendLine(FormatProperty("totalMeterset", beam.Meterset.Value, indentLevel + 1, false));
             sb.AppendLine(FormatProperty("gantryRotationDirection", beam.GantryDirection.ToString(), indentLevel + 1, false));
             sb.AppendLine(FormatProperty("gantryStartAngle", beam.ControlPoints.First().GantryAngle, indentLevel + 1, false));
-            sb.AppendLine(FormatProperty("gantryEndAngle", beam.ControlPoints.Last().GantryAngle, indentLevel + 1, true));
+            sb.AppendLine(FormatProperty("gantryEndAngle", beam.ControlPoints.Last().GantryAngle, indentLevel + 1, false));
+
+            // Compute and include Overall MCSv (collimator-adjusted) to avoid N/A in HTML display
+            double mcsValue = ComputeOverallMcsvForBeam(beam);
+            sb.AppendLine(FormatProperty("mcsValue", mcsValue, indentLevel + 1, true));
 
             sb.Append(Indent(indentLevel) + "}");
             return sb.ToString();
@@ -243,18 +254,222 @@ if (typeof window.loadEclipsePlan === 'function') {{
             sb.AppendLine(FormatArray("mlcPositionData", mlcPosStrings, indentLevel + 1, false));
 
             bool isRds = beam.MLC != null && !string.IsNullOrEmpty(beam.MLC.Model) && beam.MLC.Model.ToUpper().Contains("SX");
-            
-            string asymxString = isRds ? "[]" : string.Format(CultureInfo.InvariantCulture, "[{0:F2}, {1:F2}]", cp.JawPositions.X1, cp.JawPositions.X2);
-            string asymyString = isRds ? "[]" : string.Format(CultureInfo.InvariantCulture, "[{0:F2}, {1:F2}]", cp.JawPositions.Y1, cp.JawPositions.Y2);
 
-            sb.AppendLine(FormatProperty("asymx", asymxString, indentLevel + 1, false, false));
-            sb.AppendLine(FormatProperty("asymy", asymyString, indentLevel + 1, true, false));
+            // For Halcyon/Ethos (RDS), emit null for jaws so the simulator skips jaw math cleanly
+            if (isRds)
+            {
+                sb.AppendLine(FormatProperty("asymx", null, indentLevel + 1, false, false));
+                sb.AppendLine(FormatProperty("asymy", null, indentLevel + 1, true, false));
+            }
+            else
+            {
+                string asymxString = string.Format(CultureInfo.InvariantCulture, "[{0:F2}, {1:F2}]", cp.JawPositions.X1, cp.JawPositions.X2);
+                string asymyString = string.Format(CultureInfo.InvariantCulture, "[{0:F2}, {1:F2}]", cp.JawPositions.Y1, cp.JawPositions.Y2);
+                sb.AppendLine(FormatProperty("asymx", asymxString, indentLevel + 1, false, false));
+                sb.AppendLine(FormatProperty("asymy", asymyString, indentLevel + 1, true, false));
+            }
 
             sb.Append(Indent(indentLevel) + "}");
             return sb.ToString();
         }
         
         #region Manual JSON Building Helpers
+        private double ComputeOverallMcsvForBeam(Beam beam)
+        {
+            try
+            {
+                if (beam == null || beam.ControlPoints == null || beam.ControlPoints.Count < 2)
+                {
+                    return 1.0;
+                }
+
+                bool isRds = beam.MLC != null && !string.IsNullOrEmpty(beam.MLC.Model) && beam.MLC.Model.ToUpper().Contains("SX");
+                // Build boundaries for effective leaf calculation
+                double[] boundariesAll = beam.MLC != null && beam.MLC.Model != null ? GetBoundariesArray(beam.MLC.Model) : null;
+
+                List<double> boundariesX1 = null;
+                List<double> boundariesX2 = null;
+                if (isRds && boundariesAll != null && boundariesAll.Length >= 58)
+                {
+                    // First 29 belong to MLCX1, remaining to MLCX2 (29 each)
+                    boundariesX1 = boundariesAll.Take(29).ToList();
+                    boundariesX2 = boundariesAll.Skip(29).ToList();
+                }
+
+                // Precompute effective MLC positions for each control point
+                List<double[]> effectivePositionsPerCp = new List<double[]>();
+
+                foreach (var cp in beam.ControlPoints)
+                {
+                    if (cp.LeafPositions == null)
+                    {
+                        effectivePositionsPerCp.Add(null);
+                        continue;
+                    }
+
+                    if (!isRds)
+                    {
+                        int numPairs = cp.LeafPositions.GetLength(1);
+                        var a = new double[numPairs];
+                        var b = new double[numPairs];
+                        for (int i = 0; i < numPairs; i++)
+                        {
+                            a[i] = cp.LeafPositions[0, i];
+                            b[i] = cp.LeafPositions[1, i];
+                        }
+                        effectivePositionsPerCp.Add(a.Concat(b).ToArray());
+                    }
+                    else
+                    {
+                        // Halcyon/Ethos dual-layer: split positions into two layers following exporter logic
+                        // Layer1: indices 0..27, Layer2: 28..56
+                        int total = cp.LeafPositions.GetLength(1);
+                        int layer1Pairs = Math.Min(28, total);
+                        int layer2Pairs = Math.Max(0, total - 28);
+
+                        var layer1_A = new double[layer1Pairs];
+                        var layer1_B = new double[layer1Pairs];
+                        for (int i = 0; i < layer1Pairs; i++) { layer1_A[i] = cp.LeafPositions[0, i]; layer1_B[i] = cp.LeafPositions[1, i]; }
+
+                        var layer2_A = new double[layer2Pairs];
+                        var layer2_B = new double[layer2Pairs];
+                        for (int i = 0; i < layer2Pairs; i++) { layer2_A[i] = cp.LeafPositions[0, 28 + i]; layer2_B[i] = cp.LeafPositions[1, 28 + i]; }
+
+                        if (boundariesX1 == null || boundariesX2 == null || boundariesX1.Count < 2 || boundariesX2.Count < 2)
+                        {
+                            // Fallback: concatenate layers without virtual refinement
+                            var aCombined = layer1_A.Concat(layer2_A).ToArray();
+                            var bCombined = layer1_B.Concat(layer2_B).ToArray();
+                            effectivePositionsPerCp.Add(aCombined.Concat(bCombined).ToArray());
+                        }
+                        else
+                        {
+                            // Build union of boundaries
+                            var virtualBoundaries = new SortedSet<double>(boundariesX1.Concat(boundariesX2));
+                            var vb = virtualBoundaries.ToList();
+                            var vA = new List<double>();
+                            var vB = new List<double>();
+
+                            for (int vi = 0; vi < vb.Count - 1; vi++)
+                            {
+                                double center = (vb[vi] + vb[vi + 1]) / 2.0;
+
+                                // Find containing indices in each layer's boundaries
+                                int idx1 = -1; for (int j = 0; j < boundariesX1.Count - 1; j++) { if (center >= boundariesX1[j] && center < boundariesX1[j + 1]) { idx1 = j; break; } }
+                                int idx2 = -1; for (int k = 0; k < boundariesX2.Count - 1; k++) { if (center >= boundariesX2[k] && center < boundariesX2[k + 1]) { idx2 = k; break; } }
+
+                                double pos1_A = (idx1 >= 0 && idx1 < layer1_A.Length) ? layer1_A[idx1] : double.NegativeInfinity;
+                                double pos1_B = (idx1 >= 0 && idx1 < layer1_B.Length) ? layer1_B[idx1] : double.PositiveInfinity;
+                                double pos2_A = (idx2 >= 0 && idx2 < layer2_A.Length) ? layer2_A[idx2] : double.NegativeInfinity;
+                                double pos2_B = (idx2 >= 0 && idx2 < layer2_B.Length) ? layer2_B[idx2] : double.PositiveInfinity;
+
+                                vA.Add(Math.Max(pos1_A, pos2_A));
+                                vB.Add(Math.Min(pos1_B, pos2_B));
+                            }
+                            effectivePositionsPerCp.Add(vA.Concat(vB).ToArray());
+                        }
+                    }
+                }
+
+                // Remove nulls if any
+                var validEffective = effectivePositionsPerCp.Where(p => p != null && p.Length > 1).ToList();
+                if (validEffective.Count == 0) return 1.0;
+
+                int nPairsVirtual = validEffective[0].Length / 2;
+                if (nPairsVirtual <= 0) return 1.0;
+
+                // Precompute max opening over arc
+                double[] maxPairOpening = Enumerable.Repeat(double.NegativeInfinity, nPairsVirtual).ToArray();
+                foreach (var eff in validEffective)
+                {
+                    for (int i = 0; i < nPairsVirtual; i++)
+                    {
+                        double opening = eff[i + nPairsVirtual] - eff[i];
+                        if (opening > maxPairOpening[i]) maxPairOpening[i] = opening;
+                    }
+                }
+
+                Func<double[], double> calcLsvForBank = (bank) =>
+                {
+                    if (bank == null || bank.Length < 2) return 1.0;
+                    int N = bank.Length;
+                    double minPos = bank.Min();
+                    double maxPos = bank.Max();
+                    double posMax = maxPos - minPos;
+                    if (posMax < 0.001 || (N - 1) == 0) return 1.0;
+                    double sumVar = 0;
+                    for (int i = 0; i < N - 1; i++) sumVar += (posMax - Math.Abs(bank[i] - bank[i + 1]));
+                    double lsv = sumVar / ((N - 1) * posMax);
+                    return double.IsNaN(lsv) ? 1.0 : lsv;
+                };
+
+                double K_MCS_COLL = 0.002;
+                double mcsSum = 0.0;
+                double totalMuW = 0.0;
+
+                for (int seg = 0; seg < beam.ControlPoints.Count - 1; seg++)
+                {
+                    var eff_i = effectivePositionsPerCp[seg];
+                    var eff_i1 = effectivePositionsPerCp[seg + 1];
+                    if (eff_i == null || eff_i1 == null || eff_i.Length != eff_i1.Length) continue;
+
+                    // LSV for cp_i and cp_i1
+                    var bankA_i = eff_i.Take(nPairsVirtual).ToArray();
+                    var bankB_i = eff_i.Skip(nPairsVirtual).ToArray();
+                    var bankA_i1 = eff_i1.Take(nPairsVirtual).ToArray();
+                    var bankB_i1 = eff_i1.Skip(nPairsVirtual).ToArray();
+
+                    double lsv_i = 0.5 * (calcLsvForBank(bankA_i) + calcLsvForBank(bankB_i));
+                    double lsv_i1 = 0.5 * (calcLsvForBank(bankA_i1) + calcLsvForBank(bankB_i1));
+
+                    // AAV for cp_i and cp_i1
+                    Func<double[], double> calcAav = (eff) =>
+                    {
+                        double currentOpening = 0;
+                        for (int i = 0; i < nPairsVirtual; i++)
+                        {
+                            double opening = eff[i + nPairsVirtual] - eff[i];
+                            if (opening > 0) currentOpening += opening;
+                        }
+                        double maxArcTotal = 0;
+                        for (int i = 0; i < nPairsVirtual; i++)
+                        {
+                            double mo = maxPairOpening[i];
+                            if (mo > 0 && mo > double.NegativeInfinity) maxArcTotal += mo;
+                        }
+                        if (maxArcTotal < 0.001) return (currentOpening < 0.001 ? 1.0 : 0.0);
+                        double aav = currentOpening / maxArcTotal;
+                        return double.IsNaN(aav) ? 1.0 : Math.Max(0, Math.Min(1, aav));
+                    };
+
+                    double aav_i = calcAav(eff_i);
+                    double aav_i1 = calcAav(eff_i1);
+
+                    double meanAAV = 0.5 * (aav_i + aav_i1);
+                    double meanLSV = 0.5 * (lsv_i + lsv_i1);
+
+                    // Collimator delta
+                    double deltaColl = Math.Abs(beam.ControlPoints[seg + 1].CollimatorAngle - beam.ControlPoints[seg].CollimatorAngle);
+                    if (deltaColl > 180) deltaColl = 360 - deltaColl;
+                    double collFactor = 1 + K_MCS_COLL * deltaColl;
+
+                    // MU weight for segment
+                    double muW = beam.ControlPoints[seg + 1].MetersetWeight - beam.ControlPoints[seg].MetersetWeight;
+                    if (muW > 1e-6)
+                    {
+                        mcsSum += (meanAAV * meanLSV * collFactor * muW);
+                        totalMuW += muW;
+                    }
+                }
+
+                if (totalMuW < 1e-5) return 1.0;
+                return mcsSum / totalMuW;
+            }
+            catch
+            {
+                return 1.0;
+            }
+        }
         private List<string> BuildMlcPositionData(float[,] leafPositions, MLC mlc, int indentLevel)
         {
             var mlcDataStrings = new List<string>();
