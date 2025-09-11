@@ -1587,6 +1587,19 @@
                 let calculatedTotalPlanMU = 0;
 
                 beamSeq.forEach((bi, bidx) => {
+                    // Filter out imaging/kV CBCT beams so they don't affect totals or metrics
+                    try {
+                        const beamType_raw = getDicomElementValue(bi, 'BeamType', '');
+                        const beamType = (beamType_raw ? String(beamType_raw) : '').toUpperCase();
+                        const beamNameRaw = getDicomElementValue(bi, 'BeamName', '') || '';
+                        const machNameRaw = getDicomElementValue(bi, 'TreatmentMachineName', '') || '';
+                        const isImagingByType = beamType.indexOf('IMAGING') >= 0;
+                        const isCbctByName = /CBCT/i.test(beamNameRaw) || /CBCT/i.test(machNameRaw);
+                        if (isImagingByType || isCbctByName) {
+                            console.log(`DEBUG DICOM Parse: Skipping imaging/CBCT beam '${beamNameRaw}' (BeamType='${beamType}')`);
+                            return; // skip this beam
+                        }
+                    } catch (e) { /* continue parsing if tags missing */ }
                     const beam = { controlPoints: [], mlcDefinitions: [], sectorizedMCS: [] };
                     const beamSpecificManufacturerModelName = getDicomElementValue(bi, 'ManufacturerModelName', '');
 
