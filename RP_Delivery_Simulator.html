@@ -673,6 +673,13 @@
             <p><strong>Patient ID:</strong> <span id="planPatientID">N/A</span></p>
             <p><strong>Plan Label:</strong> <span id="planLabel">N/A</span></p>
             <p><strong>Total Beams in Plan:</strong> <span id="planTotalBeams">N/A</span></p>
+            <div id="stampAnalysisContainer" style="display:none; margin-top: 10px; padding: 10px; background-color: #eaf6ff; border: 1px solid #ddd; border-left: 5px solid #3498db; border-radius: 4px;">
+                <h4 style="margin-top:0; color: #2c3e50;">RapidArc Dynamic Analysis</h4>
+                <p><strong>Number of STAMPs:</strong> <span id="numStampsVal">0</span></p>
+                <p><strong>Total STAMP MU:</strong> <span id="totalStampMuVal">0.00</span></p>
+                <p><strong>Avg MU per STAMP:</strong> <span id="avgStampMuVal">0.00</span></p>
+                <p><strong>% MU in STAMPs:</strong> <span id="percentStampDoseVal">0.0%</span></p>
+            </div>
             <p><strong>Total Plan MU:</strong> <span id="planTotalMU">N/A</span></p>
             <p><strong>Primary Dose Rate (First Beam, CP0):</strong> <span id="planDoseRate">N/A</span> MU/min</p>
             <p><strong>Est. Total Plan Time (All Beams):</strong> <span id="totalPlanSimTime">N/A</span> s</p>
@@ -797,8 +804,8 @@
         <div class="author-info-header">
             <p><strong>Author:</strong> Taoran Li, PhD</p>
             <p><strong>Contact:</strong> taoran.li@varian.com</p>
-            <p><strong>Version:</strong> 3.9.5 (Full MLC transition calculation and display)</p>
-            <p><strong>Date:</strong> August 1, 2025</p>
+            <p><strong>Version:</strong> 3.9.6</p>
+            <p><strong>Date:</strong> November 25, 2025</p>
         </div>
 
     </div>
@@ -2363,6 +2370,61 @@
                 return diff;
             }
 
+            function analyzeSTAMPs(beam) {
+                if (!beam || !beam.controlPoints || beam.controlPoints.length < 2) return null;
+                const controlPoints = beam.controlPoints;
+                const totalMeterset = beam.totalMeterset || 0.0; // Total MU for the beam
+
+                let totalStaticMU = 0;
+                let numStamps = 0;
+                let inStamp = false;
+                
+                // Thresholds
+                const GantryStaticThreshold = 0.1; // degrees diff consider static
+                const DoseDeliveredThreshold = 0.0001; // normalized weight diff considered delivering dose
+
+                for (let i = 0; i < controlPoints.length - 1; i++) {
+                    const cp1 = controlPoints[i];
+                    const cp2 = controlPoints[i+1];
+
+                    // normalizeGantryAngleDiff handles wrap
+                    const dGantryNorm = normalizeGantryAngleDiff(cp1.gantryAngle, cp2.gantryAngle);
+                    
+                    const dWeight = cp2.cumulativeMetersetWeight - cp1.cumulativeMetersetWeight;
+                    
+                    // Calculate dMU based on totalMeterset if available, otherwise ratio
+                    let dMU = 0;
+                    if (totalMeterset > 0) {
+                         dMU = dWeight * totalMeterset;
+                    } else {
+                         dMU = dWeight; // Just use weight ratio if no total MU
+                    }
+
+                    const isStaticGantry = dGantryNorm < GantryStaticThreshold;
+                    const isDeliveringDose = dMU > DoseDeliveredThreshold;
+
+                    if (isStaticGantry && isDeliveringDose) {
+                        // This segment is a STAMP segment
+                        totalStaticMU += dMU;
+                        if (!inStamp) {
+                            // Start of a new STAMP
+                            numStamps++;
+                            inStamp = true;
+                        }
+                    } else {
+                        // Not a STAMP segment (either moving or no dose)
+                        // If we were in a stamp, we just exited it
+                        inStamp = false;
+                    }
+                }
+
+                return {
+                    numStamps: numStamps,
+                    totalStaticMU: totalStaticMU,
+                    avgStampMU: numStamps > 0 ? totalStaticMU / numStamps : 0
+                };
+            }
+
             function calculateStdDev(dataArray, key) {
                 const values = dataArray.map(item => item[key]).filter(val => typeof val === 'number' && isFinite(val));
                 if (values.length < 2) return 0;
@@ -2514,6 +2576,28 @@
 
                 const isFullPlanSim = isSimulatingAllBeams;
                 const currentBeamIdx = isFullPlanSim ? currentBeamIndexForFullSim : selectedBeamIndex;
+
+                // --- Update STAMP UI ---
+                if (rtPlanData && rtPlanData.beams && rtPlanData.beams[currentBeamIdx]) {
+                    const stampStats = analyzeSTAMPs(rtPlanData.beams[currentBeamIdx]);
+                    const stampDiv = document.getElementById('stampAnalysisContainer');
+                    if (stampStats && stampStats.numStamps > 0 && stampDiv) {
+                         stampDiv.style.display = 'block';
+                         document.getElementById('numStampsVal').textContent = stampStats.numStamps;
+                         document.getElementById('totalStampMuVal').textContent = stampStats.totalStaticMU.toFixed(2);
+                         document.getElementById('avgStampMuVal').textContent = stampStats.avgStampMU.toFixed(2);
+                         
+                         const beamTotalMU = rtPlanData.beams[currentBeamIdx].totalMeterset || 1.0;
+                         if (beamTotalMU > 0.00001) {
+                             const pct = (stampStats.totalStaticMU / beamTotalMU) * 100;
+                             document.getElementById('percentStampDoseVal').textContent = pct.toFixed(1) + '%';
+                         } else {
+                             document.getElementById('percentStampDoseVal').textContent = '0.0%';
+                         }
+                    } else if (stampDiv) {
+                         stampDiv.style.display = 'none';
+                    }
+                }
 
                 if (!rtPlanData || !rtPlanData.beams || !rtPlanData.beams[currentBeamIdx]) { console.log("DEBUG: initVisualization - no plan/beam data."); return; }
                 const beam = rtPlanData.beams[currentBeamIdx];
