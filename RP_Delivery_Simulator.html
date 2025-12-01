@@ -7,7 +7,7 @@
     <title>Advanced Plan Delivery Simulator</title>
     <link rel="icon" href="data:,">
 
-    <!-- <script>
+    <script>
         // Registration gate: redirect to registration page unless token is present
         (function () {
             const isRegistered = localStorage.getItem('plandelivery_registered');
@@ -16,7 +16,7 @@
                 window.location.href = 'gate/register.html';
             }
         })();
-    </script> -->
+    </script>
 
     <script>
         // Function to show a custom message modal
@@ -99,11 +99,11 @@
 
         async function loadCriticalScripts() {
             try {
-                await loadLocalScript('libs/dicom-parser.min.js');
-                await loadLocalScript('libs/Tone.js');
-                await loadLocalScript('libs/chart.umd.min.js');
-                await loadLocalScript('libs/chartjs-plugin-annotation.min.js');
-                await loadLocalScript('libs/chartjs-plugin-zoom.min.js');
+                await loadLocalScript('lib/dicom-parser.min.js');
+                await loadLocalScript('lib/Tone.js');
+                await loadLocalScript('lib/chart.umd.min.js');
+                await loadLocalScript('lib/chartjs-plugin-annotation.min.js');
+                await loadLocalScript('lib/chartjs-plugin-zoom.min.js');
 
                 console.log('DEBUG: All critical scripts loaded.');
             } catch (error) {
@@ -4083,7 +4083,7 @@
             function drawStructuresWebgl(gantryAngle, collimatorAngle, beam, isoCenter = [0, 0, 0], cpObj = null) {
                 if (!gl || !glProgram || !bevWebglCanvas || !glDrawBatches.length || !showStructures) {
                     if (bevWebglCanvas) bevWebglCanvas.style.display = 'none';
-                    setBevRenderModeLabel('Structures: 2D', 'rgba(180, 83, 9, 0.8)');
+                    setBevRenderModeLabel('Render: 2D', 'rgba(180, 83, 9, 0.8)');
                     return false;
                 }
                 const couchAngle = (cpObj && Number.isFinite(cpObj.couchAngle)) ? cpObj.couchAngle : (beam?.patientSupportAngle || 0);
@@ -4142,7 +4142,7 @@
                 });
 
                 bevWebglCanvas.style.display = anyDrawn ? 'block' : 'none';
-                setBevRenderModeLabel(anyDrawn ? 'Structures: WebGL Points' : 'Structures: 2D', anyDrawn ? 'rgba(22, 101, 52, 0.8)' : 'rgba(180, 83, 9, 0.8)');
+                setBevRenderModeLabel(anyDrawn ? 'Structures: WebGL' : 'Structures: 2D', anyDrawn ? 'rgba(22, 101, 52, 0.8)' : 'rgba(180, 83, 9, 0.8)');
                 return anyDrawn;
             }
 
