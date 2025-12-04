@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,7 +13,7 @@
             background-color: #f4f7f6;
             color: #333;
         }
-        
+
         .container {
             max-width: 800px;
             margin: 0 auto;
@@ -21,13 +22,13 @@
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
-        
+
         h1 {
             text-align: center;
             color: #2c3e50;
             margin-bottom: 20px;
         }
-        
+
         .disclaimer {
             background-color: #fff3cd;
             border: 1px solid #ffeaa7;
@@ -35,45 +36,45 @@
             padding: 15px;
             margin-bottom: 20px;
         }
-        
+
         .disclaimer h3 {
             color: #856404;
             margin-top: 0;
         }
-        
+
         .jotform-container {
             margin: 20px 0;
             min-height: 600px;
         }
-        
+
         .loading {
             text-align: center;
             padding: 40px;
             color: #666;
         }
-        
+
         .footer {
             text-align: center;
             margin-top: 20px;
             font-size: 0.9em;
             color: #666;
         }
-        
+
         .footer a {
             color: #3498db;
             text-decoration: none;
         }
-        
+
         .footer a:hover {
             text-decoration: underline;
         }
-        
+
         .offline-registration {
             display: none;
             text-align: center;
             margin: 20px 0;
         }
-        
+
         .qr-container {
             background-color: #f8f9fa;
             border: 2px solid #dee2e6;
@@ -82,13 +83,13 @@
             margin: 20px 0;
             display: inline-block;
         }
-        
+
         .qr-container img {
             max-width: 200px;
             height: auto;
             border: 1px solid #ccc;
         }
-        
+
         .qr-link {
             font-family: monospace;
             font-size: 0.9em;
@@ -96,20 +97,20 @@
             word-break: break-all;
             margin: 10px 0;
         }
-        
+
         .token-entry {
             margin-top: 20px;
             padding: 20px;
             background-color: #e9ecef;
             border-radius: 6px;
         }
-        
+
         .token-entry label {
             display: block;
             margin-bottom: 10px;
             font-weight: bold;
         }
-        
+
         .token-entry input {
             width: 200px;
             padding: 8px 12px;
@@ -119,7 +120,7 @@
             text-align: center;
             text-transform: uppercase;
         }
-        
+
         .token-entry button {
             background-color: #28a745;
             color: white;
@@ -130,15 +131,15 @@
             margin-left: 10px;
             font-size: 16px;
         }
-        
+
         .token-entry button:hover {
             background-color: #218838;
         }
-        
+
         .online-registration {
             display: block;
         }
-        
+
         .connection-status {
             padding: 10px;
             border-radius: 4px;
@@ -146,13 +147,13 @@
             text-align: center;
             font-weight: bold;
         }
-        
+
         .connection-status.online {
             background-color: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
         }
-        
+
         .connection-status.offline {
             background-color: #f8d7da;
             color: #721c24;
@@ -160,26 +161,29 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>DICOM RT Plan Delivery Simulator</h1>
-        
+
         <!-- Connection Status Indicator -->
         <div id="connectionStatus" class="connection-status">
             Checking connection...
         </div>
-        
+
         <!-- Retry Connection Button (hidden by default) -->
         <div id="retryConnection" style="display: none; text-align: center; margin-bottom: 20px;">
-            <button onclick="checkConnectionAndSetMode()" style="background-color: #17a2b8; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+            <button onclick="checkConnectionAndSetMode()"
+                style="background-color: #17a2b8; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
                 🔄 Retry Connection Test
             </button>
             <p style="font-size: 0.9em; color: #666; margin: 5px 0 0 0;">Click if you've gained internet access</p>
         </div>
-        
+
         <div class="disclaimer">
             <h3>⚠️ Important Notice</h3>
-            <p><strong>This software is for educational and research purposes only. It is NOT validated for clinical use.</strong></p>
+            <p><strong>This software is for educational and research purposes only. It is NOT validated for clinical
+                    use.</strong></p>
             <p>By proceeding with registration, you acknowledge that:</p>
             <ul>
                 <li>This tool is intended for educational and research applications only</li>
@@ -188,26 +192,39 @@
                 <li>You will comply with the Varian Limited Use Software License Agreement</li>
             </ul>
         </div>
-        
+
         <!-- Online Registration Section -->
         <div id="onlineRegistration" class="online-registration">
-        <h2>Registration Required</h2>
-        <p>To access the DICOM RT Plan Delivery Simulator, please complete the registration form below. This helps us track usage and ensure compliance with the software license agreement.</p>
-        
-        <div class="jotform-container">
-            <div class="loading" id="loadingMessage">
-                Loading registration form...
+            <h2>Registration Required</h2>
+            <p>To access the DICOM RT Plan Delivery Simulator, please complete the registration form below. This helps
+                us track usage and ensure compliance with the software license agreement.</p>
+
+            <!-- China Access Message -->
+            <div
+                style="background-color: #e8f4fd; border: 1px solid #b6e0fe; border-radius: 4px; padding: 15px; margin-bottom: 20px; color: #0c5460;">
+                <p style="margin-top: 0; font-weight: bold;"> Registration for China Users / 中国大陆用户注册说明</p>
+                <p><strong>中国大陆用户:</strong> 如果您无法看到下面的注册表格, 请发送您的姓名和医院/学校名称及地址到 <a
+                        href="mailto:maas.team@varian.com">maas.team@varian.com</a>, 我们将尽快以邮件形式发送您的注册码</p>
+                <p style="margin-bottom: 0;"><strong>China mainland users:</strong> If you cannot access the
+                    registration form below, please email your name and hospital/school name and address to <a
+                        href="mailto:maas.team@varian.com">maas.team@varian.com</a>, and we will send you the
+                    registration code by email as soon as possible.</p>
             </div>
-            <!-- JotForm will be embedded here -->
-            <div id="jotform-embed"></div>
+
+            <div class="jotform-container">
+                <div class="loading" id="loadingMessage">
+                    Loading registration form...
+                </div>
+                <!-- JotForm will be embedded here -->
+                <div id="jotform-embed"></div>
             </div>
         </div>
-        
+
         <!-- Offline Registration Section -->
         <div id="offlineRegistration" class="offline-registration">
             <h2>Offline Registration</h2>
             <p>Your computer appears to be offline. You can still register using your mobile device!</p>
-            
+
             <div class="qr-container">
                 <h3>📱 Scan with your phone:</h3>
                 <img src="resources/qrcode.bmp" alt="Registration QR Code" />
@@ -216,16 +233,18 @@
                     <strong>https://varian-medicalaffairsappliedsolutions.github.io/PlanDeliverySimulator/</strong>
                 </div>
             </div>
-            
+
             <div class="token-entry">
-                <label for="registrationToken">After completing registration on your phone, enter the registration code here:</label>
+                <label for="registrationToken">After completing registration on your phone, enter the registration code
+                    here:</label>
                 <input type="text" id="registrationToken" placeholder="" maxlength="8" />
                 <button onclick="validateToken()">Submit Code</button>
             </div>
         </div>
-        
+
         <div class="footer">
-            <p>By using this software, you agree to be bound by the terms of the <a href="VarianLUSLA.html" target="_blank">Varian Limited Use Software License Agreement</a></p>
+            <p>By using this software, you agree to be bound by the terms of the <a href="VarianLUSLA.html"
+                    target="_blank">Varian Limited Use Software License Agreement</a></p>
             <p><strong>Author:</strong> Taoran Li, PhD | <strong>Contact:</strong> taoran.li@varian.com</p>
         </div>
     </div>
@@ -236,30 +255,30 @@
             const statusDiv = document.getElementById('connectionStatus');
             const onlineSection = document.getElementById('onlineRegistration');
             const offlineSection = document.getElementById('offlineRegistration');
-            
+
             // First check if browser thinks we're online
             if (!navigator.onLine) {
                 setOfflineMode('📱 No network connection - Please use mobile registration');
                 return;
             }
-            
+
             // Show checking status
             statusDiv.className = 'connection-status';
             statusDiv.textContent = '🔍 Checking internet connectivity...';
-            
+
             // Test actual internet connectivity by trying to reach a reliable endpoint
             testInternetConnectivity()
-                .then(function(hasInternet) {
+                .then(function (hasInternet) {
                     if (hasInternet) {
                         setOnlineMode();
                     } else {
                         setOfflineMode('📱 Network detected but no internet access - Please use mobile registration');
                     }
                 })
-                .catch(function() {
+                .catch(function () {
                     setOfflineMode('📱 Cannot reach internet - Please use mobile registration');
                 });
-            
+
             function setOnlineMode() {
                 statusDiv.className = 'connection-status online';
                 statusDiv.textContent = '✅ Internet connection verified - Using online registration';
@@ -268,7 +287,7 @@
                 document.getElementById('retryConnection').style.display = 'none';
                 initializeJotForm();
             }
-            
+
             function setOfflineMode(message) {
                 statusDiv.className = 'connection-status offline';
                 statusDiv.textContent = message;
@@ -277,96 +296,96 @@
                 document.getElementById('retryConnection').style.display = 'block';
             }
         }
-        
+
         // Test actual internet connectivity
         function testInternetConnectivity() {
-            return new Promise(function(resolve) {
+            return new Promise(function (resolve) {
                 // Create multiple test endpoints for reliability
                 const testEndpoints = [
                     'https://www.google.com/favicon.ico',
                     'https://jotform.com/favicon.ico',
                     'https://www.microsoft.com/favicon.ico'
                 ];
-                
+
                 let testsCompleted = 0;
                 let successCount = 0;
                 const timeoutMs = 5000; // 5 second timeout
-                
+
                 function checkEndpoint(url) {
-                    return new Promise(function(resolveTest) {
+                    return new Promise(function (resolveTest) {
                         const img = new Image();
-                        const timeout = setTimeout(function() {
+                        const timeout = setTimeout(function () {
                             resolveTest(false);
                         }, timeoutMs);
-                        
-                        img.onload = function() {
+
+                        img.onload = function () {
                             clearTimeout(timeout);
                             resolveTest(true);
                         };
-                        
-                        img.onerror = function() {
+
+                        img.onerror = function () {
                             clearTimeout(timeout);
                             resolveTest(false);
                         };
-                        
+
                         // Add cache busting parameter
                         img.src = url + '?t=' + Date.now();
                     });
                 }
-                
+
                 // Test all endpoints
-                testEndpoints.forEach(function(endpoint) {
-                    checkEndpoint(endpoint).then(function(success) {
+                testEndpoints.forEach(function (endpoint) {
+                    checkEndpoint(endpoint).then(function (success) {
                         testsCompleted++;
                         if (success) successCount++;
-                        
+
                         // Resolve when all tests complete or we get at least one success
                         if (testsCompleted === testEndpoints.length || successCount > 0) {
                             resolve(successCount > 0);
                         }
                     });
                 });
-                
+
                 // Fallback timeout for the entire test
-                setTimeout(function() {
+                setTimeout(function () {
                     if (testsCompleted === 0) {
                         resolve(false);
                     }
                 }, timeoutMs + 1000);
             });
         }
-        
+
         // Token validation function
         function validateToken() {
             const token = document.getElementById('registrationToken').value.trim().toUpperCase();
-            
+
             if (!token) {
                 alert('Please enter a registration code.');
                 return;
             }
-            
+
             // Validate against the specific registration code
             const validToken = 'AC1AEFCE';
-            
+
             if (token === validToken) {
                 // Mark as registered
                 localStorage.setItem('plandelivery_registered', 'true');
                 localStorage.setItem('plandelivery_registration_timestamp', new Date().toISOString());
                 localStorage.setItem('plandelivery_registration_method', 'mobile_qr');
                 localStorage.setItem('plandelivery_registration_token', token);
-                
+
                 // Show success message
                 showOfflineSuccessMessage();
-                
+
                 // Redirect after delay
-                setTimeout(function() {
+                setTimeout(function () {
                     window.location.href = '../RP_Delivery_Simulator.html';
                 }, 2000);
             } else {
                 alert('Invalid registration code. Please check your code and try again.');
             }
         }
-        
+
         // Show success message for offline registration
         function showOfflineSuccessMessage() {
             const offlineSection = document.getElementById('offlineRegistration');
@@ -378,44 +397,44 @@
                 </div>
             `;
         }
-        
+
         // JotForm integration (only called when online)
         function initializeJotForm() {
             const JOTFORM_ID = '251694838691170';
-            
+
             // Create the JotForm embed script
             const script = document.createElement('script');
             script.src = 'https://form.jotform.com/jsform/' + JOTFORM_ID;
             script.async = true;
-            
+
             // Handle form submission using JotForm's newer API
-            script.onload = function() {
+            script.onload = function () {
                 // Hide loading message
                 document.getElementById('loadingMessage').style.display = 'none';
-                
+
                 // Add manual continue button as backup
                 addManualContinueButton();
-                
+
                 // Use JotForm's modern event handling
                 if (window.JFCustomWidget) {
                     console.log('Using JotForm widget API');
-                    window.JFCustomWidget.subscribe("submit", function(formData) {
+                    window.JFCustomWidget.subscribe("submit", function (formData) {
                         console.log('Form submitted via widget API');
                         completeRegistration();
                     });
                 }
-                
+
                 // Listen for form submission using modern event handling
-                window.addEventListener('submit', function(e) {
+                window.addEventListener('submit', function (e) {
                     console.log('Form submit event detected');
                     if (e.target.getAttribute('action')?.includes('jotform')) {
                         e.preventDefault();
                         completeRegistration();
                     }
                 }, { capture: true });
-                
+
                 // Add visibility change detection
-                document.addEventListener('visibilitychange', function() {
+                document.addEventListener('visibilitychange', function () {
                     if (document.visibilityState === 'visible') {
                         const formFrame = document.querySelector('iframe[src*="jotform"]');
                         if (formFrame && formFrame.contentWindow.document.querySelector('form.jotform-form.submitted')) {
@@ -425,39 +444,39 @@
                     }
                 });
             };
-            
+
             // Function to complete registration
             function completeRegistration() {
                 // Prompt for registration code validation
                 const token = prompt('Please enter your registration code to complete access:');
-                
+
                 if (!token) {
                     return;
                 }
-                
+
                 const normalizedToken = token.trim().toUpperCase();
                 const validToken = 'AC1AEFCE';
-                
+
                 if (normalizedToken !== validToken) {
                     alert('Invalid registration code. Access denied.');
                     return;
                 }
-                
+
                 // Store registration completion
                 localStorage.setItem('plandelivery_registered', 'true');
                 localStorage.setItem('plandelivery_registration_timestamp', new Date().toISOString());
                 localStorage.setItem('plandelivery_registration_method', 'online_form');
                 localStorage.setItem('plandelivery_registration_token', normalizedToken);
-                
+
                 // Show success message
                 showSuccessMessage();
-                
+
                 // Redirect to simulator after a short delay
-                setTimeout(function() {
+                setTimeout(function () {
                     window.location.href = '../RP_Delivery_Simulator.html';
                 }, 2000);
             }
-            
+
             // Function to show success message
             function showSuccessMessage() {
                 const container = document.querySelector('.jotform-container');
@@ -469,7 +488,7 @@
                     </div>
                 `;
             }
-            
+
             // Add a manual completion button for users who complete the form
             function addManualContinueButton() {
                 const container = document.querySelector('.jotform-container');
@@ -484,37 +503,37 @@
                 `;
                 container.appendChild(continueButton);
             }
-            
+
             // Manual continue function
-            window.manualContinue = function() {
+            window.manualContinue = function () {
                 console.log('DEBUG: Manual continue button clicked');
                 completeRegistration();
             };
-            
+
             // Manual completion button and function removed for security
-            
+
             // Add script to page
             document.getElementById('jotform-embed').appendChild(script);
         }
-        
+
         // Add event listeners for connection changes
         window.addEventListener('online', checkConnectionAndSetMode);
         window.addEventListener('offline', checkConnectionAndSetMode);
-        
+
         // Add Enter key support for token input
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const tokenInput = document.getElementById('registrationToken');
             if (tokenInput) {
-                tokenInput.addEventListener('keypress', function(e) {
+                tokenInput.addEventListener('keypress', function (e) {
                     if (e.key === 'Enter') {
                         validateToken();
                     }
                 });
             }
         });
-        
+
         // Check if already registered and initialize
-        window.addEventListener('load', function() {
+        window.addEventListener('load', function () {
             const isRegistered = localStorage.getItem('plandelivery_registered');
             const token = localStorage.getItem('plandelivery_registration_token');
             if (isRegistered === 'true' && token === 'AC1AEFCE') {
@@ -522,10 +541,11 @@
                 window.location.href = '../RP_Delivery_Simulator.html';
                 return;
             }
-            
+
             // Initialize connection check and set appropriate mode
             checkConnectionAndSetMode();
         });
     </script>
 </body>
-</html> 
+
+</html>
