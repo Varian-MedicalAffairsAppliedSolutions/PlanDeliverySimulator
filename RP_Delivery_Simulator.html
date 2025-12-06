@@ -78,7 +78,6 @@
             modal.style.display = 'flex';
         }
 
-
         // Script loading that enforces local sources
         function loadLocalScript(localPath) {
             return new Promise((resolve, reject) => {
@@ -166,7 +165,7 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
-            max-width: 1400px;
+            max-width: 1600px;
             width: 100%;
             margin: 0 auto;
             background-color: #fff;
@@ -610,6 +609,25 @@
             background: transparent;
             display: block;
         }
+        .orientation-widget {
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            width: 130px;
+            height: 130px;
+            pointer-events: none;
+            z-index: 4;
+            background: transparent;
+            border: none;
+        }
+        .orientation-widget canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            pointer-events: none;
+            background: transparent;
+            border: none;
+        }
 
         .bev-axis-labels {
             position: absolute;
@@ -897,6 +915,24 @@
             color: #334155;
         }
 
+        .bev-bg-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9em;
+            color: #334155;
+        }
+
+        .structure-for-status {
+            font-size: 0.78em;
+            color: #475569;
+            min-height: 1.2em;
+        }
+
+        .structure-for-status.warning {
+            color: #b45309;
+        }
+
         .structure-opacity {
             display: inline-flex;
             align-items: center;
@@ -962,8 +998,10 @@
         }
 
         #bevCanvas {
-            position: relative;
+            position: absolute;
+            inset: 0;
             z-index: 1;
+            pointer-events: auto;
         }
 </style>
 </head>
@@ -1168,6 +1206,7 @@
                     </div>
                     <label class="full-plan-toggle"><input type="checkbox" id="fullPlanToggle"> Simulate Full Plan</label>
                     <label class="beep-toggle"><input type="checkbox" id="beepPerMUToggle"> Beep per MU</label>
+                    <label class="bev-bg-toggle"><input type="checkbox" id="bevBgToggle"> Dark BEV BG</label>
                 </div>
                 <div class="beam-selector-controls" id="beamSelectorContainer" style="display:none;">
                     <label for="beamSelector">Select Beam:</label>
@@ -1177,6 +1216,9 @@
                 <div class="bev-canvas-wrapper" style="margin-bottom: 16px;" >
                     <canvas id="bevCanvas" width="400" height="400"></canvas>
                     <canvas id="bevWebglCanvas" width="400" height="400" style="position:absolute; left:0; top:0; pointer-events:none;"></canvas>
+                    <div class="orientation-widget">
+                        <canvas id="orientationWidgetCanvas" width="140" height="140"></canvas>
+                    </div>
                     <div class="bev-axis-labels" id="bevAxisLabels"></div>
                     <div class="bev-render-mode" id="bevRenderMode">Structures: --</div>
                 </div>
@@ -1223,6 +1265,7 @@
                                 <button id="hideAllStructuresBtn" class="primary-btn" style="min-width:90px; padding:6px 10px; background:#e11d48; border-color:#be123c;">Hide All</button>
                             </div>
                         </div>
+                        <div id="structureFoRStatus" class="structure-for-status"></div>
                         <div id="structureList" class="structure-list">
                             <div style="font-size:0.85em; color:#475569;">Load an RTSTRUCT to list structures.</div>
                         </div>
@@ -1421,6 +1464,7 @@
                 'PixelData': 'x7fe00010',
                 'StructureSetROISequence': 'x30060020',
                 'ROINumber': 'x30060022',
+                'ReferencedFrameOfReferenceUID': 'x30060024',
                 'ROIName': 'x30060026',
                 'ROIDisplayColor': 'x3006002a',
                 'ROIContourSequence': 'x30060039',
@@ -1504,9 +1548,10 @@
             let structureOpacity = DEFAULT_STRUCTURE_OPACITY; // cap structures at ~30% of prior max
             const BASE_POINT_ALPHA = 0.3; // default alpha for structure point sprites/points
             let mlcFillOpacity = 0.7;
-            const MLC_DRAW_BASE_Y_MM = -2; // static upward shift for MLC render
+            const MLC_DRAW_BASE_Y_MM = 0; // keep MLC overlay centered on iso
             let mlcRenderYOffsetMm = 0; // manual vertical overlay alignment (applied to canvas)
             let mlcRenderXOffsetMm = 0;  // manual lateral overlay alignment (applied to canvas)
+            let bevDarkBackground = false;
             let structureVoxelSpacingMm = { x: 1, y: 1, z: 1 }; // anisotropic gaussian scaling
             let structureSigmaScale = 0.45; // sharpen gaussians: sigma = structureSigmaScale * spacing (normalized 0.35–0.5)
             const useCakeMode = false; // deprecated; kept for legacy references
@@ -1538,6 +1583,13 @@
             const bevCanvas = document.getElementById('bevCanvas');
             let bevCtx = bevCanvas ? bevCanvas.getContext('2d') : null;
             const bevWebglCanvas = document.getElementById('bevWebglCanvas');
+            const orientationWidgetCanvas = document.getElementById('orientationWidgetCanvas');
+            let orientationGl = null;
+            let orientationWidgetProgram = null;
+            let orientationWidgetAttributes = null;
+            let orientationWidgetUniforms = null;
+            let orientationFigureBuffers = null;
+            const bevCanvasWrapper = document.querySelector('.bev-canvas-wrapper');
             const bevRenderMode = document.getElementById('bevRenderMode');
             const columnResizer = document.getElementById('columnResizer');
             const appLayout = document.querySelector('.app-layout');
@@ -1594,6 +1646,10 @@
                 mcs: mcsCanvasElem ? mcsCanvasElem.getContext('2d') : null
             };
             initWebgl();
+            initOrientationWidget();
+            resizeBevCanvas();
+            applyManualOverlayOffset();
+            updateWebglSize();
 
             const xyTimePlotsContainer = document.getElementById('xyTimePlotsContainer');
             const gantryMetricsCanvasElem = document.getElementById('gantryMetricsCanvas');
@@ -1630,8 +1686,10 @@
             const showStructuresToggle = document.getElementById('showStructuresToggle');
             const structureOpacityInput = document.getElementById('structureOpacity');
             const structureList = document.getElementById('structureList');
+            const structureFoRStatus = document.getElementById('structureFoRStatus');
             const showAllStructuresBtn = document.getElementById('showAllStructuresBtn');
             const hideAllStructuresBtn = document.getElementById('hideAllStructuresBtn');
+            const bevBgToggle = document.getElementById('bevBgToggle');
             const simTimeDisplay = document.getElementById('simTimeDisplay');
             const simTimeElapsedSpan = document.getElementById('simTimeElapsed');
             const totalSimTimeDisplay = document.getElementById('totalSimTimeDisplay');
@@ -1705,9 +1763,26 @@
                 updateManualAlignmentDisplays();
                 redrawBev();
             }
+            function applyBevBackground() {
+                const bg = bevDarkBackground ? '#000000' : '#ffffff';
+                if (bevCanvas) bevCanvas.style.background = 'transparent';
+                if (bevWebglCanvas) bevWebglCanvas.style.background = 'transparent';
+                if (bevCanvasWrapper) bevCanvasWrapper.style.background = bg;
+                if (bevBgToggle) bevBgToggle.checked = bevDarkBackground;
+                if (rtStructData && rtStructData.rois && rtStructData.rois.length > 0) {
+                    buildStructureGeometry();
+                }
+                redrawBev();
+            }
             if (alignXInput) alignXInput.addEventListener('change', () => setManualAlignmentValue('x', parseFloat(alignXInput.value)));
             if (alignYInput) alignYInput.addEventListener('change', () => setManualAlignmentValue('y', parseFloat(alignYInput.value)));
             if (sigmaScaleInput) sigmaScaleInput.addEventListener('input', () => setSigmaScale(parseFloat(sigmaScaleInput.value)));
+            if (bevBgToggle) {
+                bevBgToggle.addEventListener('change', () => {
+                    bevDarkBackground = bevBgToggle.checked;
+                    applyBevBackground();
+                });
+            }
 
             function renderStructureList() {
                 if (!structureList || !showStructuresToggle) return;
@@ -1716,12 +1791,23 @@
                     showStructuresToggle.checked = false;
                     showStructuresToggle.disabled = true;
                     structureList.innerHTML = '<div style="font-size:0.85em; color:#475569;">Load an RTSTRUCT to list structures.</div>';
+                    updateStructureFoRStatusDisplay(null);
                     return;
                 }
                 showStructuresToggle.disabled = false;
+                const beamForFoR = (rtPlanData?.beams && rtPlanData.beams.length > selectedBeamIndex) ? rtPlanData.beams[selectedBeamIndex] : null;
+                updateStructureFoRStatusDisplay(beamForFoR);
                 const priorityTokens = ['PTV', 'CTV', 'GTV', 'ITV', 'TARGET'];
-                const rois = rtStructData.rois
-                    .slice()
+                let sourceRois = rtStructData.rois;
+                if (beamForFoR) {
+                    sourceRois = filterRoisForBeam(rtStructData.rois, beamForFoR);
+                    if (!sourceRois || sourceRois.length === 0) {
+                        structureList.innerHTML = '<div style="font-size:0.85em; color:#b45309;">No structures share the plan frame of reference.</div>';
+                        return;
+                    }
+                }
+                const rois = sourceRois
+                    .slice(0)
                     .sort((a, b) => {
                         const aName = (a?.name || '').toUpperCase();
                         const bName = (b?.name || '').toUpperCase();
@@ -1806,6 +1892,7 @@
                 });
             }
             renderStructureList();
+            applyBevBackground();
 
 
             let currentMaxGantrySpeed, currentMaxMlcSpeedMMPS, currentMaxCollimatorSpeed, currentMaxGantryAccelDecel, currentMaxMlcAccelDecelMMPS2, currentMaxCollimatorAccelDecel;
@@ -2658,6 +2745,7 @@
                 globalCPIndex = mapLocalToGlobal(selectedBeamIndex, 0);
                 renderCpTrackBar();
                 initVisualizationForSelectedBeam();
+                renderStructureList();
             });
 
 
@@ -2669,6 +2757,7 @@
                 showStructures = false;
                 if (showStructuresToggle) { showStructuresToggle.checked = false; showStructuresToggle.disabled = true; }
                 if (structureList) { structureList.innerHTML = '<div style="font-size:0.85em; color:#475569;">Load an RTSTRUCT to list structures.</div>'; }
+                if (structureFoRStatus) { structureFoRStatus.textContent = ''; structureFoRStatus.classList.remove('warning'); }
                 if (dicomFileInput) dicomFileInput.value = '';
 
                 currentCP = 0;
@@ -3378,10 +3467,13 @@
                     const roiNumberRaw = getDicomElementValue(roiItem, 'ROINumber');
                     const roiNumber = roiNumberRaw != null ? parseInt(roiNumberRaw, 10) : null;
                     if (!Number.isFinite(roiNumber)) return;
+                    const roiFoRRaw = getDicomElementValue(roiItem, 'ReferencedFrameOfReferenceUID', frameOfReferenceUID);
+                    const roiFoR = Array.isArray(roiFoRRaw) ? roiFoRRaw[0] : roiFoRRaw;
+                    const normalizedFoR = (roiFoR && roiFoR.toString().trim()) || frameOfReferenceUID;
                     roiMap[roiNumber] = {
                         roiNumber,
                         name: getDicomElementValue(roiItem, 'ROIName', `ROI ${roiNumber}`),
-                        frameOfReferenceUID,
+                        frameOfReferenceUID: normalizedFoR,
                         contours: []
                     };
                 });
@@ -3415,7 +3507,7 @@
                     });
 
                     if (!roiMap[refNum]) {
-                        roiMap[refNum] = { roiNumber: refNum, name: `ROI ${refNum}`, frameOfReferenceUID, contours: [] };
+                        roiMap[refNum] = { roiNumber: refNum, name: `ROI ${refNum}`, frameOfReferenceUID: frameOfReferenceUID, contours: [] };
                     }
                     roiMap[refNum].contours = (roiMap[refNum].contours || []).concat(contours);
                     if (displayColor && !roiMap[refNum].displayColor) {
@@ -3434,7 +3526,8 @@
                 });
 
                 const rois = Object.values(roiMap).filter(r => Array.isArray(r.contours) && r.contours.length > 0);
-                return { sopClassUID, frameOfReferenceUID, rois, frameOfReferenceOrigin: [0, 0, 0] };
+                const frameOfReferenceUIDs = Array.from(new Set(rois.map(r => r.frameOfReferenceUID).filter(Boolean)));
+                return { sopClassUID, frameOfReferenceUID, frameOfReferenceUIDs, rois, frameOfReferenceOrigin: [0, 0, 0] };
             }
 
             function getBeamIsocenter(beam) {
@@ -3460,6 +3553,10 @@
                 const isExternal = typeUpper.includes('EXTERNAL') || ['EXTERNAL', 'BODY', 'SKIN'].some(tok => nameUpper.includes(tok));
 
                 if (isExternal) {
+                    if (bevDarkBackground) {
+                        const boostedAlpha = Math.min(1, structureOpacity + 0.1);
+                        return `rgba(255, 255, 255, ${boostedAlpha})`;
+                    }
                     return `rgba(64, 72, 80, ${structureOpacity})`;
                 }
 
@@ -3471,11 +3568,16 @@
                 return hexToRgba(paletteColor, structureOpacity);
             }
 
+            function getStructureLuminanceBoost() {
+                return bevDarkBackground ? 1.35 : 1.0;
+            }
+
             function getStructurePointAlpha() {
                 const base = Number.isFinite(structureOpacity) ? structureOpacity : DEFAULT_STRUCTURE_OPACITY;
                 const scale = base / DEFAULT_STRUCTURE_OPACITY; // normalize to new lower cap
-                const alpha = BASE_POINT_ALPHA * scale;
-                return Math.max(0, Math.min(0.15, alpha));
+                const alpha = BASE_POINT_ALPHA * scale * getStructureLuminanceBoost();
+                const maxAlpha = bevDarkBackground ? 0.22 : 0.16;
+                return Math.max(0, Math.min(maxAlpha, alpha));
             }
 
             function getRoiPointAlphaFactor(roi) {
@@ -3631,26 +3733,104 @@
                 return [dx, dy, 0];
             }
 
-            function getRoisForBeam(beam) {
-                // Show all structures regardless of FoR; avoids hiding valid contours due to UID mismatches.
+            function getBeamFrameOfReferenceSet(beam) {
+                const foRSet = new Set();
+                if (beam?.frameOfReferenceUID) foRSet.add(beam.frameOfReferenceUID);
+                if (rtPlanData?.frameOfReferenceUID) foRSet.add(rtPlanData.frameOfReferenceUID);
+                return foRSet;
+            }
+
+            function filterRoisForBeam(rois, beam, options = {}) {
+                const { allowFallback = false } = options;
+                if (!Array.isArray(rois) || rois.length === 0) return [];
+                const foRSet = getBeamFrameOfReferenceSet(beam);
+                if (!foRSet || foRSet.size === 0) return rois;
+                const filtered = rois.filter(roi => {
+                    const roiFoR = roi?.frameOfReferenceUID;
+                    return roiFoR && foRSet.has(roiFoR);
+                });
+                if (filtered.length === 0 && allowFallback) {
+                    return rois;
+                }
+                return filtered;
+            }
+
+            function getRoisForBeam(beam, options = {}) {
                 if (!rtStructData || !rtStructData.rois || rtStructData.rois.length === 0) return [];
-                return rtStructData.rois;
+                return filterRoisForBeam(rtStructData.rois, beam, options);
+            }
+
+            function computeStructureFoRStats(beam) {
+                const total = (rtStructData && Array.isArray(rtStructData.rois)) ? rtStructData.rois.length : 0;
+                const foRSet = getBeamFrameOfReferenceSet(beam);
+                const planFoRs = foRSet ? Array.from(foRSet) : [];
+                if (total === 0) return { matched: 0, total: 0, planFoRs };
+                if (!foRSet || foRSet.size === 0) return { matched: total, total, planFoRs };
+                let matched = 0;
+                rtStructData.rois.forEach(roi => {
+                    if (roi?.frameOfReferenceUID && foRSet.has(roi.frameOfReferenceUID)) matched += 1;
+                });
+                return { matched, total, planFoRs };
+            }
+
+            function updateStructureFoRStatusDisplay(beam) {
+                if (!structureFoRStatus) return;
+                if (!rtStructData || !rtStructData.rois || rtStructData.rois.length === 0) {
+                    structureFoRStatus.textContent = '';
+                    structureFoRStatus.classList.remove('warning');
+                    return;
+                }
+                const stats = computeStructureFoRStats(beam);
+                if (!stats.planFoRs || stats.planFoRs.length === 0) {
+                    const defaultUid = rtStructData.frameOfReferenceUID || 'FoR not specified';
+                    structureFoRStatus.textContent = `FoR: ${defaultUid}`;
+                    structureFoRStatus.classList.remove('warning');
+                    return;
+                }
+                if (stats.matched === 0) {
+                    structureFoRStatus.textContent = `No structures match FoR ${stats.planFoRs.join(', ')}`;
+                    structureFoRStatus.classList.add('warning');
+                } else if (stats.matched < stats.total) {
+                    structureFoRStatus.textContent = `FoR match ${stats.matched}/${stats.total} (${stats.planFoRs.join(', ')})`;
+                    structureFoRStatus.classList.add('warning');
+                } else {
+                    structureFoRStatus.textContent = `FoR match ${stats.matched}/${stats.total}`;
+                    structureFoRStatus.classList.remove('warning');
+                }
+            }
+
+            const PATIENT_AXIS_DEFS = [
+                // Swap LR labels to align with mirrored BEV presentation for BEV.
+                { label: 'R', vec: [-1, 0, 0] },
+                { label: 'L', vec: [1, 0, 0] },
+                { label: 'A', vec: [0, 1, 0] },
+                { label: 'P', vec: [0, -1, 0] },
+                { label: 'S', vec: [0, 0, 1] },
+                { label: 'I', vec: [0, 0, -1] }
+            ];
+
+            function projectPatientAxisToScreen(frame, axisVec) {
+                if (!frame || !axisVec) return null;
+                const bx = axisVec[0] * frame.right[0] + axisVec[1] * frame.right[1] + axisVec[2] * frame.right[2];
+                const by = axisVec[0] * frame.up[0] + axisVec[1] * frame.up[1] + axisVec[2] * frame.up[2];
+                const vx = bx;
+                const vy = -by;
+                const len = Math.hypot(vx, vy);
+                if (!isFinite(len) || len < 1e-6) return null;
+                return { x: vx / len, y: vy / len };
+            }
+
+            function getAxisVector(label) {
+                const entry = PATIENT_AXIS_DEFS.find(a => a.label === label);
+                return entry ? entry.vec : null;
             }
 
             function drawOrientationLabels(ctx, frame, scalePxPerMm, isoCenter = [0, 0, 0]) {
                 if (!ctx || !frame || !scalePxPerMm) return;
                 const LABEL_OFFSET_MM = 180; // distance from iso in patient space
-                const patientAxes = [
-                    // Swap LR labels to align with mirrored BEV presentation.
-                    { label: 'R', vec: [-1, 0, 0] },
-                    { label: 'L', vec: [1, 0, 0] },
-                    { label: 'A', vec: [0, 1, 0] },
-                    { label: 'P', vec: [0, -1, 0] },
-                    { label: 'S', vec: [0, 0, 1] },
-                    { label: 'I', vec: [0, 0, -1] }
-                ];
+                const orientationColor = bevDarkBackground ? 'rgba(255, 255, 255, 0.8)' : '#0f172a';
                 ctx.save();
-                patientAxes.forEach(axis => {
+                PATIENT_AXIS_DEFS.forEach(axis => {
                     const worldPoint = [
                         isoCenter[0] + axis.vec[0] * LABEL_OFFSET_MM,
                         isoCenter[1] + axis.vec[1] * LABEL_OFFSET_MM,
@@ -3672,7 +3852,7 @@
                     ctx.save();
                     ctx.translate(px, -py);
                     ctx.scale(1, -1); // flip letters vertically, keep position
-                    ctx.fillStyle = '#0f172a';
+                    ctx.fillStyle = orientationColor;
                     ctx.font = `bold ${fontSize}px Arial`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
@@ -3680,6 +3860,273 @@
                     ctx.restore();
                 });
                 ctx.restore();
+            }
+
+            const orientationAxisFloat32 = {
+                x: new Float32Array(getAxisVector('R') || [-1, 0, 0]),
+                y: new Float32Array(getAxisVector('A') || [0, 1, 0]),
+                z: new Float32Array(getAxisVector('S') || [0, 0, 1])
+            };
+
+            function initOrientationWidget() {
+                if (!orientationWidgetCanvas) return;
+                try {
+                    orientationGl = orientationWidgetCanvas.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: false });
+                } catch (err) {
+                    console.warn('Orientation widget WebGL init error', err);
+                    orientationGl = null;
+                }
+                if (!orientationGl) {
+                    console.warn('Orientation widget WebGL unavailable.');
+                    return;
+                }
+                orientationWidgetProgram = createOrientationWidgetProgram(orientationGl);
+                if (!orientationWidgetProgram) {
+                    orientationGl = null;
+                    return;
+                }
+                orientationWidgetAttributes = {
+                    position: orientationGl.getAttribLocation(orientationWidgetProgram, 'aPosition'),
+                    normal: orientationGl.getAttribLocation(orientationWidgetProgram, 'aNormal'),
+                    color: orientationGl.getAttribLocation(orientationWidgetProgram, 'aColor')
+                };
+                orientationWidgetUniforms = {
+                    frameRight: orientationGl.getUniformLocation(orientationWidgetProgram, 'uFrameRight'),
+                    frameUp: orientationGl.getUniformLocation(orientationWidgetProgram, 'uFrameUp'),
+                    frameDir: orientationGl.getUniformLocation(orientationWidgetProgram, 'uFrameDir'),
+                    tilt: orientationGl.getUniformLocation(orientationWidgetProgram, 'uTilt'),
+                    scale: orientationGl.getUniformLocation(orientationWidgetProgram, 'uScale'),
+                    aspect: orientationGl.getUniformLocation(orientationWidgetProgram, 'uAspect'),
+                    lightDir: orientationGl.getUniformLocation(orientationWidgetProgram, 'uLightDir'),
+                    axisX: orientationGl.getUniformLocation(orientationWidgetProgram, 'uAxisX'),
+                    axisY: orientationGl.getUniformLocation(orientationWidgetProgram, 'uAxisY'),
+                    axisZ: orientationGl.getUniformLocation(orientationWidgetProgram, 'uAxisZ')
+                };
+                orientationFigureBuffers = buildOrientationFigureGeometry(orientationGl);
+            }
+
+            function createOrientationWidgetProgram(gl) {
+                const vsSource = `
+                    attribute vec3 aPosition;
+                    attribute vec3 aNormal;
+                    attribute vec3 aColor;
+                    uniform vec3 uFrameRight;
+                    uniform vec3 uFrameUp;
+                    uniform vec3 uFrameDir;
+                    uniform vec3 uAxisX;
+                    uniform vec3 uAxisY;
+                    uniform vec3 uAxisZ;
+                    uniform float uTilt;
+                    uniform float uScale;
+                    uniform float uAspect;
+                    uniform vec3 uLightDir;
+                    varying vec3 vColor;
+                    varying float vLighting;
+                    vec3 remapToPatient(vec3 local) {
+                        return local.x * uAxisX + local.y * uAxisY + local.z * uAxisZ;
+                    }
+                    vec3 rotateX(vec3 v, float angle) {
+                        float s = sin(angle);
+                        float c = cos(angle);
+                        return vec3(v.x, v.y * c - v.z * s, v.y * s + v.z * c);
+                    }
+                    vec3 projectToBeam(vec3 v) {
+                        return vec3(
+                            dot(v, uFrameRight),
+                            dot(v, uFrameUp),
+                            -dot(v, uFrameDir)
+                        );
+                    }
+                    void main() {
+                        vec3 patientPos = remapToPatient(aPosition);
+                        vec3 patientNormal = remapToPatient(aNormal);
+                        vec3 beamSpace = projectToBeam(patientPos);
+                        vec3 beamNormal = projectToBeam(patientNormal);
+                        beamSpace.y *= -1.0;
+                        beamNormal.y *= -1.0;
+                        vec3 viewPos = rotateX(beamSpace, uTilt);
+                        vec3 viewNormal = normalize(rotateX(beamNormal, uTilt));
+                        vColor = aColor;
+                        vLighting = 1.0;
+                        vec2 scaled = vec2(viewPos.x / max(uAspect, 0.01), viewPos.y) * uScale;
+                        gl_Position = vec4(scaled, viewPos.z * 0.45 * uScale, 1.0);
+                    }
+                `;
+                const fsSource = `
+                    precision mediump float;
+                    varying vec3 vColor;
+                    varying float vLighting;
+                    void main() {
+                        gl_FragColor = vec4(vColor * vLighting, 1.0);
+                    }
+                `;
+                const vs = gl.createShader(gl.VERTEX_SHADER);
+                gl.shaderSource(vs, vsSource);
+                gl.compileShader(vs);
+                if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+                    console.error('Orientation widget vertex shader error', gl.getShaderInfoLog(vs));
+                    return null;
+                }
+                const fs = gl.createShader(gl.FRAGMENT_SHADER);
+                gl.shaderSource(fs, fsSource);
+                gl.compileShader(fs);
+                if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+                    console.error('Orientation widget fragment shader error', gl.getShaderInfoLog(fs));
+                    return null;
+                }
+                const program = gl.createProgram();
+                gl.attachShader(program, vs);
+                gl.attachShader(program, fs);
+                gl.linkProgram(program);
+                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                    console.error('Orientation widget program link error', gl.getProgramInfoLog(program));
+                    return null;
+                }
+                return program;
+            }
+
+            function buildOrientationFigureGeometry(gl) {
+                if (!gl) return null;
+                const mesh = createOrientationFigureMesh();
+                const positionBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mesh.positions), gl.STATIC_DRAW);
+                const normalBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mesh.normals), gl.STATIC_DRAW);
+                const colorBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mesh.colors), gl.STATIC_DRAW);
+                const indexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(mesh.indices), gl.STATIC_DRAW);
+                return {
+                    position: positionBuffer,
+                    normal: normalBuffer,
+                    color: colorBuffer,
+                    index: indexBuffer,
+                    indexCount: mesh.indices.length
+                };
+            }
+
+            function createOrientationFigureMesh() {
+                const mesh = { positions: [], normals: [], colors: [], indices: [] };
+                const GREEN = [16 / 255, 185 / 255, 129 / 255];
+                const RED = [220 / 255, 38 / 255, 38 / 255];
+                const BLUE = [37 / 255, 99 / 255, 235 / 255];
+
+                function addSphere(center, radius, color, latSteps = 12, lonSteps = 16) {
+                    const baseIndex = mesh.positions.length / 3;
+                    for (let lat = 0; lat <= latSteps; lat++) {
+                        const v = lat / latSteps;
+                        const phi = v * Math.PI;
+                        const sinPhi = Math.sin(phi);
+                        const cosPhi = Math.cos(phi);
+                        for (let lon = 0; lon <= lonSteps; lon++) {
+                            const u = lon / lonSteps;
+                            const theta = u * Math.PI * 2;
+                            const sinTheta = Math.sin(theta);
+                            const cosTheta = Math.cos(theta);
+                            const nx = cosTheta * sinPhi;
+                            const ny = cosPhi;
+                            const nz = sinTheta * sinPhi;
+                            mesh.positions.push(
+                                center[0] + radius * nx,
+                                center[1] + radius * ny,
+                                center[2] + radius * nz
+                            );
+                            mesh.normals.push(nx, ny, nz);
+                            mesh.colors.push(color[0], color[1], color[2]);
+                        }
+                    }
+                    for (let lat = 0; lat < latSteps; lat++) {
+                        for (let lon = 0; lon < lonSteps; lon++) {
+                            const first = baseIndex + lat * (lonSteps + 1) + lon;
+                            const second = first + lonSteps + 1;
+                            mesh.indices.push(first, second, first + 1);
+                            mesh.indices.push(second, second + 1, first + 1);
+                        }
+                    }
+                }
+
+                // Patient axes follow RAS (+X right, +Y anterior, +Z superior)
+                // Torso / core
+                addSphere([0, 0, 0.1], 0.35, GREEN, 14, 20);
+                addSphere([0, 0, 0.55], 0.22, GREEN, 12, 18); // head
+                addSphere([0, 0, -0.25], 0.28, GREEN, 12, 18); // hips
+                // Arms
+                addSphere([0.42, 0, 0.15], 0.16, GREEN);  // patient-right elbow
+                addSphere([-0.42, 0, 0.15], 0.16, GREEN); // patient-left elbow
+                addSphere([-0.6, 0, 0.15], 0.12, RED);    // left hand (patient left)
+                addSphere([0.6, 0, 0.15], 0.12, GREEN);   // right hand
+                // Legs
+                addSphere([0.18, 0, -0.45], 0.16, GREEN);   // patient-right knee
+                addSphere([-0.18, 0, -0.45], 0.16, GREEN);  // patient-left knee
+                addSphere([-0.18, 0, -0.72], 0.12, BLUE);   // left foot
+                addSphere([0.18, 0, -0.72], 0.12, BLUE);    // right foot
+                // Nose (anterior)
+                addSphere([0, 0.25, 0.55], 0.09, RED, 10, 16);
+
+                return mesh;
+            }
+
+            function drawOrientationWidget(frame, fallbackAngle = 0) {
+                if (!orientationGl || !orientationWidgetProgram || !orientationFigureBuffers || !orientationWidgetCanvas) return;
+                const gl = orientationGl;
+                const widgetSize = Math.floor(Math.min(orientationWidgetCanvas.clientWidth || 140, orientationWidgetCanvas.clientHeight || 140));
+                if (widgetSize > 0 && (orientationWidgetCanvas.width !== widgetSize || orientationWidgetCanvas.height !== widgetSize)) {
+                    orientationWidgetCanvas.width = widgetSize;
+                    orientationWidgetCanvas.height = widgetSize;
+                }
+                if (!orientationWidgetCanvas.width || !orientationWidgetCanvas.height) return;
+                gl.viewport(0, 0, orientationWidgetCanvas.width, orientationWidgetCanvas.height);
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                gl.enable(gl.DEPTH_TEST);
+                gl.enable(gl.CULL_FACE);
+                gl.disable(gl.BLEND);
+                gl.depthMask(true);
+                const isValidVec = vec => Array.isArray(vec) && vec.length >= 3 && vec.every(num => Number.isFinite(num));
+                const resolvedFrame = (() => {
+                    if (frame && isValidVec(frame.right) && isValidVec(frame.up) && isValidVec(frame.dir)) {
+                        return frame;
+                    }
+                    const fallbackFrame = applyBeamRoll180(computeBeamFrame(0, fallbackAngle || 0));
+                    if (fallbackFrame && isValidVec(fallbackFrame.right) && isValidVec(fallbackFrame.up) && isValidVec(fallbackFrame.dir)) {
+                        return fallbackFrame;
+                    }
+                    return {
+                        right: [-1, 0, 0],
+                        up: [0, 0, 1],
+                        dir: [0, 1, 0]
+                    };
+                })();
+                gl.useProgram(orientationWidgetProgram);
+                gl.uniform3fv(orientationWidgetUniforms.frameRight, new Float32Array(resolvedFrame.right));
+                gl.uniform3fv(orientationWidgetUniforms.frameUp, new Float32Array(resolvedFrame.up));
+                gl.uniform3fv(orientationWidgetUniforms.frameDir, new Float32Array(resolvedFrame.dir));
+                gl.uniform3fv(orientationWidgetUniforms.axisX, orientationAxisFloat32.x);
+                gl.uniform3fv(orientationWidgetUniforms.axisY, orientationAxisFloat32.y);
+                gl.uniform3fv(orientationWidgetUniforms.axisZ, orientationAxisFloat32.z);
+                gl.uniform1f(orientationWidgetUniforms.tilt, 0);
+                gl.uniform1f(orientationWidgetUniforms.scale, 0.85);
+                gl.uniform1f(orientationWidgetUniforms.aspect, orientationWidgetCanvas.width / orientationWidgetCanvas.height);
+                gl.uniform3fv(orientationWidgetUniforms.lightDir, new Float32Array([0, 0, 1]));
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, orientationFigureBuffers.position);
+                gl.enableVertexAttribArray(orientationWidgetAttributes.position);
+                gl.vertexAttribPointer(orientationWidgetAttributes.position, 3, gl.FLOAT, false, 0, 0);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, orientationFigureBuffers.normal);
+                gl.enableVertexAttribArray(orientationWidgetAttributes.normal);
+                gl.vertexAttribPointer(orientationWidgetAttributes.normal, 3, gl.FLOAT, false, 0, 0);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, orientationFigureBuffers.color);
+                gl.enableVertexAttribArray(orientationWidgetAttributes.color);
+                gl.vertexAttribPointer(orientationWidgetAttributes.color, 3, gl.FLOAT, false, 0, 0);
+
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, orientationFigureBuffers.index);
+                gl.drawElements(gl.TRIANGLES, orientationFigureBuffers.indexCount, gl.UNSIGNED_SHORT, 0);
             }
 
             function setDefaultStructureVisibility(rois) {
@@ -3715,26 +4162,33 @@
                 const isoX = isoCenter?.[0] || 0;
                 const isoY = isoCenter?.[1] || 0;
                 const isoZ = isoCenter?.[2] || 0;
+                const manualOffsetPx = {
+                    x: (mlcRenderXOffsetMm || 0) * scalePxPerMm,
+                    y: (mlcRenderYOffsetMm || 0) * scalePxPerMm
+                };
                 const pointAlpha = getStructurePointAlpha();
-                function drawGaussianDot(px, py, color, depthMm) {
+                function drawGaussianDot(px, py, color, depthMm, pxPerMmProjected) {
                     const depthGrad = getDepthGradient(depthMm);
+                    const luminanceBoost = getStructureLuminanceBoost();
                     const sigmaFactor = Math.max(0.01, structureSigmaScale); // slider drives size directly
                     const spacingX = Math.max(0.1, structureVoxelSpacingMm.x || 1);
                     const spacingY = Math.max(0.1, structureVoxelSpacingMm.y || spacingX);
                     const spacingZ = Math.max(0.1, structureVoxelSpacingMm.z || spacingX);
                     const baseRadius = 6; // larger base for better visibility
-                    const rx = baseRadius * sigmaFactor * spacingX;
-                    const ry = baseRadius * sigmaFactor * spacingZ; // elongate with slice thickness
+                    const pxScale = Math.max(0.01, pxPerMmProjected);
+                    const rx = baseRadius * sigmaFactor * spacingX * pxScale;
+                    const ry = baseRadius * sigmaFactor * spacingZ * pxScale; // elongate with slice thickness
                     const radius = Math.max(rx, ry);
                     const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 2);
-                    const brighten = depthGrad.brightness;
+                    const brighten = depthGrad.brightness * luminanceBoost;
                     const colorMatch = color.match(/rgba?\(([\d.\s,]+)\)/);
                     const boostedColor = colorMatch ? (() => {
                         const parts = colorMatch[1].split(',').map(p => parseFloat(p.trim()));
                         const r = Math.min(255, (parts[0] || 0) * brighten);
                         const g = Math.min(255, (parts[1] || 0) * brighten);
                         const b = Math.min(255, (parts[2] || 0) * brighten);
-                        const a = (parts[3] ?? 1) * pointAlpha;
+                        const alphaBoost = bevDarkBackground ? 1.25 : 1.0;
+                        const a = Math.min(1, (parts[3] ?? 1) * pointAlpha * alphaBoost);
                         return `rgba(${r},${g},${b},${a})`;
                     })() : color;
                     grad.addColorStop(0, boostedColor);
@@ -3746,7 +4200,8 @@
                     ctx.translate(px, py);
                     ctx.scale(rx / radius, ry / radius);
                     ctx.fillStyle = grad;
-                    ctx.globalAlpha = depthGrad.alphaFactor;
+                    const globalAlphaBoost = bevDarkBackground ? 1.2 : 1.0;
+                    ctx.globalAlpha = Math.min(1, depthGrad.alphaFactor * globalAlphaBoost);
                     ctx.beginPath();
                     ctx.arc(0, 0, radius * 2, 0, Math.PI * 2);
                     ctx.fill();
@@ -3776,9 +4231,10 @@
                             const depthMm = dx * frame.dir[0] + dy * frame.dir[1] + dz * frame.dir[2];
                             const denom = Math.max(1e-3, WEBGL_SAD_MM - depthMm);
                             const persp = WEBGL_SAD_MM / denom;
-                            const px = px_mm * persp * scalePxPerMm;
-                            const py = py_mm * persp * scalePxPerMm;
-                            drawGaussianDot(px, py, color, depthMm);
+                            const pxScale = persp * scalePxPerMm;
+                            const px = px_mm * pxScale + manualOffsetPx.x;
+                            const py = py_mm * pxScale + manualOffsetPx.y;
+                            drawGaussianDot(px, py, color, depthMm, pxScale);
                         });
                     });
                 });
@@ -3786,7 +4242,10 @@
                     const sliceThicknessPx = Math.max(1, (structureVoxelSpacingMm.z || 1) * scalePxPerMm);
                     sliceBuckets.forEach(bucket => {
                         if (!bucket || !bucket.pts || bucket.pts.length < 3) return;
-                        const hull = computeConvexHull(bucket.pts.map(p => ({ x: p.px, y: p.py })));
+                        const hull = computeConvexHull(bucket.pts.map(p => ({
+                            x: p.px + manualOffsetPx.x,
+                            y: p.py + manualOffsetPx.y
+                        })));
                         if (!hull || hull.length < 3) return;
                         const avgDepth = bucket.pts.reduce((s, p) => s + (p.depth || 0), 0) / bucket.pts.length;
                         const depthGrad = getDepthGradient(avgDepth);
@@ -4088,6 +4547,8 @@
                 }
                 const couchAngle = (cpObj && Number.isFinite(cpObj.couchAngle)) ? cpObj.couchAngle : (beam?.patientSupportAngle || 0);
                 const frame = applyBeamRoll180(computeBeamFrame(gantryAngle, couchAngle));
+                const beamFoRSet = getBeamFrameOfReferenceSet(beam);
+                const enforceFoR = beamFoRSet && beamFoRSet.size > 0;
                 updateWebglSize();
                 applyManualOverlayOffset();
                 gl.clearColor(0, 0, 0, 0);
@@ -4118,7 +4579,7 @@
                 const anisoX = Math.max(0.25, sigmaFactor * spacingX);
                 const anisoY = Math.max(0.25, sigmaFactor * spacingZ); // elongate with slice thickness
                 const baseRadiusPx = 6;
-                gl.uniform1f(glUniforms.pointSize, Math.max(2, baseRadiusPx * Math.max(anisoX, anisoY) * pxPerMm));
+                gl.uniform1f(glUniforms.pointSize, Math.max(2, baseRadiusPx * pxPerMm));
                 gl.uniform1f(glUniforms.pointAlpha, getStructurePointAlpha());
                 gl.uniform3fv(glUniforms.lightPosBeam, new Float32Array([0, 0, -WEBGL_SAD_MM]));
                 gl.uniform1f(glUniforms.spotCosCutoff, Math.cos(20 * Math.PI / 180)); // 20 deg cutoff
@@ -4137,6 +4598,7 @@
                 glDrawBatches.forEach(batch => {
                     if (!batch || typeof batch.offset !== 'number' || typeof batch.count !== 'number') return;
                     if (structureVisibility[batch.roiNumber] === false) return;
+                    if (enforceFoR && (!batch.frameOfReferenceUID || !beamFoRSet.has(batch.frameOfReferenceUID))) return;
                     gl.drawArrays(gl.POINTS, batch.offset, batch.count);
                     anyDrawn = true;
                 });
@@ -4937,6 +5399,8 @@
                     setBevRenderModeLabel('Structures: 2D', 'rgba(180, 83, 9, 0.8)');
                 }
                 const cpMlcData = cpObject.mlcPositionData;
+                const effectiveMlcPositions = getEffectiveMLCPositionsForCP(cpObject, beamData);
+                const apertureBoundaries = effectiveMlcPositions ? computeVirtualBoundaries(beamData) : null;
                 const canvasSize = bevCanvas.width;
                 const center = canvasSize / 2;
                 const VISUAL_FIELD_MM = WEBGL_FIELD_SPAN_MM;
@@ -5020,9 +5484,10 @@
                     bevCtx.stroke();
                 }
                 // Axis labels (swap x1/x2 and y1/y2)
+                const axisLabelColor = bevDarkBackground ? 'rgba(255, 255, 255, 0.8)' : '#16a34a';
                 bevCtx.save();
                 bevCtx.scale(1, -1); // undo canvas flip for text
-                bevCtx.fillStyle = '#16a34a';
+                bevCtx.fillStyle = axisLabelColor;
                 bevCtx.font = '12px Arial';
                 bevCtx.textAlign = 'center';
                 bevCtx.textBaseline = 'middle';
@@ -5035,6 +5500,91 @@
 
                 const mlcYOffsetPx = MLC_DRAW_BASE_Y_MM * globalScale;
                 const mlcXOffsetPx = 0;
+                function drawMlcApertureOutline(yBounds, positions, scale, yOffsetPx = 0, xOffsetPx = 0) {
+                    if (!Array.isArray(yBounds) || yBounds.length < 2) return;
+                    if (!Array.isArray(positions) || positions.length === 0) return;
+                    const numPairs = positions.length / 2;
+                    if (yBounds.length !== numPairs + 1) return;
+                    const lefts = positions.slice(0, numPairs);
+                    const rights = positions.slice(numPairs);
+                    const MIN_APERTURE_MM = 0.5;
+                    const OVERLAP_TOL_MM = 0.2;
+                    const FIELD_HALF_MM = VISUAL_FIELD_MM / 2;
+                    const LEAF_BOUNDARY_TOL_MM = 0.5;
+                    const toPxX = mm => mm * scale + xOffsetPx;
+                    const toPxY = mm => mm * scale + yOffsetPx;
+
+                    function strokeRun(startIdx, endIdx) {
+                        if (startIdx > endIdx) return;
+                        bevCtx.save();
+                        bevCtx.strokeStyle = 'rgba(251, 191, 36, 0.95)';
+                        bevCtx.lineWidth = 2;
+                        bevCtx.lineJoin = 'round';
+                        bevCtx.lineCap = 'round';
+                        bevCtx.beginPath();
+                        const startTopY = toPxY(yBounds[startIdx]);
+                        bevCtx.moveTo(toPxX(lefts[startIdx]), startTopY);
+                        for (let leaf = startIdx; leaf <= endIdx; leaf++) {
+                            const bottomY = toPxY(yBounds[leaf + 1]);
+                            bevCtx.lineTo(toPxX(lefts[leaf]), bottomY);
+                            if (leaf < endIdx) {
+                                bevCtx.lineTo(toPxX(lefts[leaf + 1]), bottomY);
+                            }
+                        }
+                        bevCtx.lineTo(toPxX(rights[endIdx]), toPxY(yBounds[endIdx + 1]));
+                        for (let leaf = endIdx; leaf >= startIdx; leaf--) {
+                            const topY = toPxY(yBounds[leaf]);
+                            bevCtx.lineTo(toPxX(rights[leaf]), topY);
+                            if (leaf > startIdx) {
+                                bevCtx.lineTo(toPxX(rights[leaf - 1]), topY);
+                            }
+                        }
+                        bevCtx.closePath();
+                        bevCtx.stroke();
+                        bevCtx.restore();
+                    }
+
+                    let runStart = -1;
+                    let prevInterval = null;
+                    const commitRun = (endIdx) => {
+                        if (runStart !== -1) {
+                            strokeRun(runStart, endIdx);
+                            runStart = -1;
+                            prevInterval = null;
+                        }
+                    };
+                    for (let i = 0; i <= numPairs; i++) {
+                        const shapesBeam = i < numPairs ? (() => {
+                            const width = rights[i] - lefts[i];
+                            if (width <= MIN_APERTURE_MM) return false;
+                            const leftAtLimit = Math.abs(lefts[i] + FIELD_HALF_MM) < LEAF_BOUNDARY_TOL_MM;
+                            const rightAtLimit = Math.abs(rights[i] - FIELD_HALF_MM) < LEAF_BOUNDARY_TOL_MM;
+                            return !(leftAtLimit && rightAtLimit);
+                        })() : false;
+
+                        if (!shapesBeam) {
+                            commitRun(i - 1);
+                            continue;
+                        }
+
+                        const currentInterval = { left: lefts[i], right: rights[i] };
+                        if (runStart === -1) {
+                            runStart = i;
+                            prevInterval = currentInterval;
+                            continue;
+                        }
+                        if (prevInterval) {
+                            const overlap = Math.min(prevInterval.right, currentInterval.right) - Math.max(prevInterval.left, currentInterval.left);
+                            if (overlap <= OVERLAP_TOL_MM) {
+                                commitRun(i - 1);
+                                runStart = i;
+                                prevInterval = currentInterval;
+                                continue;
+                            }
+                        }
+                        prevInterval = currentInterval;
+                    }
+                }
 
                 function drawMlcLayer(mlcDef, positions, scale, yOffsetPx = 0, xOffsetPx = 0) {
                     const x_tips = positions;
@@ -5099,6 +5649,9 @@
                             }
                         }
                         bevCtx.restore();
+                        if (apertureBoundaries && effectiveMlcPositions) {
+                            drawMlcApertureOutline(apertureBoundaries, effectiveMlcPositions, globalScale, mlcYOffsetPx);
+                        }
                     } else {
                         // TDS/single-layer: hide blend slider entirely
                         if (mlcBlendContainer) mlcBlendContainer.style.display = 'none';
@@ -5113,6 +5666,9 @@
                                 drawMlcLayer(mlcDef, mlcLayer.positions, globalScale, mlcYOffsetPx);
                                 bevCtx.restore();
                             }
+                        }
+                        if (apertureBoundaries && effectiveMlcPositions) {
+                            drawMlcApertureOutline(apertureBoundaries, effectiveMlcPositions, globalScale, mlcYOffsetPx);
                         }
                     }
                 } else {
@@ -5144,7 +5700,7 @@
 
                 bevCtx.save();
                 bevCtx.scale(1, -1);
-                bevCtx.fillStyle = '#111827';
+                bevCtx.fillStyle = bevDarkBackground ? 'rgba(255, 255, 255, 0.8)' : '#111827';
                 bevCtx.font = '12px Arial';
                 bevCtx.textAlign = 'center';
                 bevCtx.textBaseline = 'middle';
@@ -5157,6 +5713,7 @@
 
                 bevCtx.restore(); // undo collimator rotation
                 bevCtx.restore();
+                drawOrientationWidget(orientationFrame, couchAngle || 0);
                 bevCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
                 bevCtx.font = 'bold 12px Arial';
                 bevCtx.textAlign = 'right';
