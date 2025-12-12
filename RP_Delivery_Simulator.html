@@ -627,6 +627,7 @@
             pointer-events: none;
             background: transparent;
             border: none;
+            box-shadow: none;
         }
 
         .bev-axis-labels {
@@ -3947,7 +3948,8 @@
                         vec3 viewPos = rotateX(beamSpace, uTilt);
                         vec3 viewNormal = normalize(rotateX(beamNormal, uTilt));
                         vColor = aColor;
-                        vLighting = 1.0;
+                        float lambert = max(dot(viewNormal, normalize(uLightDir)), 0.0);
+                        vLighting = 0.6 + 0.4 * lambert;
                         vec2 scaled = vec2(viewPos.x / max(uAspect, 0.01), viewPos.y) * uScale;
                         gl_Position = vec4(scaled, viewPos.z * 0.45 * uScale, 1.0);
                     }
