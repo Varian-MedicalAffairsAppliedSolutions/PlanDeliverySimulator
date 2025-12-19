@@ -201,6 +201,24 @@
             color: #343a40;
         }
 
+        .disclaimer-footer {
+            background-color: #f8f9fa;
+            padding: 10px;
+            text-align: center;
+            font-size: 0.9em;
+            border-top: 1px solid #dee2e6;
+            margin-top: 15px;
+        }
+
+        .disclaimer-footer a {
+            color: #3498db;
+            text-decoration: none;
+        }
+
+        .disclaimer-footer a:hover {
+            text-decoration: underline;
+        }
+
         .plan-info-header h3 {
             margin-top: 0;
             color: #2c3e50;
@@ -1258,6 +1276,15 @@
                         <div id="cpTrack" class="cp-track"></div>
                         <input type="range" id="cpSlider" min="0" max="0" value="0" style="width: 100%;">
                     </div>
+                    <div class="param-item" id="stampAnalysisContainer" style="display:none; flex-direction: column; align-items: flex-start; gap: 8px;">
+                        <strong>RapidArc Dynamic Analysis</strong>
+                        <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:center; font-size:0.9em; color:#374151;">
+                            <span><strong># STAMP segments:</strong> <span id="numStampsVal">0</span></span>
+                            <span><strong>Total STAMP MU:</strong> <span id="totalStampMuVal">0.00</span></span>
+                            <span><strong>Avg MU / STAMP:</strong> <span id="avgStampMuVal">0.00</span></span>
+                            <span><strong>% MU in STAMP:</strong> <span id="percentStampDoseVal">0.0%</span></span>
+                        </div>
+                    </div>
                     <div class="param-item structure-panel">
                         <div class="structure-header">
                             <label class="structure-toggle"><input type="checkbox" id="showStructuresToggle"> Show Structures (beta)</label>
@@ -1353,6 +1380,10 @@
             "as is" for educational and research purposes only. It is not intended for clinical use, patient
             diagnosis, or treatment planning. The accuracy of simulations and any derived data is not guaranteed.
             The user assumes all responsibility for the use of this software.</p>
+    </div>
+
+    <div class="disclaimer-footer">
+        Bound by the terms of the <a href="gate/VarianLUSLA.html" target="_blank">VarianLUSLA</a>
     </div>
 
     </div>
@@ -4908,6 +4939,38 @@
                 }
             }
 
+            function updateStampAnalysisFromSegments(segments, totalMu) {
+                const stampDiv = document.getElementById('stampAnalysisContainer');
+                if (!stampDiv) return;
+
+                if (!Array.isArray(segments) || segments.length === 0) {
+                    stampDiv.style.display = 'none';
+                    return;
+                }
+
+                const stampSegments = segments.filter(s => s && s.type === 'stamp');
+                const numStamps = stampSegments.length;
+                if (numStamps === 0) {
+                    stampDiv.style.display = 'none';
+                    return;
+                }
+
+                const totalStampMu = stampSegments.reduce((sum, s) => sum + (s.mu || 0), 0);
+                const avgStampMu = numStamps > 0 ? (totalStampMu / numStamps) : 0;
+                const pct = (totalMu > 0) ? ((totalStampMu / totalMu) * 100) : 0;
+
+                const numEl = document.getElementById('numStampsVal');
+                const totalEl = document.getElementById('totalStampMuVal');
+                const avgEl = document.getElementById('avgStampMuVal');
+                const pctEl = document.getElementById('percentStampDoseVal');
+
+                if (numEl) numEl.textContent = String(numStamps);
+                if (totalEl) totalEl.textContent = totalStampMu.toFixed(2);
+                if (avgEl) avgEl.textContent = avgStampMu.toFixed(2);
+                if (pctEl) pctEl.textContent = `${pct.toFixed(1)}%`;
+                stampDiv.style.display = 'flex';
+            }
+
             function renderCpTrackBar() {
                 if (!cpTrack) return;
                 cpTrack.innerHTML = '';
@@ -4931,6 +4994,7 @@
                 }
                 const totalMu = segments.reduce((sum, s) => sum + (s.mu || 0), 0);
                 updateCpTypeOverlay(segments);
+                updateStampAnalysisFromSegments(segments, totalMu);
 
                 const showTooltip = (event, seg) => {
                     if (!cpTrackTooltip) {
