@@ -47,8 +47,11 @@ Upon successful loading, overall plan information (patient name, ID, plan label,
 ### Configure Simulation Parameters (Optional):
 1. Navigate to the "Machine Speed & Acceleration Limits (for Simulation)" section.
 2. Adjust the maximum speeds and accelerations for Gantry, MLC, Collimator, and Jaws. These values are used when the "Simulate Delivery" mode is active.
-3. Default values may be set based on the `ManufacturerModelName` tag in the DICOM file (e.g., different defaults for "RDS" vs. "TDS" machines).
-4. Click "Apply & Recalculate Simulation" to apply changes. This will re-initialize the visualization and recalculate simulation-dependent metrics if a plan is loaded.
+3. Optional timing knobs:
+   * **Beam Start Overhead (ms)**: adds a fixed delay at beam start in simulated time.
+   * **Per-CP Overhead (ms)**: adds a fixed overhead to each control point-to-control point segment; useful to model controller update granularity (often ~20ms).
+4. Default values may be set based on the `ManufacturerModelName` tag in the DICOM file (e.g., different defaults for "RDS" vs. "TDS" machines).
+5. Click "Apply & Recalculate Simulation" to apply changes. This will re-initialize the visualization and recalculate simulation-dependent metrics if a plan is loaded.
 
 ### Select Beam (if multiple exist):
 1. If the loaded plan contains multiple beams, a "Select Beam" dropdown menu will appear above the BEV visualization.
@@ -83,6 +86,19 @@ Upon successful loading, overall plan information (patient name, ID, plan label,
 ### Clear Data:
 * Click "Clear All Data & Visuals" to remove the loaded plan, reset all visualizations, and clear input fields.
 
+### Trajectory Log Timing Calibration (Optional)
+If you have measured delivery trajectory logs (e.g., sampled every ~20ms) and want to tune the simulator timing parameters to better match measured delivery time:
+
+1. Obtain a **plan JSON**:
+   * From Eclipse via `PlanDeliverySimulator-Launcher.cs` (ESAPI) which auto-generates an `eclipse-plan-*.json`, or
+   * From the simulator: click **Export Parsed Data as JSON** after loading a plan.
+2. Export/prepare a **trajectory log CSV/TSV** that contains:
+   * A monotonically increasing **time** column (seconds or milliseconds), and
+   * A monotonically increasing **cumulative MU/meterset** column.
+   * Alternatively, you can load Varian TrueBeam **Trajectory Log** binaries (`.bin`) directly in the calibrator.
+3. Open `RP_Trajectory_Timing_Calibrator.html` in a browser, load your plan JSON(s) and log file(s), create plan-beam/log pairs, then click **Run Fit**.
+4. Apply the fitted parameters back in the simulator under **Machine Speed & Acceleration Limits (for Simulation)**, including **Per-CP Overhead (ms)** if fitted.
+
 ---
 
 ## 3. Simulation and Calculation Details
@@ -103,6 +119,7 @@ The method for calculating the duration of each segment (time between two consec
 
 #### Simulate Delivery Mode:
 This mode estimates segment durations based on device kinematics and MU delivery requirements.
+* **Note**: Current implementation uses an acceleration-limited trapezoidal/triangular motion profile (via `calculateProfiledMoveTime`) for gantry/MLC/collimator moves, and a dose-rate-limited time for MU delivery; the segment duration is the max of these component times.
 * **Ideal Component Times**: For each segment (between CP <img src="https://i.upmath.me/svg/k-1" alt="k-1" /> and CP <img src="https://i.upmath.me/svg/k" alt="k" />):
     * $\Delta \text{GantryAngle}$, $\Delta \text{MaxLeafTravel}$, $\Delta \text{CollAngle}$, $\Delta \text{MaxJawXTravel}$, $\Delta \text{MaxJawYTravel}$, $\Delta \text{MUWeight}$ are calculated.
     * <img src="https://i.upmath.me/svg/%5Ctext%7Btime%7D_%7B%5Ctext%7BGantry%7D_%7B%5Ctext%7Bsimple%7D%7D%7D%20%3D%20%5Cfrac%7B%5CDelta%20%5Ctext%7BGantryAngle%7D%7D%7B%5Ctext%7BcurrentMaxGantrySpeed%7D%7D" alt="\text{time}_{\text{Gantry}_{\text{simple}}} = \frac{\Delta \text{GantryAngle}}{\text{currentMaxGantrySpeed}}" />

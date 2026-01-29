@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plan Delivery Multi-Plan Comparator</title>
+  <script>
+    // Single licensing gate for the whole comparator page
+    (function () {
+      const isRegistered = localStorage.getItem('plandelivery_registered');
+      const token = localStorage.getItem('plandelivery_registration_token');
+      if (!isRegistered || isRegistered !== 'true' || !token || token !== 'AC1AEFCE') {
+        window.location.href = 'gate/register.html';
+      }
+    })();
+  </script>
+  <style>
+    :root {
+      --column-width: 400px;
+      --card-bg: #ffffff;
+      --panel-bg: #f8fafc;
+      --border: #e2e8f0;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+      --accent: #0ea5e9;
+      --accent-strong: #0284c7;
+      --text: #0f172a;
+      --muted: #475569;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      background: radial-gradient(110% 150% at 10% 10%, #e0f2fe 0%, #f8fafc 30%, #e2e8f0 100%);
+      color: var(--text);
+      line-height: 1.5;
+      overflow-x: auto;
+    }
+
+    .page-shell {
+      min-height: 100vh;
+    }
+
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 20px 20px 8px 20px;
+    }
+
+    .page-header h1 {
+      margin: 4px 0;
+      font-size: 1.6rem;
+    }
+
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      color: #94a3b8;
+      margin: 0;
+    }
+
+    .lede {
+      margin: 8px 0 0 0;
+      max-width: 960px;
+      color: var(--muted);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+    }
+
+    button.ghost {
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:hover { opacity: 0.96; }
+    button:active { transform: translateY(1px); }
+
+    .comparison-board {
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+      padding: 0 20px 32px 20px;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+    }
+
+    .plan-column {
+      width: var(--column-width);
+      min-width: var(--column-width);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .plan-meta {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .plan-title {
+      margin: 0 0 10px 0;
+      font-size: 1.15rem;
+      color: var(--text);
+    }
+
+    .plan-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 12px;
+    }
+
+    .plan-meta-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.95rem;
+      color: #334155;
+    }
+
+    .plan-meta-row span:last-child {
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .plan-column iframe {
+      overflow: hidden;
+    }
+
+    .section-label {
+      font-weight: 700;
+      font-size: 0.92rem;
+      color: var(--text);
+      margin: 0 0 6px 0;
+    }
+
+    .bev-stage,
+    .plots-block {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .bev-stage canvas {
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      background: #0b1727;
+      border: 1px dashed #cbd5e1;
+      border-radius: 12px;
+    }
+
+    .radial-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .radial-grid canvas,
+    .xy-grid canvas {
+      width: 100%;
+      height: auto;
+      background: #fff;
+      border: 1px dashed #cbd5e1;
+      border-radius: 10px;
+    }
+
+    .xy-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .global-panel {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      background: #fff;
+      box-shadow: var(--shadow);
+      margin: 0 20px 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .global-panel h2 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .global-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+
+    .global-grid label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.9rem;
+      color: #1f2937;
+      border: 1px solid #e2e8f0;
+      padding: 10px;
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+
+    .global-grid input {
+      padding: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+
+    .instructions-panel {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      background: #fff;
+      box-shadow: var(--shadow);
+      margin: 0 20px 16px 20px;
+    }
+
+    .instructions-body {
+      display: none;
+      margin-top: 10px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .global-footer {
+      margin: 20px;
+      padding: 14px 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: var(--shadow);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .global-footer strong {
+      color: #0f172a;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Multi-plan prototype</p>
+        <h1>Plan Delivery Comparator</h1>
+        <p class="lede">One 400 px column per plan. Reuses the full simulator pipeline in an embedded view; drop multiple RPs to spawn multiple full simulators side by side.</p>
+      </div>
+      <div class="header-actions">
+        <button id="addPlanColumnBtn" class="primary">Add empty column</button>
+        <button id="resetColumnsBtn" class="ghost">Reset to one column</button>
+      </div>
+    </header>
+
+    <section class="instructions-panel">
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <h2 style="margin:0;">Advanced Plan Delivery Simulator</h2>
+        <button id="toggleGlobalNotesBtn" class="ghost" type="button">Show Instructions</button>
+      </div>
+      <div id="globalNotes" class="instructions-body">
+        <p style="color:red; margin-top:0;">For Educational and Research Purpose Only. Not For Clinical Use.</p>
+        <ul style="margin:0 0 6px 18px; padding:0; line-height:1.5;">
+          <li><strong>Load</strong>: Drag/drop a DICOM RT Plan (.dcm) or exported JSON, or use Choose File.</li>
+          <li><strong>Limits</strong>: Set machine speed/accel limits globally, then click Apply &amp; Broadcast.</li>
+          <li><strong>Play</strong>: Select a beam or enable Simulate Full Plan, then Play/Pause. Beep per MU is optional.</li>
+          <li><strong>Scrub</strong>: Use the CP bar + slider or hover radial plots/mini stamps to jump between CPs.</li>
+          <li><strong>Views</strong>: BEV shows interpolated MLC/jaws; crosshair ticks are 1 cm. Radial/XY plots track the current CP.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section style="padding: 0 20px 18px 20px;">
+      <div id="dropZone" style="border: 2px dashed #94a3b8; border-radius: 12px; padding: 14px; background:#fff; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <div style="flex:1; min-width: 220px;">
+          <strong>Load one or more RT Plans (RP):</strong><br>
+          <small>Drag & drop or pick files; one embedded simulator column per RP will appear.</small>
+        </div>
+        <input id="fileInput" type="file" accept=".dcm,application/dicom,.json,application/json" multiple style="flex:0 0 200px;">
+        <button id="clearBoardBtn" class="ghost" type="button">Clear all columns</button>
+      </div>
+    </section>
+
+    <section class="global-panel">
+      <h2>Machine Speed & Acceleration Limits (global)</h2>
+      <div class="global-grid">
+        <label>Max Gantry Speed (°/s)
+          <input id="globalMaxGantrySpeed" type="number" step="0.1" placeholder="e.g., 12">
+        </label>
+        <label>Max Gantry Accel/Decel (°/s²)
+          <input id="globalMaxGantryAccelDecel" type="number" step="0.1" placeholder="e.g., 12">
+        </label>
+        <label>Max MLC Speed (cm/s)
+          <input id="globalMaxMlcSpeed" type="number" step="0.1" placeholder="e.g., 5">
+        </label>
+        <label>Max MLC Accel/Decel (cm/s²)
+          <input id="globalMaxMlcAccelDecel" type="number" step="0.1" placeholder="e.g., 5">
+        </label>
+        <label>Max Coll Speed (°/s)
+          <input id="globalMaxCollSpeed" type="number" step="0.1" placeholder="e.g., 9">
+        </label>
+        <label>Max Collimator Accel/Decel (°/s²)
+          <input id="globalMaxCollAccelDecel" type="number" step="0.1" placeholder="e.g., 9">
+        </label>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="applyGlobalSpeedsBtn" class="primary" type="button">Apply & Broadcast to All Columns</button>
+      </div>
+    </section>
+
+    <div id="comparisonBoard" class="comparison-board" aria-live="polite"></div>
+
+    <template id="planColumnTemplate">
+      <div class="plan-column" data-plan-slot="">
+        <div class="plan-meta">
+          <div class="plan-title" data-field="planTitle">Plan</div>
+          <div class="plan-meta-grid">
+            <div class="plan-meta-row"><span>File</span><span data-field="fileName">—</span></div>
+            <div class="plan-meta-row"><span>Status</span><span data-field="statusLabel">Loading…</span></div>
+            <div class="plan-meta-row"><span>Patient</span><span data-field="patientName">—</span></div>
+            <div class="plan-meta-row"><span>Plan ID</span><span data-field="planId">—</span></div>
+            <div class="plan-meta-row"><span>Total Beams</span><span data-field="beams">—</span></div>
+            <div class="plan-meta-row"><span>Total MU</span><span data-field="totalMu">—</span></div>
+            <div class="plan-meta-row"><span>Primary Dose Rate</span><span data-field="primaryDose">—</span></div>
+          </div>
+        </div>
+        <iframe data-field="simFrame" title="Embedded Plan Delivery Simulator" style="width:100%; height:1800px; min-height:0; border:1px solid #e2e8f0; border-radius:12px; background:#fff; overflow:auto;" scrolling="auto"></iframe>
+      </div>
+    </template>
+
+    <footer class="global-footer">
+      <p><strong>Author:</strong> Taoran Li, PhD</p>
+      <p><strong>Contact:</strong> taoran.li@varian.com</p>
+      <p><strong>Version:</strong> 1.1.0</p>
+      <p><strong>Date:</strong> Nov 30, 2025</p>
+      <p><strong>Rights & Disclaimer:</strong> © 2025 Taoran Li. All rights reserved. This software is provided "as is" for educational and research purposes only. It is not intended for clinical use, patient diagnosis, or treatment planning. The accuracy of simulations and any derived data is not guaranteed. The user assumes all responsibility for the use of this software.</p>
+    </footer>
+  </div>
+
+  <script>
+    (() => {
+      const board = document.getElementById('comparisonBoard');
+      const template = document.getElementById('planColumnTemplate');
+      const addBtn = document.getElementById('addPlanColumnBtn');
+      const resetBtn = document.getElementById('resetColumnsBtn');
+      const clearBtn = document.getElementById('clearBoardBtn');
+      const dropZone = document.getElementById('dropZone');
+      const fileInput = document.getElementById('fileInput');
+      const applyGlobalSpeedsBtn = document.getElementById('applyGlobalSpeedsBtn');
+      const globalMaxGantrySpeed = document.getElementById('globalMaxGantrySpeed');
+      const globalMaxGantryAccelDecel = document.getElementById('globalMaxGantryAccelDecel');
+      const globalMaxMlcSpeed = document.getElementById('globalMaxMlcSpeed');
+      const globalMaxMlcAccelDecel = document.getElementById('globalMaxMlcAccelDecel');
+      const globalMaxCollSpeed = document.getElementById('globalMaxCollSpeed');
+      const globalMaxCollAccelDecel = document.getElementById('globalMaxCollAccelDecel');
+      const toggleGlobalNotesBtn = document.getElementById('toggleGlobalNotesBtn');
+      const globalNotes = document.getElementById('globalNotes');
+      let slotCounter = 0;
+      let globalSpeeds = {};
+      const sectionHeights = new Map();
+      let lastMaxPlanInfoHeight = 0;
+      const PLAN_INFO_CAP = 700;
+      const MIN_IFRAME_HEIGHT = 1400;
+      const MAX_IFRAME_HEIGHT = 8000;
+
+      function setPlanMeta(column, data) {
+        column.querySelector('[data-field="planTitle"]').textContent = data.title || `Plan ${data.slot}`;
+        column.querySelector('[data-field="fileName"]').textContent = data.fileName || '—';
+        column.querySelector('[data-field="patientName"]').textContent = data.patientName || '—';
+        column.querySelector('[data-field="planId"]').textContent = data.planId || '—';
+        column.querySelector('[data-field="beams"]').textContent = data.beams ?? '—';
+        column.querySelector('[data-field="totalMu"]').textContent = data.totalMu ?? '—';
+        column.querySelector('[data-field="primaryDose"]').textContent = data.primaryDose ?? '—';
+        column.querySelector('[data-field="statusLabel"]').textContent = data.status || 'Ready';
+      }
+
+      function addPlanColumn(label, file) {
+        slotCounter += 1;
+        const column = template.content.firstElementChild.cloneNode(true);
+        column.dataset.planSlot = String(slotCounter);
+        setPlanMeta(column, {
+          slot: slotCounter,
+          title: label || `Plan ${slotCounter}`,
+          fileName: file ? file.name : '—',
+          status: file ? 'Booting simulator…' : 'Waiting for plan',
+        });
+
+        const iframe = column.querySelector('[data-field="simFrame"]');
+        if (iframe) {
+          iframe.dataset.planSlot = String(slotCounter);
+          iframe.scrolling = 'no';
+          iframe.src = `RP_Delivery_Simulator.html?skipGate=1&embedded=1&slot=${slotCounter}`;
+          iframe.addEventListener('load', () => {
+            setPlanMeta(column, {
+              slot: slotCounter,
+              title: label || `Plan ${slotCounter}`,
+              fileName: file ? file.name : '—',
+              status: file ? 'Loading plan…' : 'Ready',
+            });
+            if (file && iframe.contentWindow) {
+              iframe.contentWindow.postMessage({ type: 'multiPlanLoadFiles', files: [file] }, '*');
+            }
+            if (iframe.contentWindow && Object.keys(globalSpeeds).length > 0) {
+              iframe.contentWindow.postMessage({ type: 'multiPlanSetSpeeds', speeds: globalSpeeds }, '*');
+            }
+          });
+        }
+
+        board.appendChild(column);
+        return column;
+      }
+
+      function resetBoard() {
+        while (board.firstChild) board.removeChild(board.firstChild);
+        slotCounter = 0;
+      }
+
+      function clearBoard() {
+        while (board.firstChild) board.removeChild(board.firstChild);
+        slotCounter = 0;
+      }
+
+      function getGlobalSpeeds() {
+        return {
+          maxGantrySpeed: parseFloat(globalMaxGantrySpeed.value) || null,
+          maxGantryAccelDecel: parseFloat(globalMaxGantryAccelDecel.value) || null,
+          maxMlcSpeed: parseFloat(globalMaxMlcSpeed.value) || null,
+          maxMlcAccelDecel: parseFloat(globalMaxMlcAccelDecel.value) || null,
+          maxCollSpeed: parseFloat(globalMaxCollSpeed.value) || null,
+          maxCollAccelDecel: parseFloat(globalMaxCollAccelDecel.value) || null,
+        };
+      }
+
+      function broadcastSpeeds() {
+        board.querySelectorAll('iframe[data-field="simFrame"]').forEach((iframe) => {
+          if (iframe.contentWindow) {
+            iframe.contentWindow.postMessage({ type: 'multiPlanSetSpeeds', speeds: globalSpeeds }, '*');
+          }
+        });
+      }
+
+      function updateIframeHeight(slot, height) {
+        if (!slot || !height) return;
+        const frame = board.querySelector(`iframe[data-field="simFrame"][data-plan-slot="${slot}"]`);
+        if (frame) {
+          const nextHeight = Math.max(MIN_IFRAME_HEIGHT, Math.min(height, MAX_IFRAME_HEIGHT));
+          frame.style.height = `${nextHeight}px`;
+          frame.style.minHeight = '0px';
+        }
+      }
+
+      function handleFiles(fileList) {
+        if (!fileList || !fileList.length) return;
+        Array.from(fileList).forEach((file) => {
+          const label = file.name || 'Plan';
+          addPlanColumn(label, file);
+        });
+      }
+
+      addBtn?.addEventListener('click', () => addPlanColumn());
+      resetBtn?.addEventListener('click', resetBoard);
+      clearBtn?.addEventListener('click', clearBoard);
+      applyGlobalSpeedsBtn?.addEventListener('click', () => {
+        globalSpeeds = getGlobalSpeeds();
+        broadcastSpeeds();
+      });
+      toggleGlobalNotesBtn?.addEventListener('click', () => {
+        const isHidden = !globalNotes || globalNotes.style.display === 'none' || globalNotes.style.display === '';
+        if (globalNotes) globalNotes.style.display = isHidden ? 'block' : 'none';
+        if (toggleGlobalNotesBtn) toggleGlobalNotesBtn.textContent = isHidden ? 'Hide Instructions' : 'Show Instructions';
+      });
+
+      fileInput?.addEventListener('change', (e) => handleFiles(e.target.files));
+
+      dropZone?.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#0ea5e9';
+      });
+      dropZone?.addEventListener('dragleave', () => {
+        dropZone.style.borderColor = '#94a3b8';
+      });
+      dropZone?.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#94a3b8';
+        handleFiles(e.dataTransfer.files);
+      });
+
+      window.addEventListener('message', (event) => {
+        const data = event.data;
+        if (!data || !data.type) return;
+        if (data.type === 'simHeight') {
+          updateIframeHeight(data.slot, data.height);
+        } else if (data.type === 'sectionHeights' && data.slot) {
+          sectionHeights.set(data.slot, data.planInfoHeight || 0);
+          const maxInfo = Math.max(...Array.from(sectionHeights.values()));
+          const targetInfo = Math.min(maxInfo, PLAN_INFO_CAP);
+          if (targetInfo !== lastMaxPlanInfoHeight) {
+            lastMaxPlanInfoHeight = targetInfo;
+            board.querySelectorAll('iframe[data-field="simFrame"]').forEach((iframe) => {
+              if (iframe.contentWindow) {
+                iframe.contentWindow.postMessage({ type: 'setMinPlanInfoHeight', height: targetInfo }, '*');
+              }
+            });
+          }
+        }
+      });
+
+      window.addPlanColumn = addPlanColumn;
+      window.injectPlanIntoColumn = function (slot, payload = {}) {
+        const column = board.querySelector(`[data-plan-slot="${slot}"]`);
+        if (!column) return null;
+        setPlanMeta(column, {
+          slot,
+          title: payload.title,
+          patientName: payload.patientName,
+          planId: payload.planId,
+          beams: payload.beams,
+          totalMu: payload.totalMu,
+          primaryDose: payload.primaryDose,
+          status: payload.status,
+        });
+        return column;
+      };
+
+      resetBoard();
+    })();
+  </script>
+</body>
+</html>

@@ -1090,6 +1090,14 @@
                         <label for="maxCollimatorAccelDecelInput">Max Collimator Accel/Decel (°/s²):</label>
                         <input type="number" id="maxCollimatorAccelDecelInput" step="0.1">
                     </div>
+                    <div>
+                        <label for="beamStartOverheadMsInput">Beam Start Overhead (ms):</label>
+                        <input type="number" id="beamStartOverheadMsInput" step="1" min="0" value="0">
+                    </div>
+                    <div>
+                        <label for="segmentOverheadMsInput">Per-CP Overhead (ms):</label>
+                        <input type="number" id="segmentOverheadMsInput" step="1" min="0" value="20">
+                    </div>
                     <button id="applySpeedLimitsBtn" class="primary-btn">Apply & Recalculate Simulation</button>
                 </div>
             </div>
@@ -1102,6 +1110,8 @@
                 <p><strong>Total Beams in Plan:</strong> <span id="planTotalBeams">N/A</span></p>
                 <p><strong>Total Plan MU:</strong> <span id="planTotalMU">N/A</span></p>
                 <p><strong>Primary Dose Rate (First Beam, CP0):</strong> <span id="planDoseRate">N/A</span> MU/min</p>
+                <p><strong>Avg Leaf Gap (MU-wt):</strong> <span id="planAvgLeafGap">N/A</span> mm</p>
+                <p><strong>Plan Complexity (Younge et al, MU-wt):</strong> <span id="planEdgeComplexity">N/A</span> 1/mm</p>
                 <p><strong>Est. Total Plan Time (All Beams):</strong> <span id="totalPlanSimTime">N/A</span> s</p>
                 <div id="individualBeamInfoContainer">
                 </div>
@@ -1139,6 +1149,20 @@
                     <div class="radial-plot-container">
                         <h3>Dose Rate</h3>
                         <canvas id="doseRateCanvas" width="220" height="220"></canvas>
+                    </div>
+                    <div class="radial-plot-container">
+                        <div class="tooltip-container">
+                            <h3>Avg Leaf Gap</h3>
+                            <span class="tooltip-text">Aperture average leaf gap (mm), computed as aperture area divided by total open leaf height for each control point.</span>
+                        </div>
+                        <canvas id="leafGapCanvas" width="220" height="220"></canvas>
+                    </div>
+                    <div class="radial-plot-container">
+                        <div class="tooltip-container">
+                            <h3>Plan Complexity</h3>
+                            <span class="tooltip-text">Plan Complexity (Younge et al) per control point: y/A, where y is aperture perimeter excluding MLC leaf ends (leaf-side perimeter only) and A is aperture area.</span>
+                        </div>
+                        <canvas id="edgeComplexityCanvas" width="220" height="220"></canvas>
                     </div>
                     <div class="radial-plot-container">
                         <div class="tooltip-container">
@@ -1418,11 +1442,11 @@
                 MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS: 9.0
             };
             const DEFAULTS_TDS = {
-                MAX_GANTRY_SPEED_DEGPS: 4.8,
-                MAX_MLC_SPEED_CMPS: 2.25,
+                MAX_GANTRY_SPEED_DEGPS: 6.0,
+                MAX_MLC_SPEED_CMPS: 2.5,
                 MAX_COLLIMATOR_SPEED_DEGPS: 9.0,
                 MAX_GANTRY_ACCEL_DECEL_DEGPSS: 4.8,
-                MAX_MLC_ACCEL_DECEL_CMPS2: 2.25,
+                MAX_MLC_ACCEL_DECEL_CMPS2: 2.5,
                 MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS: 9.0
             };
             const COMPONENT_COLORS = {
@@ -1433,6 +1457,8 @@
                 cpDensity: '#4db6ac',
                 miSport: '#e74c3c',
                 localMIt: '#e67e22',
+                leafGap: '#3F51B5',
+                edgeComplexity: '#607D8B',
                 sas: '#E91E63',
                 aav: '#00BCD4',
                 mcs: '#8D6E63'
@@ -1450,6 +1476,9 @@
             const MIT_GAMMA = 0.1;
             const ACCEL_CHECK_FACTOR = 1.05;
             const COLLIMATOR_WEIGHTING_FACTOR = 0.1;
+            // Younge et al plan complexity uses perimeter excluding leaf ends => C1=0 by default.
+            const EDGE_COMPLEXITY_C1 = 0.0; // leaf ends (vertical perimeter) [excluded]
+            const EDGE_COMPLEXITY_C2 = 1.0; // leaf sides (horizontal perimeter) [included]
 
             // --- DICOM PARSING HELPERS ---
             const DICOM_TAG_MAP = {
@@ -1635,6 +1664,8 @@
             const planTotalBeamsSpan = document.getElementById('planTotalBeams');
             const planTotalMUSpan = document.getElementById('planTotalMU');
             const planDoseRateSpan = document.getElementById('planDoseRate');
+            const planAvgLeafGapSpan = document.getElementById('planAvgLeafGap');
+            const planEdgeComplexitySpan = document.getElementById('planEdgeComplexity');
             const totalPlanSimTimeSpan = document.getElementById('totalPlanSimTime');
             const individualBeamInfoContainer = document.getElementById('individualBeamInfoContainer');
 
@@ -1643,6 +1674,8 @@
             const collimatorSpeedCanvasElem = document.getElementById('collimatorSpeedCanvas');
             const cpDensityCanvasElem = document.getElementById('cpDensityCanvas');
             const doseRateCanvasElem = document.getElementById('doseRateCanvas');
+            const leafGapCanvasElem = document.getElementById('leafGapCanvas');
+            const edgeComplexityCanvasElem = document.getElementById('edgeComplexityCanvas');
             const localMItCanvasElem = document.getElementById('localMItCanvas');
             const miCanvasElem = document.getElementById('miCanvas');
             const sasCanvasElem = document.getElementById('sasCanvas');
@@ -1658,6 +1691,8 @@
                 collimatorSpeed: collimatorSpeedCanvasElem,
                 cpDensity: cpDensityCanvasElem,
                 doseRate: doseRateCanvasElem,
+                leafGap: leafGapCanvasElem,
+                edgeComplexity: edgeComplexityCanvasElem,
                 localMIt: localMItCanvasElem,
                 mi: miCanvasElem,
                 sas: sasCanvasElem,
@@ -1671,6 +1706,8 @@
                 collimatorSpeed: collimatorSpeedCanvasElem ? collimatorSpeedCanvasElem.getContext('2d') : null,
                 cpDensity: cpDensityCanvasElem ? cpDensityCanvasElem.getContext('2d') : null,
                 doseRate: doseRateCanvasElem ? doseRateCanvasElem.getContext('2d') : null,
+                leafGap: leafGapCanvasElem ? leafGapCanvasElem.getContext('2d') : null,
+                edgeComplexity: edgeComplexityCanvasElem ? edgeComplexityCanvasElem.getContext('2d') : null,
                 localMIt: localMItCanvasElem ? localMItCanvasElem.getContext('2d') : null,
                 mi: miCanvasElem ? miCanvasElem.getContext('2d') : null,
                 sas: sasCanvasElem ? sasCanvasElem.getContext('2d') : null,
@@ -1751,6 +1788,8 @@
             const maxGantryAccelDecelInput = document.getElementById('maxGantryAccelDecelInput');
             const maxMlcAccelDecelInput = document.getElementById('maxMlcAccelDecelInput');
             const maxCollimatorAccelDecelInput = document.getElementById('maxCollimatorAccelDecelInput');
+            const beamStartOverheadMsInput = document.getElementById('beamStartOverheadMsInput');
+            const segmentOverheadMsInput = document.getElementById('segmentOverheadMsInput');
 
 
             const applySpeedLimitsBtn = document.getElementById('applySpeedLimitsBtn');
@@ -1927,10 +1966,10 @@
             applyBevBackground();
 
 
-            let currentMaxGantrySpeed, currentMaxMlcSpeedMMPS, currentMaxCollimatorSpeed, currentMaxGantryAccelDecel, currentMaxMlcAccelDecelMMPS2, currentMaxCollimatorAccelDecel;
-            let maxGantrySpeedOverall = 0, maxMlcSpeedOverall = 0, maxCollimatorSpeedOverall = 0, maxDoseRateOverall = 0, maxModulationIndexOverall = 0, maxLocalMItFactorOverall = 0, maxCpDensityOverall = 0;
+            let currentMaxGantrySpeed, currentMaxMlcSpeedMMPS, currentMaxCollimatorSpeed, currentMaxGantryAccelDecel, currentMaxMlcAccelDecelMMPS2, currentMaxCollimatorAccelDecel, currentBeamStartOverheadSec, currentSegmentOverheadSec;
+            let maxGantrySpeedOverall = 0, maxMlcSpeedOverall = 0, maxCollimatorSpeedOverall = 0, maxDoseRateOverall = 0, maxModulationIndexOverall = 0, maxLocalMItFactorOverall = 0, maxCpDensityOverall = 0, maxAvgLeafGapOverall = 0, maxEdgeComplexityOverall = 0;
             let miniMetricScales = {};
-            const STAMP_METRIC_KEYS = ['gantrySpeed', 'mlcSpeed', 'collimatorSpeed', 'cpDensity', 'doseRate', 'modulationIndex', 'localMItFactor', 'sasValue', 'aavValue', 'mcsValue_cp'];
+            const STAMP_METRIC_KEYS = ['gantrySpeed', 'mlcSpeed', 'collimatorSpeed', 'cpDensity', 'doseRate', 'avgLeafGap', 'edgeComplexity', 'modulationIndex', 'localMItFactor', 'sasValue', 'aavValue', 'mcsValue_cp'];
 
 
             if (clearAllBtn) { clearAllBtn.addEventListener('click', clearAll); } else { console.error("DEBUG ERROR: clearAllBtn element not found!"); }
@@ -2248,6 +2287,107 @@
                 }
             };
 
+            function normalizeRtStructJson(jsonData) {
+                if (!jsonData) return null;
+                const data = jsonData.rtStructData ? jsonData.rtStructData : jsonData;
+                if (!data || !Array.isArray(data.rois)) return null;
+
+                const rois = data.rois
+                    .map((roi, idx) => {
+                        if (!roi) return null;
+                        const roiNumber = Number.isFinite(roi.roiNumber) ? roi.roiNumber : (idx + 1);
+                        const name = roi.name || roi.roiName || roi.ROIName || `ROI ${roiNumber}`;
+                        const contours = Array.isArray(roi.contours) ? roi.contours : [];
+                        const frameOfReferenceUID = roi.frameOfReferenceUID || data.frameOfReferenceUID || '';
+                        const displayColor = Array.isArray(roi.displayColor) ? roi.displayColor.slice(0, 3) : null;
+                        return { ...roi, roiNumber, name, contours, frameOfReferenceUID, displayColor };
+                    })
+                    .filter(Boolean)
+                    .filter(roi => Array.isArray(roi.contours) && roi.contours.length > 0);
+
+                const frameOfReferenceUID = data.frameOfReferenceUID || '';
+                const frameOfReferenceUIDs = Array.isArray(data.frameOfReferenceUIDs) && data.frameOfReferenceUIDs.length
+                    ? data.frameOfReferenceUIDs
+                    : Array.from(new Set(rois.map(r => r.frameOfReferenceUID).filter(Boolean)));
+
+                return {
+                    sopClassUID: data.sopClassUID || '1.2.840.10008.5.1.4.1.1.481.3',
+                    frameOfReferenceUID,
+                    frameOfReferenceUIDs,
+                    rois,
+                    frameOfReferenceOrigin: Array.isArray(data.frameOfReferenceOrigin) ? data.frameOfReferenceOrigin : [0, 0, 0]
+                };
+            }
+
+            function processStructData(jsonData, sourceInfo) {
+                const normalized = normalizeRtStructJson(jsonData);
+                if (!normalized || !normalized.rois || normalized.rois.length === 0) {
+                    showMessageModal("RTSTRUCT Loading Error", "No valid structures/contours were found in the provided RS data.");
+                    return;
+                }
+
+                rtStructData = normalized;
+                updateStructureSpacingFromStruct(rtStructData);
+                setDefaultStructureVisibility(rtStructData.rois);
+                showStructures = true;
+                if (showStructuresToggle) {
+                    showStructuresToggle.checked = true;
+                    showStructuresToggle.disabled = false;
+                }
+                renderStructureList();
+                buildStructureGeometry();
+                redrawBev();
+
+                if (sourceInfo) {
+                    console.log("DEBUG: RS loaded from:", sourceInfo);
+                }
+            }
+
+            function loadStructFromFile(structFilePath) {
+                console.log("DEBUG: Attempting to load struct file:", structFilePath);
+                const fileUrl = 'file:///' + structFilePath.replace(/\\/g, '/');
+                fetch(fileUrl)
+                    .then(resp => {
+                        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                        return resp.text();
+                    })
+                    .then(text => {
+                        const json = JSON.parse(text);
+                        processStructData(json, structFilePath);
+                    })
+                    .catch(err => {
+                        console.error("DEBUG ERROR: Failed to load struct file:", err);
+                        showMessageModal("RTSTRUCT Loading Error",
+                            `Automatic RS loading failed due to browser restrictions.\n\n` +
+                            `You can still load an RTSTRUCT DICOM (.dcm) manually in the simulator.\n\n` +
+                            `Debug file path (JSON export):\n${structFilePath || 'N/A'}`);
+                    });
+            }
+
+            window.loadEclipseStruct = function (params) {
+                console.log("DEBUG: loadEclipseStruct called with params:", params);
+                if (!params || params.mode !== 'eclipse') return;
+
+                if (params.structData) {
+                    setTimeout(() => {
+                        try {
+                            const jsonText = params.structDataIsBase64 ? atob(params.structData) : params.structData;
+                            const jsonData = JSON.parse(jsonText);
+                            processStructData(jsonData, params.structFile);
+                        } catch (error) {
+                            console.error("DEBUG ERROR: Error parsing embedded RS data:", error);
+                            if (params.structFile) {
+                                loadStructFromFile(params.structFile);
+                            } else {
+                                showMessageModal("RTSTRUCT Loading Error", `Error parsing RS data: ${error.message}`);
+                            }
+                        }
+                    }, 150);
+                } else if (params.structFile) {
+                    loadStructFromFile(params.structFile);
+                }
+            };
+
             function checkAndLoadPlanFromEclipse() {
                 console.log("DEBUG: Checking for eclipse-launch-params.js file...");
                 const script = document.createElement('script');
@@ -2299,12 +2439,18 @@
                 reader.onload = function (e) {
                     try {
                         const jsonData = JSON.parse(e.target.result);
-                        ingestPlanWrapper(jsonData, {
-                            successTitle: "JSON Plan Loaded",
-                            successMessage: "Plan data successfully loaded from JSON file.",
-                            errorTitle: "JSON Format Error",
-                            errorMessage: "The provided JSON file does not have the expected 'parsedDicomPlan' structure."
-                        });
+                        if (jsonData && jsonData.parsedDicomPlan) {
+                            ingestPlanWrapper(jsonData, {
+                                successTitle: "JSON Plan Loaded",
+                                successMessage: "Plan data successfully loaded from JSON file.",
+                                errorTitle: "JSON Format Error",
+                                errorMessage: "The provided JSON file does not have the expected 'parsedDicomPlan' structure."
+                            });
+                        } else if (jsonData && (Array.isArray(jsonData.rois) || (jsonData.rtStructData && Array.isArray(jsonData.rtStructData.rois)))) {
+                            processStructData(jsonData, file.name);
+                        } else {
+                            showMessageModal("JSON Format Error", "Unrecognized JSON format. Expected a plan ('parsedDicomPlan') or structures ('rois').");
+                        }
                     } catch (error) {
                         console.error("DEBUG ERROR: Error parsing JSON file:", error);
                         showMessageModal("JSON Parsing Error", `Error parsing JSON file: ${error.message}.`);
@@ -2690,6 +2836,43 @@
                 return rtPlan;
             }
 
+            function computeBeamApertureSummaryMetricsFromControlPoints(beam) {
+                if (!beam || !Array.isArray(beam.controlPoints) || beam.controlPoints.length < 2) {
+                    return { avgLeafGap: 0, edgeComplexity: 0 };
+                }
+
+                const controlPoints = beam.controlPoints;
+                let sumGap = 0;
+                let sumCx = 0;
+                let sumWt = 0;
+
+                for (let i = 0; i < controlPoints.length - 1; i++) {
+                    const cp = controlPoints[i];
+                    const next = controlPoints[i + 1];
+                    if (!cp || !next) continue;
+                    const muWtSegment = (next.cumulativeMetersetWeight - cp.cumulativeMetersetWeight) || 0;
+                    if (muWtSegment <= 0) continue;
+
+                    const eff = getEffectiveMLCPositionsForCP(cp, beam);
+                    if (!eff || eff.length === 0) continue;
+
+                    const avgGap = calculateAverageLeafGap(eff, beam);
+                    const area = calculateApertureArea(eff, beam);
+                    const { leafEndPerimeter, leafSidePerimeter } = calculateApertureEdgePerimeters(eff, beam);
+                    const edgeCx = area > 1e-6
+                        ? ((EDGE_COMPLEXITY_C2 * leafSidePerimeter) / area) // Younge et al: leaf-side perimeter only (exclude leaf ends)
+                        : 0;
+
+                    sumGap += avgGap * muWtSegment;
+                    sumCx += edgeCx * muWtSegment;
+                    sumWt += muWtSegment;
+                }
+
+                return sumWt > 0
+                    ? { avgLeafGap: sumGap / sumWt, edgeComplexity: sumCx / sumWt }
+                    : { avgLeafGap: 0, edgeComplexity: 0 };
+            }
+
             function updateOverallPlanInfoDisplay(planData) {
                 if (planData) {
                     planPatientNameSpan.textContent = planData.patientName || 'N/A';
@@ -2701,15 +2884,38 @@
                     totalPlanSimTimeSpan.textContent = 'N/A';
 
                     if (planData.beams) {
+                        let planSumGap = 0;
+                        let planSumCx = 0;
+                        let planSumMu = 0;
                         planData.beams.forEach(beam => {
                             beam.mcsValue = calculateMCSForScope(beam, COLLIMATOR_WEIGHTING_FACTOR);
+                            const { avgLeafGap, edgeComplexity } = computeBeamApertureSummaryMetricsFromControlPoints(beam);
+                            beam.avgLeafGap = avgLeafGap;
+                            beam.edgeComplexity = edgeComplexity;
+                            const beamMu = beam.totalMeterset || 0;
+                            if (beamMu > 0) {
+                                planSumGap += avgLeafGap * beamMu;
+                                planSumCx += edgeComplexity * beamMu;
+                                planSumMu += beamMu;
+                            }
                         });
+
+                        planData.avgLeafGap = planSumMu > 0 ? (planSumGap / planSumMu) : 0;
+                        planData.edgeComplexity = planSumMu > 0 ? (planSumCx / planSumMu) : 0;
                     }
 
+                    if (planAvgLeafGapSpan) {
+                        planAvgLeafGapSpan.textContent = (typeof planData.avgLeafGap === 'number') ? planData.avgLeafGap.toFixed(2) : 'N/A';
+                    }
+                    if (planEdgeComplexitySpan) {
+                        planEdgeComplexitySpan.textContent = (typeof planData.edgeComplexity === 'number') ? planData.edgeComplexity.toFixed(4) : 'N/A';
+                    }
                     displayIndividualBeamInfoWithMCS(planData.beams);
                     if (overallPlanInfoContainer) overallPlanInfoContainer.style.display = 'block';
                 } else {
                     planPatientNameSpan.textContent = 'N/A'; planPatientIDSpan.textContent = 'N/A'; planLabelSpan.textContent = 'N/A'; planTotalBeamsSpan.textContent = 'N/A'; planTotalMUSpan.textContent = 'N/A'; planDoseRateSpan.textContent = 'N/A'; totalPlanSimTimeSpan.textContent = 'N/A';
+                    if (planAvgLeafGapSpan) planAvgLeafGapSpan.textContent = 'N/A';
+                    if (planEdgeComplexitySpan) planEdgeComplexitySpan.textContent = 'N/A';
                     individualBeamInfoContainer.innerHTML = '';
                     if (overallPlanInfoContainer) overallPlanInfoContainer.style.display = 'none';
                 }
@@ -2721,8 +2927,10 @@
                 if (beams && beams.length > 0) {
                     beams.forEach(beam => {
                         const mcsText = (typeof beam.mcsValue === 'number') ? beam.mcsValue.toFixed(3) : 'N/A';
+                        const gapText = (typeof beam.avgLeafGap === 'number') ? beam.avgLeafGap.toFixed(2) : 'N/A';
+                        const edgeCxText = (typeof beam.edgeComplexity === 'number') ? beam.edgeComplexity.toFixed(4) : 'N/A';
                         const li = document.createElement('li');
-                        li.innerHTML = `<strong>${beam.beamName || 'Beam ' + beam.beamNumber}:</strong> ${beam.totalMeterset.toFixed(2)} MU, ${beam.controlPoints.length} CPs, Overall MCSv (coll-adj): ${mcsText}`;
+                        li.innerHTML = `<strong>${beam.beamName || 'Beam ' + beam.beamNumber}:</strong> ${beam.totalMeterset.toFixed(2)} MU, ${beam.controlPoints.length} CPs, MCSv (coll-adj): ${mcsText}, Avg Gap: ${gapText} mm, Plan Cx (Younge): ${edgeCxText} 1/mm`;
                         ul.appendChild(li);
                     });
                 }
@@ -2751,6 +2959,8 @@
                 maxGantryAccelDecelInput.value = defaultsToUse.MAX_GANTRY_ACCEL_DECEL_DEGPSS;
                 maxMlcAccelDecelInput.value = defaultsToUse.MAX_MLC_ACCEL_DECEL_CMPS2;
                 maxCollimatorAccelDecelInput.value = defaultsToUse.MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS;
+                if (beamStartOverheadMsInput) beamStartOverheadMsInput.value = 0;
+                if (segmentOverheadMsInput) segmentOverheadMsInput.value = 20;
 
                 updateCurrentSpeedLimits();
             }
@@ -2855,7 +3065,9 @@
                 if (cpTrack) cpTrack.innerHTML = '';
 
                 maxGantrySpeedOverall = 0; maxMlcSpeedOverall = 0; maxCollimatorSpeedOverall = 0; maxDoseRateOverall = 0;
+                maxCpDensityOverall = 0; maxAvgLeafGapOverall = 0; maxEdgeComplexityOverall = 0;
                 maxLocalMItFactorOverall = 0.0; maxModulationIndexOverall = 0;
+                window.maxSasOverall = 0; window.maxAavOverall = 0; window.maxMcsOverall = 0;
 
                 updateParamDisplay();
             }
@@ -2868,6 +3080,8 @@
                 currentMaxGantryAccelDecel = parseFloat(maxGantryAccelDecelInput.value) || defaults.MAX_GANTRY_ACCEL_DECEL_DEGPSS;
                 currentMaxMlcAccelDecelMMPS2 = (parseFloat(maxMlcAccelDecelInput.value) || defaults.MAX_MLC_ACCEL_DECEL_CMPS2) * 10;
                 currentMaxCollimatorAccelDecel = parseFloat(maxCollimatorAccelDecelInput.value) || defaults.MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS;
+                currentBeamStartOverheadSec = ((parseFloat(beamStartOverheadMsInput?.value) || 0) / 1000.0);
+                currentSegmentOverheadSec = ((parseFloat(segmentOverheadMsInput?.value) || 0) / 1000.0);
             }
 
             applySpeedLimitsBtn.addEventListener('click', () => {
@@ -2916,19 +3130,84 @@
                 }
             }
 
+            function calculateContinuousMoveTimesForDistances(distances, vmax, amax) {
+                if (!distances || distances.length === 0) return [];
+                if (!isFinite(vmax) || vmax <= 0) return distances.map(() => Infinity);
+                if (!isFinite(amax) || amax <= 0) return distances.map(d => Math.max(0, d) / vmax);
+
+                const n = distances.length;
+                const v = new Array(n + 1).fill(0);
+
+                for (let i = 0; i < n; i++) {
+                    const d = Math.max(0, distances[i]);
+                    const vNextMax = Math.sqrt((v[i] * v[i]) + (2 * amax * d));
+                    v[i + 1] = Math.min(vmax, vNextMax);
+                }
+
+                v[n] = 0;
+                for (let i = n - 1; i >= 0; i--) {
+                    const d = Math.max(0, distances[i]);
+                    const vMaxFromNext = Math.sqrt((v[i + 1] * v[i + 1]) + (2 * amax * d));
+                    v[i] = Math.min(v[i], vMaxFromNext);
+                }
+
+                for (let iter = 0; iter < 2; iter++) {
+                    for (let i = 0; i < n; i++) {
+                        const d = Math.max(0, distances[i]);
+                        const vNextMax = Math.sqrt((v[i] * v[i]) + (2 * amax * d));
+                        v[i + 1] = Math.min(v[i + 1], vmax, vNextMax);
+                    }
+                    v[n] = 0;
+                    for (let i = n - 1; i >= 0; i--) {
+                        const d = Math.max(0, distances[i]);
+                        const vMaxFromNext = Math.sqrt((v[i + 1] * v[i + 1]) + (2 * amax * d));
+                        v[i] = Math.min(v[i], vMaxFromNext);
+                    }
+                }
+
+                const t = new Array(n);
+                for (let i = 0; i < n; i++) {
+                    const d = Math.max(0, distances[i]);
+                    const denom = v[i] + v[i + 1];
+                    t[i] = (denom > 1e-9) ? (2 * d / denom) : 0;
+                }
+                return t;
+            }
+
             function calculateSegmentTimes(beamData, controlPoints, dataToProcess, primaryDoseRate) {
                 if (!beamData || !controlPoints || controlPoints.length < 2) return 0;
 
-                const MAX_GANTRY_SPEED = currentMaxGantrySpeed || DEFAULTS_RDS.MAX_GANTRY_SPEED_DEGPS;
-                const MAX_MLC_SPEED_MMPS = currentMaxMlcSpeedMMPS || (DEFAULTS_RDS.MAX_MLC_SPEED_CMPS * 10);
-                const MAX_COLL_SPEED = currentMaxCollimatorSpeed || DEFAULTS_RDS.MAX_COLLIMATOR_SPEED_DEGPS;
+                const defaults = beamData.isRDSMachine ? DEFAULTS_RDS : DEFAULTS_TDS;
+
+                const MAX_GANTRY_SPEED = currentMaxGantrySpeed || defaults.MAX_GANTRY_SPEED_DEGPS;
+                const MAX_MLC_SPEED_MMPS = currentMaxMlcSpeedMMPS || (defaults.MAX_MLC_SPEED_CMPS * 10);
+                const MAX_COLL_SPEED = currentMaxCollimatorSpeed || defaults.MAX_COLLIMATOR_SPEED_DEGPS;
+                const MAX_GANTRY_ACCEL = currentMaxGantryAccelDecel || defaults.MAX_GANTRY_ACCEL_DECEL_DEGPSS;
+                const MAX_MLC_ACCEL_MMPS2 = currentMaxMlcAccelDecelMMPS2 || (defaults.MAX_MLC_ACCEL_DECEL_CMPS2 * 10);
+                const MAX_COLL_ACCEL = currentMaxCollimatorAccelDecel || defaults.MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS;
                 const MAX_DOSE_RATE = primaryDoseRate || 600.0;
                 const MAX_DOSE_RATE_PER_SEC = MAX_DOSE_RATE / 60.0;
 
-                let totalBeamSimTime = 0;
+                const BEAM_START_OVERHEAD_SEC = currentBeamStartOverheadSec || 0;
+                const SEGMENT_OVERHEAD_SEC = currentSegmentOverheadSec || 0;
+
+                let totalBeamSimTime = BEAM_START_OVERHEAD_SEC;
+
+                const numSegments = controlPoints.length - 1;
+                const segmentDeltaG = new Array(numSegments).fill(0);
+                const segmentDeltaColl = new Array(numSegments).fill(0);
+                const segmentMaxLeafTravel = new Array(numSegments).fill(0);
+                const segmentDoseRateSet = new Array(numSegments).fill(MAX_DOSE_RATE);
+
+                let leafDistances = null;
+                const eff0 = getEffectiveMLCPositionsForCP(controlPoints[0], beamData);
+                if (eff0 && eff0.length > 0) {
+                    leafDistances = new Array(eff0.length);
+                    for (let k = 0; k < eff0.length; k++) leafDistances[k] = new Float32Array(numSegments);
+                }
 
                 if (!dataToProcess[0]) dataToProcess[0] = { cp: controlPoints[0] };
-                dataToProcess[0].cumulativeSimTime = 0;
+                dataToProcess[0].cumulativeSimTime = totalBeamSimTime;
                 dataToProcess[0].segmentDuration = 0;
 
                 for (let i = 1; i < controlPoints.length; i++) {
@@ -2940,36 +3219,77 @@
                     let deltaCollAngle = Math.abs(currentCP.collimatorAngle - prevCP.collimatorAngle);
                     if (deltaCollAngle > 180) deltaCollAngle = 360 - deltaCollAngle;
 
-                    const dMU_WEIGHT = currentCP.cumulativeMetersetWeight - prevCP.cumulativeMetersetWeight;
-                    let deltaDose = (dMU_WEIGHT > 1e-6) ? beamData.totalMeterset * dMU_WEIGHT : 0;
-
                     let maxLeafTravel = 0;
                     if (beamData.mlcDefinitions && currentCP.mlcPositionData && prevCP.mlcPositionData) {
                         const prevEffective = getEffectiveMLCPositionsForCP(prevCP, beamData);
                         const currentEffective = getEffectiveMLCPositionsForCP(currentCP, beamData);
 
                         if (prevEffective && currentEffective && prevEffective.length === currentEffective.length) {
-                            for (let l = 0; l < currentEffective.length; l++) {
-                                maxLeafTravel = Math.max(maxLeafTravel, Math.abs(currentEffective[l] - prevEffective[l]));
+                            if (leafDistances && leafDistances.length === currentEffective.length) {
+                                for (let l = 0; l < currentEffective.length; l++) {
+                                    const d = Math.abs(currentEffective[l] - prevEffective[l]);
+                                    leafDistances[l][segmentIndex] = d;
+                                    if (d > maxLeafTravel) maxLeafTravel = d;
+                                }
+                            } else {
+                                for (let l = 0; l < currentEffective.length; l++) {
+                                    maxLeafTravel = Math.max(maxLeafTravel, Math.abs(currentEffective[l] - prevEffective[l]));
+                                }
                             }
+                        } else {
+                            leafDistances = null;
                         }
                     }
 
                     if (isNaN(deltaGantryAngle)) deltaGantryAngle = 0;
                     if (isNaN(deltaCollAngle)) deltaCollAngle = 0;
                     if (isNaN(maxLeafTravel)) maxLeafTravel = 0;
+
+                    segmentDeltaG[segmentIndex] = deltaGantryAngle;
+                    segmentDeltaColl[segmentIndex] = deltaCollAngle;
+                    segmentMaxLeafTravel[segmentIndex] = maxLeafTravel;
+                    const drSet = (Number(currentCP.doseRateSet) || Number(prevCP.doseRateSet) || MAX_DOSE_RATE);
+                    segmentDoseRateSet[segmentIndex] = drSet;
+                }
+
+                const gantryMinTimes = calculateContinuousMoveTimesForDistances(segmentDeltaG, MAX_GANTRY_SPEED, MAX_GANTRY_ACCEL);
+                const collMinTimes = calculateContinuousMoveTimesForDistances(segmentDeltaColl, MAX_COLL_SPEED, MAX_COLL_ACCEL);
+                let mlcMinTimes;
+                if (leafDistances && leafDistances.length > 0) {
+                    mlcMinTimes = new Array(numSegments).fill(0);
+                    for (let l = 0; l < leafDistances.length; l++) {
+                        const tLeaf = calculateContinuousMoveTimesForDistances(leafDistances[l], MAX_MLC_SPEED_MMPS, MAX_MLC_ACCEL_MMPS2);
+                        for (let si = 0; si < numSegments; si++) mlcMinTimes[si] = Math.max(mlcMinTimes[si], tLeaf[si] || 0);
+                    }
+                } else {
+                    mlcMinTimes = calculateContinuousMoveTimesForDistances(segmentMaxLeafTravel, MAX_MLC_SPEED_MMPS, MAX_MLC_ACCEL_MMPS2);
+                }
+
+                for (let i = 1; i < controlPoints.length; i++) {
+                    const prevCP = controlPoints[i - 1];
+                    const currentCP = controlPoints[i];
+                    const segmentIndex = i - 1;
+
+                    const deltaGantryAngle = segmentDeltaG[segmentIndex] || 0;
+                    const deltaCollAngle = segmentDeltaColl[segmentIndex] || 0;
+                    const maxLeafTravel = segmentMaxLeafTravel[segmentIndex] || 0;
+
+                    const dMU_WEIGHT = currentCP.cumulativeMetersetWeight - prevCP.cumulativeMetersetWeight;
+                    let deltaDose = (dMU_WEIGHT > 1e-6) ? beamData.totalMeterset * dMU_WEIGHT : 0;
                     if (isNaN(deltaDose)) deltaDose = 0;
 
-                    const timeGantry = (MAX_GANTRY_SPEED > 1e-6) ? deltaGantryAngle / MAX_GANTRY_SPEED : 0;
-                    const timeMlc = (MAX_MLC_SPEED_MMPS > 1e-6) ? maxLeafTravel / MAX_MLC_SPEED_MMPS : 0;
-                    const timeColl = (MAX_COLL_SPEED > 1e-6) ? deltaCollAngle / MAX_COLL_SPEED : 0;
-                    const timeDose = (MAX_DOSE_RATE_PER_SEC > 1e-6) ? deltaDose / MAX_DOSE_RATE_PER_SEC : 0;
+                    const timeGantry = gantryMinTimes[segmentIndex] || 0;
+                    const timeMlc = mlcMinTimes[segmentIndex] || 0;
+                    const timeColl = collMinTimes[segmentIndex] || 0;
+                    const maxDrPerSec = (Number(segmentDoseRateSet[segmentIndex]) || 0) / 60.0;
+                    const timeDose = (maxDrPerSec > 1e-6) ? deltaDose / maxDrPerSec : 0;
 
-                    const segmentDuration = Math.max(timeGantry, timeMlc, timeColl, timeDose);
+                    const baseSegmentDuration = Math.max(timeGantry, timeMlc, timeColl, timeDose);
+                    const segmentDuration = baseSegmentDuration + SEGMENT_OVERHEAD_SEC;
                     totalBeamSimTime += segmentDuration;
 
                     let limitingComponent = 'None';
-                    if (segmentDuration > 1e-9) {
+                    if (baseSegmentDuration > 1e-9) {
                         const times = { Gantry: timeGantry, MLC: timeMlc, Collimator: timeColl, 'Dose Rate': timeDose };
                         limitingComponent = Object.keys(times).reduce((a, b) => times[a] >= times[b] ? a : b);
                     }
@@ -2981,9 +3301,10 @@
                     dataToProcess[segmentIndex].maxLeafTravel = maxLeafTravel;
                     dataToProcess[segmentIndex].limitingComponent = limitingComponent;
 
-                    const avgGantrySpeed = (segmentDuration > 1e-9) ? deltaGantryAngle / segmentDuration : 0;
-                    const avgMlcSpeed = (segmentDuration > 1e-9) ? maxLeafTravel / segmentDuration : 0;
-                    const avgCollSpeed = (segmentDuration > 1e-9) ? deltaCollAngle / segmentDuration : 0;
+                    const motionDuration = Math.max(1e-9, segmentDuration - SEGMENT_OVERHEAD_SEC);
+                    const avgGantrySpeed = (motionDuration > 1e-9) ? deltaGantryAngle / motionDuration : 0;
+                    const avgMlcSpeed = (motionDuration > 1e-9) ? maxLeafTravel / motionDuration : 0;
+                    const avgCollSpeed = (motionDuration > 1e-9) ? deltaCollAngle / motionDuration : 0;
                     const avgDoseRate = (segmentDuration > 1e-9) ? (deltaDose / segmentDuration) * 60 : 0;
 
                     dataToProcess[segmentIndex].gantryCapability = MAX_GANTRY_SPEED > 0 ? (avgGantrySpeed / MAX_GANTRY_SPEED) * 100 : 0;
@@ -3316,6 +3637,97 @@
                 return totalArea;
             }
 
+            function getVirtualLeafBoundariesForEffectivePositions(beamData, numLeafPairs) {
+                if (!beamData || !beamData.mlcDefinitions || beamData.mlcDefinitions.length === 0) return null;
+
+                let virtualBoundaries = null;
+                if (beamData.isRDSMachine && beamData.mlcDefinitions.length >= 2) {
+                    const layer1Def = beamData.mlcDefinitions.find(def => def.type === 'MLCX1');
+                    const layer2Def = beamData.mlcDefinitions.find(def => def.type === 'MLCX2');
+                    if (layer1Def && layer2Def) {
+                        virtualBoundaries = Array.from(new Set([...layer1Def.boundaries, ...layer2Def.boundaries])).sort((a, b) => a - b);
+                    } else {
+                        virtualBoundaries = beamData.mlcDefinitions[0].boundaries;
+                    }
+                } else {
+                    virtualBoundaries = beamData.mlcDefinitions[0].boundaries;
+                }
+
+                if (!Array.isArray(virtualBoundaries) || virtualBoundaries.length !== numLeafPairs + 1) return null;
+                return virtualBoundaries;
+            }
+
+            function calculateAverageLeafGap(effectiveMlcPositions, beamData) {
+                if (!effectiveMlcPositions || effectiveMlcPositions.length === 0) return 0;
+                const numLeafPairs = effectiveMlcPositions.length / 2;
+                if (!Number.isFinite(numLeafPairs) || numLeafPairs < 1) return 0;
+
+                const virtualBoundaries = getVirtualLeafBoundariesForEffectivePositions(beamData, numLeafPairs);
+                if (!virtualBoundaries) return 0;
+
+                let openHeight = 0;
+                let area = 0;
+                for (let i = 0; i < numLeafPairs; i++) {
+                    const w = virtualBoundaries[i + 1] - virtualBoundaries[i];
+                    const opening = effectiveMlcPositions[i + numLeafPairs] - effectiveMlcPositions[i];
+                    if (opening > 0 && w > 0) {
+                        openHeight += w;
+                        area += w * opening;
+                    }
+                }
+                return openHeight > 1e-9 ? (area / openHeight) : 0;
+            }
+
+            function calculateApertureEdgePerimeters(effectiveMlcPositions, beamData) {
+                if (!effectiveMlcPositions || effectiveMlcPositions.length === 0) return { leafEndPerimeter: 0, leafSidePerimeter: 0 };
+                const numLeafPairs = effectiveMlcPositions.length / 2;
+                if (!Number.isFinite(numLeafPairs) || numLeafPairs < 1) return { leafEndPerimeter: 0, leafSidePerimeter: 0 };
+
+                const virtualBoundaries = getVirtualLeafBoundariesForEffectivePositions(beamData, numLeafPairs);
+                if (!virtualBoundaries) return { leafEndPerimeter: 0, leafSidePerimeter: 0 };
+
+                const intervals = new Array(numLeafPairs);
+                let openHeight = 0;
+                for (let i = 0; i < numLeafPairs; i++) {
+                    const a = effectiveMlcPositions[i];
+                    const b = effectiveMlcPositions[i + numLeafPairs];
+                    const opening = b - a;
+                    if (opening > 0) {
+                        intervals[i] = { a, b, len: opening };
+                        const w = virtualBoundaries[i + 1] - virtualBoundaries[i];
+                        if (w > 0) openHeight += w;
+                    } else {
+                        intervals[i] = null;
+                    }
+                }
+
+                const leafEndPerimeter = 2 * openHeight;
+
+                const intervalLen = (iv) => iv ? Math.max(0, iv.len || (iv.b - iv.a)) : 0;
+                const overlapLen = (iv1, iv2) => {
+                    if (!iv1 || !iv2) return 0;
+                    const left = Math.max(iv1.a, iv2.a);
+                    const right = Math.min(iv1.b, iv2.b);
+                    return Math.max(0, right - left);
+                };
+                const symmetricDiffLen = (iv1, iv2) => {
+                    const l1 = intervalLen(iv1);
+                    const l2 = intervalLen(iv2);
+                    if (l1 <= 0 && l2 <= 0) return 0;
+                    const ov = overlapLen(iv1, iv2);
+                    return Math.max(0, l1 + l2 - 2 * ov);
+                };
+
+                let leafSidePerimeter = 0;
+                if (intervals[0]) leafSidePerimeter += intervalLen(intervals[0]); // bottom edge
+                if (intervals[numLeafPairs - 1]) leafSidePerimeter += intervalLen(intervals[numLeafPairs - 1]); // top edge
+                for (let i = 0; i < numLeafPairs - 1; i++) {
+                    leafSidePerimeter += symmetricDiffLen(intervals[i], intervals[i + 1]);
+                }
+
+                return { leafEndPerimeter, leafSidePerimeter };
+            }
+
             function calculateInterBeamTime(beam1, beam2) {
                 if (!beam1 || !beam2 || !beam1.controlPoints || beam1.controlPoints.length === 0 || !beam2.controlPoints || beam2.controlPoints.length === 0) {
                     return { timeGantry: 0, timeColl: 0, timeMlc: 0, totalTime: 0 };
@@ -3360,9 +3772,7 @@
                 let totalPlanTime = 0;
                 allBeamsProcessedData = [];
 
-                currentMaxGantrySpeed = parseFloat(maxGantrySpeedInput.value) || DEFAULTS_RDS.MAX_GANTRY_SPEED_DEGPS;
-                currentMaxMlcSpeedMMPS = (parseFloat(maxMlcSpeedInput.value) || DEFAULTS_RDS.MAX_MLC_SPEED_CMPS) * 10;
-                currentMaxCollimatorSpeed = parseFloat(maxCollimatorSpeedInput.value) || DEFAULTS_RDS.MAX_COLLIMATOR_SPEED_DEGPS;
+                updateCurrentSpeedLimits();
 
                 const planPrimaryDoseRate = (typeof rtPlanData.primaryDoseRate === 'number') ? rtPlanData.primaryDoseRate : 600.0;
 
@@ -4775,8 +5185,16 @@
 
                 data.forEach((pd_item, idx) => {
                     const mlcPos_i_effective = getEffectiveMLCPositionsForCP(pd_item.cp, beam);
-                    pd_item.sasValue = mlcPos_i_effective ? 1 - (calculateApertureArea(mlcPos_i_effective, beam) / A_max_plan) : 0;
+                    const area = mlcPos_i_effective ? calculateApertureArea(mlcPos_i_effective, beam) : 0;
+                    pd_item.sasValue = mlcPos_i_effective ? 1 - (area / A_max_plan) : 0;
                     pd_item.aavValue = mlcPos_i_effective ? calculateAAVAtCP(mlcPos_i_effective, allEffectiveCPsMlcDataForBeam) : 0;
+                    pd_item.avgLeafGap = mlcPos_i_effective ? calculateAverageLeafGap(mlcPos_i_effective, beam) : 0;
+                    const { leafEndPerimeter, leafSidePerimeter } = mlcPos_i_effective ? calculateApertureEdgePerimeters(mlcPos_i_effective, beam) : { leafEndPerimeter: 0, leafSidePerimeter: 0 };
+                    pd_item.leafEndPerimeter = leafEndPerimeter;
+                    pd_item.leafSidePerimeter = leafSidePerimeter;
+                    pd_item.edgeComplexity = area > 1e-6
+                        ? ((EDGE_COMPLEXITY_C2 * leafSidePerimeter) / area) // Younge et al: leaf-side perimeter only (exclude leaf ends)
+                        : 0;
                     pd_item.modulationIndex = calculateModulationIndex(beam, idx, K_3_PERCENT);
                     pd_item.cpDensity = calculateCpDensity(controlPoints, idx, DENSITY_WINDOW_DEGREES);
                     pd_item.mcsValue_cp = calculateLocalMCSvForCP(beam, data, idx, K_3_PERCENT, allEffectiveCPsMlcDataForBeam, COLLIMATOR_WEIGHTING_FACTOR);
@@ -4784,7 +5202,7 @@
 
                 const totalMuWeight = numControlPoints > 0 ? controlPoints[numControlPoints - 1].cumulativeMetersetWeight : 0;
                 if (totalMuWeight > 0) {
-                    let sasSum = 0, aavSum = 0;
+                    let sasSum = 0, aavSum = 0, gapSum = 0, edgeCxSum = 0;
                     for (let i = 0; i < numControlPoints - 1; i++) {
                         const muWtSegment = controlPoints[i + 1].cumulativeMetersetWeight - controlPoints[i].cumulativeMetersetWeight;
                         if (muWtSegment > 0) {
@@ -4794,13 +5212,23 @@
                             if (data[i] && data[i].aavValue !== undefined) {
                                 aavSum += data[i].aavValue * muWtSegment;
                             }
+                            if (data[i] && data[i].avgLeafGap !== undefined) {
+                                gapSum += data[i].avgLeafGap * muWtSegment;
+                            }
+                            if (data[i] && data[i].edgeComplexity !== undefined) {
+                                edgeCxSum += data[i].edgeComplexity * muWtSegment;
+                            }
                         }
                     }
                     beam.sasScore = sasSum / totalMuWeight;
                     beam.aavScore = aavSum / totalMuWeight;
+                    beam.avgLeafGap = gapSum / totalMuWeight;
+                    beam.edgeComplexity = edgeCxSum / totalMuWeight;
                 } else {
                     beam.sasScore = 0;
                     beam.aavScore = 0;
+                    beam.avgLeafGap = 0;
+                    beam.edgeComplexity = 0;
                 }
 
                 data.forEach((pd_item, index) => {
@@ -4861,6 +5289,8 @@
                 maxCollimatorSpeedOverall = Math.max(0.01, ...data.map(d => d.collimatorSpeed));
                 maxDoseRateOverall = Math.max(0.01, ...data.map(d => d.doseRate));
                 maxCpDensityOverall = Math.max(0.01, ...data.map(d => d.cpDensity));
+                maxAvgLeafGapOverall = Math.max(0.01, ...data.map(d => d.avgLeafGap || 0));
+                maxEdgeComplexityOverall = Math.max(0.01, ...data.map(d => d.edgeComplexity || 0));
                 maxModulationIndexOverall = Math.max(0.01, ...data.map(d => d.modulationIndex));
                 maxLocalMItFactorOverall = Math.max(0.01, ...data.map(d => d.localMItFactor));
                 window.maxSasOverall = Math.max(0.01, ...data.map(d => d.sasValue));
@@ -6000,6 +6430,8 @@
                     case 'doseRate': plotColor = COMPONENT_COLORS.doseRate; break;
                     case 'modulationIndex': plotColor = COMPONENT_COLORS.miSport; break;
                     case 'localMItFactor': plotColor = COMPONENT_COLORS.localMIt; break;
+                    case 'avgLeafGap': plotColor = COMPONENT_COLORS.leafGap; break;
+                    case 'edgeComplexity': plotColor = COMPONENT_COLORS.edgeComplexity; break;
                     case 'sasValue': plotColor = COMPONENT_COLORS.sas; break;
                     case 'aavValue': plotColor = COMPONENT_COLORS.aav; break;
                     case 'mcsValue_cp': plotColor = COMPONENT_COLORS.mcs; break;
@@ -6036,7 +6468,7 @@
                     ctx.closePath(); // Line back to the center to close the pie slice
 
                     // Apply the gradient fill for complexity metrics
-                    if (['sasValue', 'aavValue', 'mcsValue_cp', 'modulationIndex', 'localMItFactor', 'cpDensity'].includes(valueKey)) {
+                    if (['sasValue', 'aavValue', 'mcsValue_cp', 'modulationIndex', 'localMItFactor', 'cpDensity', 'edgeComplexity'].includes(valueKey)) {
                         const grad = ctx.createRadialGradient(center, center, plotMinRadius, center, center, outerPlottingRadius);
                         grad.addColorStop(0, plotColor + '00'); // Transparent at center
                         grad.addColorStop(1, plotColor + '44'); // Colored at edge
@@ -6097,6 +6529,8 @@
                 drawSingleRadialPlot(radialContexts.collimatorSpeed, processedData, 'collimatorSpeed', currentMaxCollimatorSpeed, currentCP, "Collimator Speed");
                 drawSingleRadialPlot(radialContexts.cpDensity, processedData, 'cpDensity', maxCpDensityOverall, currentCP, "CP Density");
                 drawSingleRadialPlot(radialContexts.doseRate, processedData, 'doseRate', primaryDoseRate, currentCP, "Dose Rate");
+                drawSingleRadialPlot(radialContexts.leafGap, processedData, 'avgLeafGap', maxAvgLeafGapOverall, currentCP, "Avg Leaf Gap");
+                drawSingleRadialPlot(radialContexts.edgeComplexity, processedData, 'edgeComplexity', maxEdgeComplexityOverall, currentCP, "Plan Complexity (Younge)", true);
                 drawSingleRadialPlot(radialContexts.mi, processedData, 'modulationIndex', maxModulationIndexOverall, currentCP, "MIsport", true);
                 drawSingleRadialPlot(radialContexts.localMIt, processedData, 'localMItFactor', maxLocalMItFactorOverall, currentCP, "Local MIt");
                 drawSingleRadialPlot(radialContexts.sas, processedData, 'sasValue', window.maxSasOverall || 1.0, currentCP, "SAS (Small Aperture)", true);
@@ -6345,6 +6779,8 @@
                     collimatorSpeed: COMPONENT_COLORS.collimator,
                     cpDensity: COMPONENT_COLORS.cpDensity,
                     doseRate: COMPONENT_COLORS.doseRate,
+                    avgLeafGap: COMPONENT_COLORS.leafGap,
+                    edgeComplexity: COMPONENT_COLORS.edgeComplexity,
                     modulationIndex: COMPONENT_COLORS.miSport,
                     localMItFactor: COMPONENT_COLORS.localMIt,
                     sasValue: COMPONENT_COLORS.sas,
@@ -6438,6 +6874,8 @@
                 const plotMeta = [
                     { key: 'mlcSpeed', ctx: radialContexts.mlcSpeed, valueKey: 'mlcSpeed', max: currentMaxMlcSpeedMMPS },
                     { key: 'doseRate', ctx: radialContexts.doseRate, valueKey: 'doseRate', max: rtPlanData?.primaryDoseRate || maxDoseRateOverall },
+                    { key: 'leafGap', ctx: radialContexts.leafGap, valueKey: 'avgLeafGap', max: maxAvgLeafGapOverall },
+                    { key: 'edgeComplexity', ctx: radialContexts.edgeComplexity, valueKey: 'edgeComplexity', max: maxEdgeComplexityOverall },
                     { key: 'mi', ctx: radialContexts.mi, valueKey: 'modulationIndex', max: maxModulationIndexOverall },
                     { key: 'localMIt', ctx: radialContexts.localMIt, valueKey: 'localMItFactor', max: maxLocalMItFactorOverall },
                     { key: 'sas', ctx: radialContexts.sas, valueKey: 'sasValue', max: window.maxSasOverall || 1 },
@@ -6487,6 +6925,8 @@
                     let mcsValue = beam.mcsValue !== undefined ? beam.mcsValue.toFixed(3) : "N/A";
                     let aavScore = beam.aavScore !== undefined ? beam.aavScore.toFixed(3) : "N/A";
                     let sasScore = beam.sasScore !== undefined ? beam.sasScore.toFixed(3) : "N/A";
+                    let avgGap = beam.avgLeafGap !== undefined ? beam.avgLeafGap.toFixed(2) : "N/A";
+                    let edgeCx = beam.edgeComplexity !== undefined ? beam.edgeComplexity.toFixed(4) : "N/A";
                     let transitionTimeHtml = '';
 
                     if (beam.interBeamTransitionTime && beam.interBeamTransitionTime > 0) {
@@ -6500,7 +6940,9 @@
                     Est. Time: ${beamTime.toFixed(2)} s, 
                     MCSv: ${mcsValue}, 
                     AAV: ${aavScore}, 
-                    SAS: ${sasScore}
+                    SAS: ${sasScore},
+                    Avg Gap: ${avgGap} mm,
+                    Plan Cx (Younge): ${edgeCx} 1/mm
                 </li>`;
 
                     return beamInfoHtml + transitionTimeHtml;

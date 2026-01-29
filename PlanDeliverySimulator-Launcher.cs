@@ -10,6 +10,9 @@ using VMS.TPS.Common.Model.Types;
 using System.Globalization; // Required for culture-invariant formatting
 using System.Diagnostics;   // Required for Process.Start
 using System.Runtime.CompilerServices; // Required for CallerFilePath
+using System.Windows.Media; // Required for Structure colors
+using System.Windows.Media.Media3D; // Required for MeshGeometry3D
+using System.Reflection; // Required for reflection-based ESAPI compatibility
 // Note: Using Uri.EscapeDataString instead of HttpUtility for ESAPI compatibility
 
 namespace VMS.TPS
@@ -48,7 +51,12 @@ namespace VMS.TPS
                 // STEP 2: PREPARE AND VALIDATE HTML FILE PATH
                 // ====================================================================================
                 // Get the launcher path using the source file method
-                string launcherPath = Path.GetDirectoryName(GetSourceFilePath());
+                string sourceFilePath = GetSourceFilePath();
+                string launcherPath = !string.IsNullOrEmpty(sourceFilePath) ? Path.GetDirectoryName(sourceFilePath) : null;
+                if (string.IsNullOrEmpty(launcherPath))
+                {
+                    launcherPath = AppDomain.CurrentDomain.BaseDirectory;
+                }
                 string htmlFileName = "RP_Delivery_Simulator.html";
                 
                 // Uncomment and modify the line below to specify a custom path to the HTML file
@@ -80,6 +88,21 @@ namespace VMS.TPS
                 var beamDataExporter = new ManualJsonExporter();
                 string jsonOutput = beamDataExporter.ExportPlanToJson(context.PlanSetup);
 
+                // Optional: export StructureSet (RS) so the simulator can auto-load it via the same
+                // eclipse-launch-params.js mechanism used for the plan (RP).
+                string structJsonOutput = null;
+                if (context.StructureSet != null)
+                {
+                    try
+                    {
+                        structJsonOutput = beamDataExporter.ExportStructureSetToJson(context.StructureSet);
+                    }
+                    catch
+                    {
+                        structJsonOutput = null;
+                    }
+                }
+
                 // ====================================================================================
                 // STEP 4: SAVE JSON DATA AND PARAMETER FILE FOR BROWSER LAUNCH
                 // ====================================================================================
@@ -88,6 +111,15 @@ namespace VMS.TPS
                 string tempFilePath = Path.Combine(Path.GetTempPath(), tempFileName);
                 File.WriteAllText(tempFilePath, jsonOutput);
 
+                // Save structure set data to temp file (if available)
+                string structTempFilePath = null;
+                if (!string.IsNullOrEmpty(structJsonOutput))
+                {
+                    string structTempFileName = string.Format("eclipse-struct-{0}.json", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+                    structTempFilePath = Path.Combine(Path.GetTempPath(), structTempFileName);
+                    File.WriteAllText(structTempFilePath, structJsonOutput);
+                }
+
                 // Create parameter JavaScript file (bypasses CORS restrictions)
                 string paramFileName = "eclipse-launch-params.js";
                 string paramFilePath = Path.Combine(Path.GetDirectoryName(htmlFilePath), paramFileName);
@@ -95,31 +127,57 @@ namespace VMS.TPS
                 // Create parameter JavaScript file (compatible with older .NET versions)
                 // Properly escape the JSON string for JavaScript embedding
                 string escapedJsonOutput = jsonOutput.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "").Replace("\n", "\\n");
+                string escapedStructOutput = (structJsonOutput ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "").Replace("\n", "\\n");
                 
                 var paramJs = string.Format(@"// Eclipse launch parameters
-window.eclipseLaunchParams = {{
-  mode: ""eclipse"",
-  planFile: ""{0}"",
-  patientId: ""{1}"",
-  courseId: ""{2}"",
-  planId: ""{3}"",
-  timestamp: ""{4}"",
-  planData: ""{5}""
-}};
+	window.eclipseLaunchParams = {{
+	  mode: ""eclipse"",
+	  planFile: ""{0}"",
+	  structFile: ""{1}"",
+	  patientId: ""{2}"",
+	  courseId: ""{3}"",
+	  planId: ""{4}"",
+	  timestamp: ""{5}"",
+	  planData: ""{6}"",
+	  structData: ""{7}""
+	}};
 
-// Auto-trigger loading if function exists
-if (typeof window.loadEclipsePlan === 'function') {{
-  console.log('DEBUG: Auto-triggering Eclipse plan loading...');
-  window.loadEclipsePlan(window.eclipseLaunchParams);
-}}", 
+	// Auto-trigger loading if function exists
+	if (typeof window.loadEclipsePlan === 'function') {{
+	  console.log('DEBUG: Auto-triggering Eclipse plan loading...');
+	  window.loadEclipsePlan(window.eclipseLaunchParams);
+	}}
+
+	// Auto-trigger structures (RS) if function exists and data is present
+	if (typeof window.loadEclipseStruct === 'function' && (window.eclipseLaunchParams.structData || window.eclipseLaunchParams.structFile)) {{
+	  console.log('DEBUG: Auto-triggering Eclipse structure loading...');
+	  setTimeout(function() {{ window.loadEclipseStruct(window.eclipseLaunchParams); }}, 250);
+	}}", 
                     tempFilePath.Replace("\\", "\\\\").Replace("\"", "\\\""),
+                    (structTempFilePath ?? "").Replace("\\", "\\\\").Replace("\"", "\\\""),
                     context.Patient.Id.Replace("\"", "\\\""),
                     context.Course.Id.Replace("\"", "\\\""),
                     context.PlanSetup.Id.Replace("\"", "\\\""),
                     DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                    escapedJsonOutput);
+                    escapedJsonOutput,
+                    escapedStructOutput);
                 
-                File.WriteAllText(paramFilePath, paramJs);
+                try
+                {
+                    File.WriteAllText(paramFilePath, paramJs);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        string.Format("Error: Failed to write '{0}'.\n\nPath:\n{1}\n\nDetails:\n{2}\n\nTip: Place the HTML simulator in a user-writable folder.",
+                            paramFileName,
+                            paramFilePath,
+                            ex.Message),
+                        "Write Error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                    return;
+                }
 
                 // ====================================================================================
                 // STEP 5: LAUNCH THE HTML APP IN DEFAULT BROWSER
@@ -207,6 +265,203 @@ if (typeof window.loadEclipsePlan === 'function') {{
             return sb.ToString();
         }
 
+        public string ExportStructureSetToJson(StructureSet structureSet)
+        {
+            if (structureSet == null)
+            {
+                return "{}";
+            }
+
+            string frameOfReferenceUid = TryGetFrameOfReferenceUid(structureSet);
+            object imageObj = null;
+            try { imageObj = structureSet.Image; } catch { imageObj = null; }
+            int zSize = GetIntProperty(imageObj, "ZSize");
+            if (zSize <= 0) zSize = GetIntProperty(imageObj, "SizeZ");
+            if (zSize <= 0) zSize = GetIntProperty(imageObj, "Z");
+
+            var roiStrings = new List<string>();
+            int roiNumber = 0;
+
+            foreach (var structure in structureSet.Structures)
+            {
+                if (structure == null) continue;
+                if (structure.IsEmpty) continue;
+
+                roiNumber += 1;
+
+                var contourStrings = new List<string>();
+
+                // Export true slice contours (no skipping/decimation) when available.
+                // This preserves the structure as a set of per-slice planar contours rather than a sampled surface mesh.
+                MethodInfo getContoursMethod = null;
+                try
+                {
+                    // Most ESAPI versions expose: VVector[][] GetContoursOnImagePlane(int planeIndex)
+                    getContoursMethod = structure.GetType().GetMethod("GetContoursOnImagePlane", new[] { typeof(int) });
+                    if (getContoursMethod == null)
+                    {
+                        foreach (var m in structure.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public))
+                        {
+                            if (m.Name != "GetContoursOnImagePlane") continue;
+                            var ps = m.GetParameters();
+                            if (ps.Length == 1 && ps[0].ParameterType == typeof(int))
+                            {
+                                getContoursMethod = m;
+                                break;
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    getContoursMethod = null;
+                }
+
+                if (getContoursMethod != null && zSize > 0)
+                {
+                    for (int plane = 0; plane < zSize; plane++)
+                    {
+                        object planeContoursObj = null;
+                        try { planeContoursObj = getContoursMethod.Invoke(structure, new object[] { plane }); } catch { planeContoursObj = null; }
+                        if (planeContoursObj == null) continue;
+                        var planeContours = planeContoursObj as Array;
+                        if (planeContours == null || planeContours.Length == 0) continue;
+
+                        foreach (var contourObj in planeContours)
+                        {
+                            var contourPts = contourObj as Array;
+                            if (contourPts == null || contourPts.Length < 3) continue;
+                            var pointStrings = new List<string>();
+                            foreach (var ptObj in contourPts)
+                            {
+                                if (ptObj == null) continue;
+                                double x = GetDoubleMember(ptObj, "x", "X");
+                                double y = GetDoubleMember(ptObj, "y", "Y");
+                                double z = GetDoubleMember(ptObj, "z", "Z");
+                                if (double.IsNaN(x) || double.IsNaN(y) || double.IsNaN(z)) continue;
+                                pointStrings.Add(string.Format(CultureInfo.InvariantCulture, "[{0:F2},{1:F2},{2:F2}]", x, y, z));
+                            }
+                            if (pointStrings.Count < 3) continue;
+
+                            var contourBuilder = new StringBuilder();
+                            contourBuilder.AppendLine(Indent(3) + "{");
+                            contourBuilder.AppendLine(FormatArray("points", pointStrings, 4, true, false));
+                            contourBuilder.Append(Indent(3) + "}");
+                            contourStrings.Add(contourBuilder.ToString());
+                        }
+                    }
+                }
+
+                // Fallback: if slice contours aren't available, fall back to MeshGeometry (still truthy, but not per-slice).
+                if (contourStrings.Count == 0)
+                {
+                    MeshGeometry3D mesh = null;
+                    try { mesh = structure.MeshGeometry; } catch { mesh = null; }
+                    if (mesh != null && mesh.Positions != null && mesh.Positions.Count > 0)
+                    {
+                        var pointStrings = new List<string>();
+                        for (int i = 0; i < mesh.Positions.Count; i++)
+                        {
+                            Point3D p = mesh.Positions[i];
+                            pointStrings.Add(string.Format(CultureInfo.InvariantCulture, "[{0:F2},{1:F2},{2:F2}]", p.X, p.Y, p.Z));
+                        }
+                        if (pointStrings.Count >= 3)
+                        {
+                            var contourBuilder = new StringBuilder();
+                            contourBuilder.AppendLine(Indent(3) + "{");
+                            contourBuilder.AppendLine(FormatArray("points", pointStrings, 4, true, false));
+                            contourBuilder.Append(Indent(3) + "}");
+                            contourStrings.Add(contourBuilder.ToString());
+                        }
+                    }
+                }
+
+                if (contourStrings.Count == 0) continue;
+
+                Color c = structure.Color;
+                var rgb = new List<string> { c.R.ToString(CultureInfo.InvariantCulture), c.G.ToString(CultureInfo.InvariantCulture), c.B.ToString(CultureInfo.InvariantCulture) };
+
+                var roiBuilder = new StringBuilder();
+                roiBuilder.AppendLine(Indent(2) + "{");
+                roiBuilder.AppendLine(FormatProperty("roiNumber", roiNumber, 3, false, false));
+                roiBuilder.AppendLine(FormatProperty("name", structure.Id ?? ("ROI " + roiNumber.ToString(CultureInfo.InvariantCulture)), 3, false));
+                roiBuilder.AppendLine(FormatProperty("type", structure.DicomType ?? string.Empty, 3, false));
+                roiBuilder.AppendLine(FormatProperty("frameOfReferenceUID", frameOfReferenceUid ?? string.Empty, 3, false));
+                roiBuilder.AppendLine(FormatArray("displayColor", rgb, 3, false, false));
+                roiBuilder.AppendLine(FormatArray("contours", contourStrings, 3, true, true));
+                roiBuilder.Append(Indent(2) + "}");
+
+                roiStrings.Add(roiBuilder.ToString());
+            }
+
+            var sb = new StringBuilder();
+            sb.AppendLine("{");
+            sb.AppendLine(FormatProperty("sopClassUID", "1.2.840.10008.5.1.4.1.1.481.3", 1, false));
+            sb.AppendLine(FormatProperty("frameOfReferenceUID", frameOfReferenceUid ?? string.Empty, 1, false));
+
+            var forUids = new List<string>();
+            if (!string.IsNullOrEmpty(frameOfReferenceUid))
+            {
+                forUids.Add("\"" + EscapeString(frameOfReferenceUid) + "\"");
+            }
+            sb.AppendLine(FormatArray("frameOfReferenceUIDs", forUids, 1, false, false));
+            sb.AppendLine(FormatArray("frameOfReferenceOrigin", new List<string> { "0", "0", "0" }, 1, false, false));
+            sb.AppendLine(FormatArray("rois", roiStrings, 1, true, true));
+            sb.AppendLine("}");
+            return sb.ToString();
+        }
+
+        private static int GetIntProperty(object obj, string propertyName)
+        {
+            if (obj == null || string.IsNullOrEmpty(propertyName)) return 0;
+            try
+            {
+                var prop = obj.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+                if (prop == null) return 0;
+                var value = prop.GetValue(obj, null);
+                if (value == null) return 0;
+                return Convert.ToInt32(value, CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static string TryGetFrameOfReferenceUid(StructureSet structureSet)
+        {
+            if (structureSet == null) return string.Empty;
+
+            // Some ESAPI versions do not expose Image.FrameOfReferenceUID; use reflection to stay compatible.
+            string uid = GetStringProperty(structureSet, "FrameOfReferenceUID");
+            if (!string.IsNullOrEmpty(uid)) return uid;
+
+            object img = null;
+            try { img = structureSet.Image; } catch { img = null; }
+            uid = GetStringProperty(img, "FrameOfReferenceUID");
+            if (!string.IsNullOrEmpty(uid)) return uid;
+            uid = GetStringProperty(img, "FrameOfReferenceUid");
+            if (!string.IsNullOrEmpty(uid)) return uid;
+
+            return string.Empty;
+        }
+
+        private static string GetStringProperty(object obj, string propertyName)
+        {
+            if (obj == null || string.IsNullOrEmpty(propertyName)) return null;
+            try
+            {
+                var prop = obj.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+                if (prop == null) return null;
+                var value = prop.GetValue(obj, null);
+                return value != null ? value.ToString() : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private string BuildBeamJson(Beam beam, int indentLevel)
         {
             var sb = new StringBuilder();
@@ -250,6 +505,13 @@ if (typeof window.loadEclipsePlan === 'function') {{
             sb.AppendLine(FormatProperty("cumulativeMetersetWeight", cp.MetersetWeight, indentLevel + 1, false));
             sb.AppendLine(FormatProperty("doseRateSet", beam.DoseRate, indentLevel + 1, false));
 
+            // Provide isocenterPosition so structure overlays can align to beam iso in the simulator.
+            string isoString = TryGetBeamIsocenterArrayLiteral(beam);
+            if (!string.IsNullOrEmpty(isoString))
+            {
+                sb.AppendLine(FormatProperty("isocenterPosition", isoString, indentLevel + 1, false, false));
+            }
+
             var mlcPosStrings = BuildMlcPositionData(cp.LeafPositions, beam.MLC, indentLevel + 2);
             sb.AppendLine(FormatArray("mlcPositionData", mlcPosStrings, indentLevel + 1, false));
 
@@ -271,6 +533,69 @@ if (typeof window.loadEclipsePlan === 'function') {{
 
             sb.Append(Indent(indentLevel) + "}");
             return sb.ToString();
+        }
+
+        private static string TryGetBeamIsocenterArrayLiteral(Beam beam)
+        {
+            if (beam == null) return null;
+            try
+            {
+                // Beam.IsocenterPosition is usually a VVector (x/y/z). Use reflection for version tolerance.
+                object isoObj = null;
+                try
+                {
+                    var prop = beam.GetType().GetProperty("IsocenterPosition", BindingFlags.Instance | BindingFlags.Public);
+                    if (prop != null) isoObj = prop.GetValue(beam, null);
+                }
+                catch
+                {
+                    isoObj = null;
+                }
+                if (isoObj == null) return null;
+
+                double x = GetDoubleMember(isoObj, "x", "X");
+                double y = GetDoubleMember(isoObj, "y", "Y");
+                double z = GetDoubleMember(isoObj, "z", "Z");
+                if (double.IsNaN(x) || double.IsNaN(y) || double.IsNaN(z)) return null;
+
+                return string.Format(CultureInfo.InvariantCulture, "[{0:F2}, {1:F2}, {2:F2}]", x, y, z);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static double GetDoubleMember(object obj, params string[] names)
+        {
+            if (obj == null || names == null) return double.NaN;
+            var t = obj.GetType();
+            foreach (var name in names)
+            {
+                try
+                {
+                    var prop = t.GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
+                    if (prop != null)
+                    {
+                        var v = prop.GetValue(obj, null);
+                        if (v == null) continue;
+                        return Convert.ToDouble(v, CultureInfo.InvariantCulture);
+                    }
+                }
+                catch { }
+                try
+                {
+                    var field = t.GetField(name, BindingFlags.Instance | BindingFlags.Public);
+                    if (field != null)
+                    {
+                        var v = field.GetValue(obj);
+                        if (v == null) continue;
+                        return Convert.ToDouble(v, CultureInfo.InvariantCulture);
+                    }
+                }
+                catch { }
+            }
+            return double.NaN;
         }
         
         #region Manual JSON Building Helpers

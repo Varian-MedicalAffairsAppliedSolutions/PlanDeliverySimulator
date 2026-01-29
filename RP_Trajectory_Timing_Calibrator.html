@@ -1,0 +1,3061 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trajectory Timing Calibrator</title>
+  <link rel="icon" href="data:," />
+
+  <script>
+    (function () {
+      const isRegistered = localStorage.getItem('plandelivery_registered');
+      const token = localStorage.getItem('plandelivery_registration_token');
+      if (!isRegistered || isRegistered !== 'true' || !token || token !== 'AC1AEFCE') {
+        window.location.href = 'gate/register.html';
+      }
+    })();
+  </script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f7f6;
+      color: #111827;
+    }
+
+    h1 {
+      margin: 0 0 10px 0;
+      color: #1f2937;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .card {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 12px;
+      background: #fafafa;
+    }
+
+    .card h2 {
+      margin: 0 0 10px 0;
+      font-size: 1.05rem;
+      color: #111827;
+    }
+
+    label {
+      font-size: 0.9rem;
+      color: #374151;
+    }
+
+    input[type="number"],
+    input[type="text"],
+    select {
+      padding: 7px 9px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #fff;
+      min-width: 220px;
+    }
+
+    input[type="file"] {
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 10px;
+      background: #fff;
+      min-width: 360px;
+    }
+
+    button {
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      background: #111827;
+      color: white;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: #ffffff;
+      color: #111827;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #e5e7eb;
+      padding: 8px;
+      font-size: 0.9rem;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f9fafb;
+      color: #374151;
+      font-weight: 600;
+    }
+
+    .small {
+      font-size: 0.85rem;
+      color: #4b5563;
+      line-height: 1.35;
+      white-space: pre-wrap;
+    }
+
+    .status {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.85rem;
+      padding: 10px;
+      background: #0b1220;
+      color: #e5e7eb;
+      border-radius: 10px;
+      white-space: pre-wrap;
+      max-height: 260px;
+      overflow: auto;
+    }
+
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .plot-wrap {
+      position: relative;
+      height: 240px;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    #plotCanvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
+
+    @media (max-width: 960px) {
+      .grid2 {
+        grid-template-columns: 1fr;
+      }
+      input[type="file"] {
+        min-width: 0;
+        width: 100%;
+      }
+      select,
+      input[type="number"],
+      input[type="text"] {
+        min-width: 0;
+        width: 100%;
+      }
+    }
+
+    .disclaimer-footer {
+      margin-top: 16px;
+      font-size: 0.8rem;
+      color: #6b7280;
+      text-align: center;
+    }
+  </style>
+
+  <script>
+    function loadLocalScript(localPath) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = localPath;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Failed to load local script: ${localPath}`));
+        document.head.appendChild(script);
+      });
+    }
+
+    async function loadCriticalScripts() {
+      await loadLocalScript('lib/chart.umd.min.js');
+    }
+  </script>
+</head>
+
+<body>
+  <div class="container">
+    <div>
+      <h1>Trajectory Timing Calibrator</h1>
+      <div class="small">
+        Fits simulator timing parameters to match delivered trajectory logs (sampled ~20ms) by minimizing the error
+        between predicted and measured cumulative time along the control point MU axis.
+
+        Inputs:
+        - Plan: JSON exported by ESAPI launcher or by "Export Parsed Data as JSON" in the simulator.
+        - Log: either (A) CSV/TSV text with a time column and a cumulative MU/meterset column, or (B) Varian TrueBeam
+          Trajectory Log binary (`.bin`) (parsed using the same field order as `pylinac.TrajectoryLog`).
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>1) Load Files</h2>
+        <div class="row">
+          <label for="planInput"><strong>Plan JSON(s)</strong></label>
+          <input id="planInput" type="file" accept=".json" multiple />
+        </div>
+        <div class="row">
+          <label for="logInput"><strong>Trajectory log(s)</strong></label>
+          <input id="logInput" type="file" accept=".csv,.tsv,.txt,.bin" multiple />
+        </div>
+        <div class="row">
+          <label><input id="autoSynthesizePairsInput" type="checkbox" checked /> Auto-synthesize a plan from each `.bin` log and auto-pair</label>
+        </div>
+        <div class="row">
+          <label for="exportLogSelect"><strong>Export log</strong></label>
+          <select id="exportLogSelect"></select>
+          <label for="exportStrideInput">Stride</label>
+          <input id="exportStrideInput" type="number" value="1" step="1" min="1" max="50" />
+          <label><input id="exportIncludeCpExpectedInput" type="checkbox" /> Include `cpExpected` (large)</label>
+          <button id="exportLogBtn" class="secondary" disabled>Export Log JSON</button>
+        </div>
+        <div class="row">
+          <button id="applyInferredGantryBtn" class="secondary" disabled>Use Inferred Gantry Max</button>
+          <div id="inferredGantryText" class="small"></div>
+        </div>
+        <div class="small" id="fileSummary">No files loaded.</div>
+      </div>
+
+      <div class="card">
+        <h2>2) Create Training Pairs</h2>
+        <div class="row">
+          <button id="addPairBtn" class="secondary" disabled>Add Pair</button>
+          <button id="clearPairsBtn" class="secondary" disabled>Clear Pairs</button>
+        </div>
+        <div id="pairsContainer" class="small">Load plans and logs to add pairs.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3) Fit Parameters</h2>
+      <div class="row">
+        <label for="muStartThresholdInput">Start threshold (MU or fraction)</label>
+        <input id="muStartThresholdInput" type="number" value="0.10" step="0.01" min="0" />
+        <label for="muEndMarginInput">End margin (MU or fraction)</label>
+        <input id="muEndMarginInput" type="number" value="0.10" step="0.01" min="0" />
+        <label for="maxPassesInput">Max passes</label>
+        <input id="maxPassesInput" type="number" value="60" step="1" min="1" />
+        <label for="seedInput">Seed</label>
+        <input id="seedInput" type="number" value="1" step="1" min="0" />
+      </div>
+
+      <div class="row">
+        <label><input id="useCpAxisInput" type="checkbox" checked /> Use log control-point axis for .bin logs</label>
+        <label><input id="useLogExpectedPlanInput" type="checkbox" checked /> Use log expected values to synthesize plan CPs</label>
+        <label><input id="accurateMlcInput" type="checkbox" checked /> Accurate MLC timing (per-leaf)</label>
+        <label><input id="weightByMuInput" type="checkbox" checked /> Weight errors by segment MU</label>
+        <label for="modelSelect">Model</label>
+        <select id="modelSelect">
+          <option value="cp">CP kinematics (segment timing)</option>
+          <option value="ts">Trajectory dynamics (expected→actual)</option>
+        </select>
+        <label for="tsStrideInput">TS stride</label>
+        <input id="tsStrideInput" type="number" value="2" step="1" min="1" max="20" />
+        <label for="fitMetricSelect">Fit metric</label>
+        <select id="fitMetricSelect">
+          <option value="segment">Segment durations</option>
+          <option value="cumulative">Cumulative curve</option>
+        </select>
+        <label for="pairAggSelect">Pair aggregation</label>
+        <select id="pairAggSelect">
+          <option value="median">Median</option>
+          <option value="mean">Mean</option>
+        </select>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Fit</th>
+            <th>Parameter</th>
+            <th>Value</th>
+            <th>Min</th>
+            <th>Max</th>
+            <th>Step</th>
+            <th>Units</th>
+          </tr>
+        </thead>
+        <tbody id="paramTableBody"></tbody>
+      </table>
+
+      <div class="row" style="margin-top: 10px;">
+        <button id="fitBtn" disabled>Run Fit</button>
+        <button id="evalBtn" class="secondary" disabled>Evaluate Current</button>
+        <button id="exportBtn" class="secondary" disabled>Export Params JSON</button>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>4) Plot (Selected Pair)</h2>
+        <div class="row">
+          <label for="plotPairSelect">Pair</label>
+          <select id="plotPairSelect" disabled></select>
+          <label for="plotModeSelect">Plot</label>
+          <select id="plotModeSelect" disabled>
+            <option value="curve">Time vs CP (curve)</option>
+            <option value="parity">Actual vs Predicted (all pairs)</option>
+            <option value="parityEnds">Actual vs Predicted (pair end times)</option>
+            <option value="residuals">Segment residuals (pred - actual)</option>
+            <option value="gantryAxis">Gantry angle: actual vs predicted</option>
+            <option value="collimatorAxis">Collimator angle: actual vs predicted</option>
+            <option value="gantryParity">Gantry parity (actual vs predicted)</option>
+            <option value="collimatorParity">Collimator parity (actual vs predicted)</option>
+            <option value="gantryTs">Gantry: expected vs modeled vs actual</option>
+            <option value="collimatorTs">Collimator: expected vs modeled vs actual</option>
+            <option value="muTs">MU: expected vs modeled vs actual</option>
+          </select>
+          <button id="plotBtn" class="secondary" disabled>Plot</button>
+        </div>
+        <div class="plot-wrap">
+          <canvas id="plotCanvas"></canvas>
+        </div>
+        <div class="small" id="plotNote"></div>
+      </div>
+      <div class="card">
+        <h2>5) Status</h2>
+        <div id="status" class="status">Load files to begin.</div>
+      </div>
+    </div>
+
+    <div class="disclaimer-footer">
+      Bound by the terms of the <a href="gate/VarianLUSLA.html" target="_blank" rel="noreferrer">VarianLUSLA</a>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      plans: [],
+      logs: [],
+      pairs: [],
+      chart: null,
+      params: null,
+      paramDefs: null
+    };
+
+    const planInput = document.getElementById('planInput');
+    const logInput = document.getElementById('logInput');
+    const fileSummary = document.getElementById('fileSummary');
+    const autoSynthesizePairsInput = document.getElementById('autoSynthesizePairsInput');
+    const exportLogSelect = document.getElementById('exportLogSelect');
+    const exportStrideInput = document.getElementById('exportStrideInput');
+    const exportIncludeCpExpectedInput = document.getElementById('exportIncludeCpExpectedInput');
+    const exportLogBtn = document.getElementById('exportLogBtn');
+    const addPairBtn = document.getElementById('addPairBtn');
+    const clearPairsBtn = document.getElementById('clearPairsBtn');
+    const pairsContainer = document.getElementById('pairsContainer');
+    const fitBtn = document.getElementById('fitBtn');
+    const evalBtn = document.getElementById('evalBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const statusEl = document.getElementById('status');
+    const paramTableBody = document.getElementById('paramTableBody');
+    const muStartThresholdInput = document.getElementById('muStartThresholdInput');
+    const muEndMarginInput = document.getElementById('muEndMarginInput');
+    const maxPassesInput = document.getElementById('maxPassesInput');
+    const seedInput = document.getElementById('seedInput');
+    const useCpAxisInput = document.getElementById('useCpAxisInput');
+    const useLogExpectedPlanInput = document.getElementById('useLogExpectedPlanInput');
+    const accurateMlcInput = document.getElementById('accurateMlcInput');
+    const weightByMuInput = document.getElementById('weightByMuInput');
+    const modelSelect = document.getElementById('modelSelect');
+    const tsStrideInput = document.getElementById('tsStrideInput');
+    const fitMetricSelect = document.getElementById('fitMetricSelect');
+    const pairAggSelect = document.getElementById('pairAggSelect');
+    const plotPairSelect = document.getElementById('plotPairSelect');
+    const plotModeSelect = document.getElementById('plotModeSelect');
+    const plotBtn = document.getElementById('plotBtn');
+    const plotCanvas = document.getElementById('plotCanvas');
+    const plotNote = document.getElementById('plotNote');
+    const applyInferredGantryBtn = document.getElementById('applyInferredGantryBtn');
+    const inferredGantryText = document.getElementById('inferredGantryText');
+
+    function formatNum(x, digits = 3) {
+      return (x == null || !Number.isFinite(x)) ? 'N/A' : Number(x).toFixed(digits);
+    }
+
+    function logStatus(line) {
+      statusEl.textContent = `${line}\n\n${statusEl.textContent}`.slice(0, 8000);
+    }
+
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    function detectPlanLogMismatch(beam, log) {
+      const planMu = Number(beam?.totalMeterset) || 0;
+      const planCp = Number(beam?.controlPoints?.length) || 0;
+      const logMu = Number(log?.cumMu?.[log?.cumMu?.length - 1]) || 0;
+      const cpEnd = Number(log?.controlPoint?.[log?.controlPoint?.length - 1]);
+      const logCp = Number.isFinite(cpEnd) ? (Math.round(cpEnd) + 1) : 0;
+
+      const muDelta = logMu - planMu;
+      const muRel = (Math.abs(planMu) > 1e-9) ? (muDelta / planMu) : 0;
+      const cpDelta = (logCp && planCp) ? (logCp - planCp) : 0;
+
+      const muAbsTol = 10.0;      // MU
+      const muRelTol = 0.02;      // 2%
+      const cpTol = 2;            // CPs
+
+      const muMismatch = (planMu > 0 && logMu > 0) && (Math.abs(muDelta) > muAbsTol) && (Math.abs(muRel) > muRelTol);
+      const cpMismatch = (planCp > 0 && logCp > 0) && (Math.abs(cpDelta) > cpTol);
+
+      const reasons = [];
+      if (cpMismatch) reasons.push(`CP_MISMATCH(Δ=${cpDelta})`);
+      if (muMismatch) reasons.push(`MU_MISMATCH(Δ=${muDelta.toFixed(1)}=${(muRel * 100).toFixed(1)}%)`);
+
+      return {
+        planMu, planCp, logMu, logCp,
+        muDelta, muRel, cpDelta,
+        muMismatch, cpMismatch,
+        reasons
+      };
+    }
+
+    function buildSyntheticBeamFromLogExpected(planBeam, log, planPrimaryDoseRate) {
+      const cpExp = log?.cpExpected;
+      if (!cpExp || !cpExp.cpCount || cpExp.cpCount < 2) return null;
+      if (planBeam?.isRDSMachine) return null;
+
+      const totalMu = Number(cpExp.mu?.[cpExp.cpCount - 1]) || 0;
+      if (!Number.isFinite(totalMu) || totalMu <= 0) return null;
+
+      // Varian trajectory logs report MLC positions in centimeters; the simulator uses millimeters.
+      const trajMlcCmToMm = 10.0;
+
+      const cps = new Array(cpExp.cpCount);
+      const fallbackDr = Number(planPrimaryDoseRate) || 600;
+
+      for (let i = 0; i < cpExp.cpCount; i++) {
+        const mu = Number(cpExp.mu[i]) || 0;
+        const doseRateSet = (planBeam?.controlPoints && planBeam.controlPoints[i] && Number.isFinite(Number(planBeam.controlPoints[i].doseRateSet)))
+          ? Number(planBeam.controlPoints[i].doseRateSet)
+          : fallbackDr;
+
+        const cp = {
+          controlPointIndex: i,
+          gantryAngle: Number(cpExp.gantryDeg[i]) || 0,
+          collimatorAngle: Number(cpExp.collimatorDeg[i]) || 0,
+          cumulativeMetersetWeight: (totalMu > 1e-9) ? (mu / totalMu) : 0,
+          doseRateSet,
+          mlcPositionData: []
+        };
+
+        if (cpExp.mlc && cpExp.mlc[i]) {
+          const src = cpExp.mlc[i];
+          const scaled = new Float32Array(src.length);
+          for (let k = 0; k < src.length; k++) scaled[k] = (Number(src[k]) || 0) * trajMlcCmToMm;
+          cp.mlcPositionData = [{ type: 'MLCX', positions: scaled }];
+        }
+        cps[i] = cp;
+      }
+
+      return {
+        ...planBeam,
+        isRDSMachine: false,
+        totalMeterset: totalMu,
+        controlPoints: cps,
+        _syntheticFromTrajectoryExpected: true
+      };
+    }
+
+    function buildSyntheticPlanFromLog(logSeries, baseName) {
+      if (!logSeries?.meta || logSeries.meta.format !== 'VarianTrajectoryLogBin') return null;
+      if (!logSeries.cpExpected || !logSeries.cpExpected.cpCount) return null;
+
+      const inferredMuPerMin = Number(logSeries.meta?.doseRateStable20?.p95MuPerSec) * 60.0;
+      const primaryDoseRate = (Number.isFinite(inferredMuPerMin) && inferredMuPerMin > 0) ? inferredMuPerMin : 600.0;
+
+      const dummyBeam = { isRDSMachine: false, totalMeterset: 1, controlPoints: [] };
+      const beam = buildSyntheticBeamFromLogExpected(dummyBeam, logSeries, primaryDoseRate);
+      if (!beam) return null;
+
+      return {
+        patientName: '(synthetic from trajectory expected)',
+        rtPlanLabel: baseName || 'SyntheticPlan',
+        primaryDoseRate,
+        beams: [beam],
+        _syntheticPlan: true
+      };
+    }
+
+    function binarySearchFirstIndexGE(sortedArr, x) {
+      if (!sortedArr || sortedArr.length === 0) return 0;
+      let lo = 0, hi = sortedArr.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (sortedArr[mid] >= x) hi = mid; else lo = mid + 1;
+      }
+      return Math.max(0, Math.min(sortedArr.length - 1, lo));
+    }
+
+    function computePairCurveTS(pair, params) {
+      const plan = state.plans[pair.planIndex]?.data;
+      const planBeam = plan?.beams?.[pair.beamIndex];
+      const log = state.logs[pair.logIndex]?.data;
+      if (!plan || !planBeam || !log) throw new Error('Invalid pair.');
+      if (!log.meta || log.meta.format !== 'VarianTrajectoryLogBin') throw new Error('TS model requires a .bin trajectory log.');
+      if (!Array.isArray(log.gantryExpectedDeg) || !Array.isArray(log.collimatorExpectedDeg) || !Array.isArray(log.cumMuExpected)) {
+        throw new Error('Trajectory log missing expected channels.');
+      }
+
+      const primaryDoseRate = (typeof plan.primaryDoseRate === 'number') ? plan.primaryDoseRate : 600.0;
+      const beam = (useLogExpectedPlanInput?.checked && log?.meta?.format === 'VarianTrajectoryLogBin')
+        ? (buildSyntheticBeamFromLogExpected(planBeam, log, primaryDoseRate) || planBeam)
+        : planBeam;
+      const usingSynth = !!beam?._syntheticFromTrajectoryExpected;
+
+      const totalMU = Number(beam.totalMeterset) || 0;
+      const muStartThreshold = interpretThreshold(muStartThresholdInput.value, totalMU);
+      const muEndMargin = interpretThreshold(muEndMarginInput.value, totalMU);
+
+      const cps = beam.controlPoints || [];
+      const targets = cps.map(cp => (Number(cp.cumulativeMetersetWeight) || 0) * totalMU);
+      const i0 = targets.findIndex(mu => mu >= muStartThreshold);
+      if (i0 < 0) throw new Error(`No CP reaches MU start threshold (${muStartThreshold}).`);
+      let i1 = targets.length - 1;
+      while (i1 > i0 && targets[i1] > totalMU - muEndMargin) i1--;
+      if (i1 <= i0) throw new Error('Not enough CPs in window after applying end margin.');
+
+      const mismatch = detectPlanLogMismatch(planBeam, log);
+      if (!usingSynth && (mismatch.cpMismatch || mismatch.muMismatch)) {
+        throw new Error(`Plan/log mismatch: ${(mismatch.reasons || []).join(', ') || 'CP/MU mismatch'}`);
+      }
+      let canUseCp = !!(useCpAxisInput?.checked && log.meta?.format === 'VarianTrajectoryLogBin' && Array.isArray(log.controlPoint));
+      if (canUseCp && beam?._syntheticFromTrajectoryExpected) {
+        const logCp = (Number.isFinite(Number(log?.controlPoint?.[log?.controlPoint?.length - 1]))) ? (Math.round(Number(log.controlPoint[log.controlPoint.length - 1])) + 1) : 0;
+        if (logCp > 0 && cps.length > 0 && Math.abs(logCp - cps.length) > 1) canUseCp = false;
+      } else if (canUseCp && (mismatch.cpMismatch || mismatch.muMismatch)) {
+        canUseCp = false;
+      }
+
+      // Use CP-axis time as ground truth CP time when possible; fallback to MU axis.
+      const tAct = new Array(cps.length).fill(null);
+      for (let i = i0; i <= i1; i++) {
+        const t = canUseCp
+          ? interpolateTimeAtMonotonicX(log.timeSec, log.controlPoint, i)
+          : interpolateTimeAtMonotonicX(log.timeSec, log.cumMu, targets[i]);
+        tAct[i] = (t === null) ? null : t;
+      }
+      if (tAct[i0] === null || tAct[i1] === null) throw new Error('Log does not cover the selected CP window.');
+
+      const tStart = tAct[i0];
+      const tEnd = tAct[i1];
+      const idxStart = binarySearchFirstIndexGE(log.timeSec, tStart);
+      const idxEnd = binarySearchFirstIndexGE(log.timeSec, tEnd);
+      const stride = Math.max(1, Math.round(Number(tsStrideInput?.value) || 1));
+      const dt = (Number(log.meta.samplingIntervalMs) || 20) / 1000.0 * stride;
+
+      function sliceStride(arr) {
+        const out = [];
+        for (let i = idxStart; i <= idxEnd; i += stride) out.push(arr[i]);
+        return out;
+      }
+
+      const gExp = unwrapAngleSeries(sliceStride(log.gantryExpectedDeg));
+      const gAct = unwrapAngleSeries(sliceStride(log.gantryDeg));
+      const cExp = unwrapAngleSeries(sliceStride(log.collimatorExpectedDeg));
+      const cAct = unwrapAngleSeries(sliceStride(log.collimatorDeg));
+      const muExpRaw = sliceStride(log.cumMuExpected);
+      const muActRaw = sliceStride(log.cumMu);
+      const holdRaw = sliceStride(log.beamHold || []);
+
+      const muExp0 = Number(muExpRaw[0]) || 0;
+      const muAct0 = Number(muActRaw[0]) || 0;
+      const muExp = makeMonotonicNonDecreasing(muExpRaw.map(v => (Number(v) || 0) - muExp0));
+      const muAct = makeMonotonicNonDecreasing(muActRaw.map(v => (Number(v) || 0) - muAct0));
+
+      const gSimObj = simulateAxisTrackingJerk({
+        expectedUnwrapped: gExp,
+        dtSec: dt,
+        vmax: Number(params.maxGantrySpeedDegPerSec) || 0,
+        amax: Number(params.maxGantryAccelDegPerSec2) || 0,
+        jmax: Number(params.maxGantryJerkDegPerSec3) || 0,
+        delaySec: Number(params.gantryDelaySec) || 0,
+        x0: gAct[0],
+        v0: 0
+      });
+      const cSimObj = simulateAxisTrackingJerk({
+        expectedUnwrapped: cExp,
+        dtSec: dt,
+        vmax: Number(params.maxCollimatorSpeedDegPerSec) || 0,
+        amax: Number(params.maxCollimatorAccelDegPerSec2) || 0,
+        jmax: Number(params.maxCollimatorJerkDegPerSec3) || 0,
+        delaySec: Number(params.collimatorDelaySec) || 0,
+        x0: cAct[0],
+        v0: 0
+      });
+      const gSim = gSimObj.pos;
+      const cSim = cSimObj.pos;
+
+      const muSimObj = simulateMuTracking({
+        muExpected: muExp,
+        dtSec: dt,
+        beamHold: holdRaw,
+        delaySec: Number(params.muDelaySec) || 0,
+        tauSec: Number(params.muTauSec) || 0.10
+      });
+      const muPred = muSimObj.mu;
+
+      // Predicted CP times from muPred(time) inversion.
+      const tPredAbs = new Array(cps.length).fill(null);
+      const tGrid = new Array(muPred.length);
+      for (let i = 0; i < tGrid.length; i++) tGrid[i] = tStart + i * dt;
+      for (let i = i0; i <= i1; i++) {
+        const t = interpolateTimeAtMonotonicX(tGrid, muPred, targets[i] - targets[i0]);
+        tPredAbs[i] = t;
+      }
+      if (tPredAbs[i0] === null || tPredAbs[i1] === null) throw new Error('TS model did not reach target MU window.');
+
+      const xs = [];
+      const yAct = [];
+      const yPred = [];
+      for (let i = i0; i <= i1; i++) {
+        if (tAct[i] === null || tPredAbs[i] === null) continue;
+        xs.push(i);
+        yAct.push(tAct[i] - tStart);
+        yPred.push(tPredAbs[i] - tPredAbs[i0]);
+      }
+
+      // Axis RMSE on the same window (downsampled).
+      let sseG = 0, sseC = 0, n = 0;
+      for (let i = 0; i < gAct.length; i++) {
+        const eg = (gSim[i] ?? 0) - (gAct[i] ?? 0);
+        const ec = (cSim[i] ?? 0) - (cAct[i] ?? 0);
+        sseG += eg * eg;
+        sseC += ec * ec;
+        n++;
+      }
+      const rmseG = Math.sqrt(sseG / Math.max(1, n));
+      const rmseC = Math.sqrt(sseC / Math.max(1, n));
+
+      return {
+        i0, i1,
+        cpIdx: xs,
+        actualSec: yAct,
+        predictedSec: yPred,
+        axisRmseDeg: { gantry: rmseG, collimator: rmseC },
+        mismatch,
+        endErrorSec: (yPred[yPred.length - 1] - yAct[yAct.length - 1])
+      };
+    }
+
+    function seededRand(seed) {
+      let x = seed >>> 0;
+      return () => {
+        x ^= x << 13; x >>>= 0;
+        x ^= x >> 17; x >>>= 0;
+        x ^= x << 5; x >>>= 0;
+        return (x >>> 0) / 4294967296;
+      };
+    }
+
+    function safeJsonParse(text) {
+      try { return { ok: true, value: JSON.parse(text) }; } catch (e) { return { ok: false, error: e }; }
+    }
+
+    function unwrapPlanJson(parsed) {
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (parsed.parsedDicomPlan && parsed.parsedDicomPlan.beams) return parsed.parsedDicomPlan;
+      if (parsed.beams && Array.isArray(parsed.beams)) return parsed;
+      return null;
+    }
+
+    function inferDelimiter(firstLine) {
+      const comma = (firstLine.match(/,/g) || []).length;
+      const tab = (firstLine.match(/\t/g) || []).length;
+      const semi = (firstLine.match(/;/g) || []).length;
+      if (tab >= comma && tab >= semi && tab > 0) return '\t';
+      if (semi >= comma && semi > 0) return ';';
+      return ',';
+    }
+
+    function parseDelimitedNumeric(text) {
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length < 2) throw new Error('Not enough rows.');
+      const delimiter = inferDelimiter(lines[0]);
+      const headers = lines[0].split(delimiter).map(h => h.trim().replace(/^"|"$/g, ''));
+      const rows = [];
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(delimiter);
+        if (parts.length < headers.length) continue;
+        const row = new Array(headers.length);
+        let anyFinite = false;
+        for (let c = 0; c < headers.length; c++) {
+          const raw = (parts[c] || '').trim().replace(/^"|"$/g, '');
+          const v = raw === '' ? NaN : Number(raw);
+          row[c] = v;
+          if (Number.isFinite(v)) anyFinite = true;
+        }
+        if (anyFinite) rows.push(row);
+      }
+      return { delimiter, headers, rows };
+    }
+
+    function pickColumnIndex(headers, pred) {
+      for (let i = 0; i < headers.length; i++) if (pred(headers[i] || '')) return i;
+      return -1;
+    }
+
+    function isMonotonicNonDecreasing(arr) {
+      for (let i = 1; i < arr.length; i++) if (arr[i] < arr[i - 1] - 1e-9) return false;
+      return true;
+    }
+
+    function makeMonotonicNonDecreasing(arr) {
+      const out = arr.slice();
+      for (let i = 1; i < out.length; i++) out[i] = Math.max(out[i], out[i - 1]);
+      return out;
+    }
+
+    function detectTimeAndMuColumns(parsed) {
+      const { headers, rows } = parsed;
+      const lower = headers.map(h => (h || '').toLowerCase());
+
+      const timeIdx = pickColumnIndex(lower, h =>
+        h === 't' || h.includes('time') || h.includes('timestamp') || h.includes('ms') || h.includes('sec')
+      );
+      let muIdx = pickColumnIndex(lower, h =>
+        h.includes('mu') && (h.includes('cum') || h.includes('cumulative') || h.includes('meterset') || h.includes('delivered'))
+      );
+      if (muIdx < 0) {
+        muIdx = pickColumnIndex(lower, h => h === 'mu' || h.includes('mu'));
+      }
+      if (timeIdx < 0 || muIdx < 0) return { timeIdx, muIdx };
+
+      const time = rows.map(r => r[timeIdx]).filter(Number.isFinite);
+      const mu = rows.map(r => r[muIdx]).filter(Number.isFinite);
+      if (time.length < 2 || mu.length < 2) return { timeIdx, muIdx };
+
+      const headerTime = lower[timeIdx] || '';
+      const maxTime = Math.max(...time);
+      const timeIsMs = headerTime.includes('ms') || (!headerTime.includes('sec') && !headerTime.includes('s') && maxTime > 2000);
+      return { timeIdx, muIdx, timeIsMs };
+    }
+
+    function buildTimeMuSeries(parsed) {
+      const { headers, rows } = parsed;
+      const { timeIdx, muIdx, timeIsMs } = detectTimeAndMuColumns(parsed);
+      if (timeIdx < 0) throw new Error(`Could not detect time column. Headers: ${headers.join(', ')}`);
+      if (muIdx < 0) throw new Error(`Could not detect MU column. Headers: ${headers.join(', ')}`);
+
+      const timeRaw = [];
+      const muRaw = [];
+      for (const r of rows) {
+        const t = r[timeIdx];
+        const m = r[muIdx];
+        if (!Number.isFinite(t) || !Number.isFinite(m)) continue;
+        timeRaw.push(t);
+        muRaw.push(m);
+      }
+      if (timeRaw.length < 2) throw new Error('Insufficient numeric samples after parsing.');
+
+      const t0 = timeRaw[0];
+      const timeSec = timeRaw.map(t => (timeIsMs ? (t - t0) / 1000.0 : (t - t0)));
+      const cumMu = makeMonotonicNonDecreasing(muRaw);
+      return {
+        timeSec,
+        cumMu,
+        meta: { timeCol: headers[timeIdx], muCol: headers[muIdx], timeUnit: timeIsMs ? 'ms' : 's' }
+      };
+    }
+
+    function readFixedString(view, offset, length) {
+      const bytes = new Uint8Array(view.buffer, view.byteOffset + offset, length);
+      let out = '';
+      for (let i = 0; i < bytes.length; i++) {
+        const c = bytes[i];
+        if (c === 0) break;
+        out += String.fromCharCode(c);
+      }
+      return out;
+    }
+
+    function unwrapDeltaDeg(d) {
+      if (d > 180) return d - 360;
+      if (d < -180) return d + 360;
+      return d;
+    }
+
+    function clampAbs(v, maxAbs) {
+      if (!Number.isFinite(v)) return 0;
+      if (!Number.isFinite(maxAbs) || maxAbs <= 0) return v;
+      return Math.max(-maxAbs, Math.min(maxAbs, v));
+    }
+
+    function computeStableSpeedStatsFromAngleDeg(angleDeg, dtSec, beamHold, windowSec) {
+      if (!angleDeg || angleDeg.length < 3) return null;
+      const w = Math.max(1, Math.round((windowSec || 1.0) / dtSec));
+
+      const n = angleDeg.length - 1;
+      const valid = new Array(n).fill(false);
+      const absSpeed = new Array(n).fill(0);
+
+      for (let i = 0; i < n; i++) {
+        const hold0 = Math.round(beamHold?.[i] ?? 0);
+        const hold1 = Math.round(beamHold?.[i + 1] ?? 0);
+        if (hold0 !== 0 || hold1 !== 0) continue;
+        valid[i] = true;
+        absSpeed[i] = Math.abs(unwrapDeltaDeg(angleDeg[i + 1] - angleDeg[i]) / dtSec);
+      }
+
+      let maxMean = -Infinity;
+      let maxAtSec = null;
+      const means = [];
+
+      for (let i = 0; i + w <= n; i++) {
+        let ok = true;
+        let sum = 0;
+        for (let k = 0; k < w; k++) {
+          if (!valid[i + k]) { ok = false; break; }
+          sum += absSpeed[i + k];
+        }
+        if (!ok) continue;
+        const mean = sum / w;
+        means.push(mean);
+        if (mean > maxMean) {
+          maxMean = mean;
+          maxAtSec = i * dtSec;
+        }
+      }
+
+      if (means.length === 0) return null;
+      means.sort((a, b) => a - b);
+      const p = (q) => {
+        const idx = (means.length - 1) * q;
+        const lo = Math.floor(idx);
+        const hi = Math.ceil(idx);
+        if (lo === hi) return means[lo];
+        const a = idx - lo;
+        return means[lo] * (1 - a) + means[hi] * a;
+      };
+      return {
+        windowSec,
+        count: means.length,
+        p95: p(0.95),
+        p99: p(0.99),
+        max: means[means.length - 1],
+        maxAtSec
+      };
+    }
+
+    function unwrapAngleSeries(angleDeg) {
+      if (!angleDeg || angleDeg.length === 0) return [];
+      const out = new Array(angleDeg.length);
+      out[0] = Number(angleDeg[0]) || 0;
+      for (let i = 1; i < angleDeg.length; i++) {
+        const prev = Number(angleDeg[i - 1]) || 0;
+        const cur = Number(angleDeg[i]) || 0;
+        out[i] = out[i - 1] + unwrapDeltaDeg(cur - prev);
+      }
+      return out;
+    }
+
+    function simulateAxisTracking({ expectedUnwrapped, dtSec, vmax, amax, delaySec, x0 = null, v0 = 0 }) {
+      const n = expectedUnwrapped.length;
+      const out = new Array(n);
+      if (n === 0) return out;
+
+      const delaySamples = Math.max(0, Math.round((Number(delaySec) || 0) / dtSec));
+      let x = (x0 === null) ? (Number(expectedUnwrapped[0]) || 0) : (Number(x0) || 0);
+      let v = Number(v0) || 0;
+      out[0] = x;
+
+      const aStep = (Number(amax) || 0) * dtSec;
+      for (let i = 1; i < n; i++) {
+        const j = Math.max(0, i - delaySamples);
+        const u = Number(expectedUnwrapped[j]) || 0;
+        const vDes = (u - x) / dtSec;
+        const dv = clampAbs(vDes - v, aStep);
+        v = clampAbs(v + dv, vmax);
+        x = x + v * dtSec;
+        out[i] = x;
+      }
+      return { pos: out, delaySamples };
+    }
+
+    function simulateAxisTrackingJerk({ expectedUnwrapped, dtSec, vmax, amax, jmax, delaySec, x0 = null, v0 = 0, a0 = 0 }) {
+      const n = expectedUnwrapped.length;
+      const out = new Array(n);
+      if (n === 0) return { pos: out, delaySamples: 0 };
+
+      const delaySamples = Math.max(0, Math.round((Number(delaySec) || 0) / dtSec));
+      let x = (x0 === null) ? (Number(expectedUnwrapped[0]) || 0) : (Number(x0) || 0);
+      let v = Number(v0) || 0;
+      let a = Number(a0) || 0;
+      out[0] = x;
+
+      const vmaxAbs = Number(vmax) || 0;
+      const amaxAbs = Number(amax) || 0;
+      const jmaxAbs = Number(jmax) || 0;
+
+      const aStepMax = amaxAbs * dtSec;
+      const jStepMax = jmaxAbs * dtSec;
+
+      for (let i = 1; i < n; i++) {
+        const j = Math.max(0, i - delaySamples);
+        const u = Number(expectedUnwrapped[j]) || 0;
+
+        const vDes = (u - x) / dtSec;
+        const aDes = clampAbs((vDes - v) / dtSec, amaxAbs);
+
+        // Jerk limit: constrain how fast acceleration can change
+        const da = (jmaxAbs > 0) ? clampAbs(aDes - a, jStepMax) : clampAbs(aDes - a, aStepMax);
+        a = clampAbs(a + da, amaxAbs);
+
+        // Integrate with accel limit
+        const dv = clampAbs(a * dtSec, aStepMax);
+        v = clampAbs(v + dv, vmaxAbs);
+        x = x + v * dtSec;
+        out[i] = x;
+      }
+      return { pos: out, delaySamples };
+    }
+
+    function simulateMuTracking({ muExpected, dtSec, beamHold, delaySec, tauSec }) {
+      const n = muExpected.length;
+      const out = new Array(n).fill(0);
+      if (n === 0) return { mu: out, delaySamples: 0 };
+
+      const delaySamples = Math.max(0, Math.round((Number(delaySec) || 0) / dtSec));
+      const tau = Math.max(1e-4, Number(tauSec) || 0.10);
+
+      let mu = Number(muExpected[0]) || 0;
+      let muDot = 0;
+      out[0] = mu;
+
+      for (let i = 1; i < n; i++) {
+        const hold = beamHold && beamHold.length === n && (Math.round(beamHold[i] || 0) !== 0 || Math.round(beamHold[i - 1] || 0) !== 0);
+        if (hold) {
+          muDot = 0;
+          out[i] = mu;
+          continue;
+        }
+
+        const j = Math.max(0, i - delaySamples);
+        const muE0 = Number(muExpected[Math.max(0, j - 1)]) || 0;
+        const muE1 = Number(muExpected[j]) || 0;
+        const muDotCmd = Math.max(0, (muE1 - muE0) / dtSec);
+
+        muDot = muDot + ((muDotCmd - muDot) * (dtSec / tau));
+        if (muDot < 0) muDot = 0;
+        mu = mu + muDot * dtSec;
+        out[i] = mu;
+      }
+
+      const mu0 = out[0] || 0;
+      for (let i = 0; i < out.length; i++) out[i] -= mu0;
+      return { mu: makeMonotonicNonDecreasing(out), delaySamples };
+    }
+
+    function computeStableDoseRateStatsFromCumMu(cumMu, dtSec, beamHold, windowSec) {
+      if (!cumMu || cumMu.length < 3) return null;
+      const w = Math.max(1, Math.round((windowSec || 1.0) / dtSec));
+
+      const n = cumMu.length - 1;
+      const valid = new Array(n).fill(false);
+      const rate = new Array(n).fill(0);
+
+      const muEnd = Number(cumMu[cumMu.length - 1]) || 0;
+      const muLo = 0.02 * muEnd;
+      const muHi = 0.98 * muEnd;
+
+      for (let i = 0; i < n; i++) {
+        const hold0 = Math.round(beamHold?.[i] ?? 0);
+        const hold1 = Math.round(beamHold?.[i + 1] ?? 0);
+        if (hold0 !== 0 || hold1 !== 0) continue;
+        const mu0 = Number(cumMu[i]);
+        const mu1 = Number(cumMu[i + 1]);
+        if (!Number.isFinite(mu0) || !Number.isFinite(mu1)) continue;
+        if (mu0 < muLo || mu0 > muHi) continue;
+        const d = mu1 - mu0;
+        if (d <= 1e-9) continue;
+        valid[i] = true;
+        rate[i] = d / dtSec; // MU/s
+      }
+
+      let maxMean = -Infinity;
+      let maxAtSec = null;
+      const means = [];
+
+      for (let i = 0; i + w <= n; i++) {
+        let ok = true;
+        let sum = 0;
+        for (let k = 0; k < w; k++) {
+          if (!valid[i + k]) { ok = false; break; }
+          sum += rate[i + k];
+        }
+        if (!ok) continue;
+        const mean = sum / w;
+        means.push(mean);
+        if (mean > maxMean) {
+          maxMean = mean;
+          maxAtSec = i * dtSec;
+        }
+      }
+
+      if (means.length === 0) return null;
+      means.sort((a, b) => a - b);
+      const p = (q) => {
+        const idx = (means.length - 1) * q;
+        const lo = Math.floor(idx);
+        const hi = Math.ceil(idx);
+        if (lo === hi) return means[lo];
+        const a = idx - lo;
+        return means[lo] * (1 - a) + means[hi] * a;
+      };
+      return {
+        windowSec,
+        count: means.length,
+        p95MuPerSec: p(0.95),
+        p99MuPerSec: p(0.99),
+        maxMuPerSec: means[means.length - 1],
+        maxAtSec
+      };
+    }
+
+    function readFloatSnapshot(floats, snapshotIdx, stepSizeFloats, col) {
+      return floats[(snapshotIdx * stepSizeFloats) + col];
+    }
+
+    function synthesizeExpectedCPsFromTrajectory({ floats, stepSizeFloats, cpSeries, cpEndIndex, muExpectedCol, gantryExpectedCol, collimatorExpectedCol, mlcExpectedStartCol }) {
+      const cpCount = Math.max(0, (Number.isFinite(cpEndIndex) ? Math.round(cpEndIndex) : 0) + 1);
+      if (cpCount < 2) return null;
+
+      const leafCount = Math.max(0, Math.floor((stepSizeFloats - mlcExpectedStartCol) / 2));
+      const out = {
+        cpCount,
+        leafCount,
+        gantryDeg: new Array(cpCount).fill(0),
+        collimatorDeg: new Array(cpCount).fill(0),
+        mu: new Array(cpCount).fill(0),
+        mlc: leafCount > 0 ? new Array(cpCount) : null
+      };
+
+      let nextCp = 0;
+      let prevIdx = 0;
+      for (let i = 1; i < cpSeries.length && nextCp < cpCount; i++) {
+        const cpPrev = cpSeries[prevIdx];
+        const cpCur = cpSeries[i];
+        if (!Number.isFinite(cpPrev) || !Number.isFinite(cpCur)) { prevIdx = i; continue; }
+        if (cpCur < nextCp) { prevIdx = i; continue; }
+        if (cpPrev > nextCp) { prevIdx = i; continue; }
+
+        while (nextCp < cpCount && cpPrev <= nextCp && cpCur >= nextCp) {
+          const denom = (cpCur - cpPrev);
+          const a = (Math.abs(denom) < 1e-9) ? 0 : ((nextCp - cpPrev) / denom);
+
+          const g0 = readFloatSnapshot(floats, prevIdx, stepSizeFloats, gantryExpectedCol);
+          const g1 = readFloatSnapshot(floats, i, stepSizeFloats, gantryExpectedCol);
+          const c0 = readFloatSnapshot(floats, prevIdx, stepSizeFloats, collimatorExpectedCol);
+          const c1 = readFloatSnapshot(floats, i, stepSizeFloats, collimatorExpectedCol);
+          const m0 = readFloatSnapshot(floats, prevIdx, stepSizeFloats, muExpectedCol);
+          const m1 = readFloatSnapshot(floats, i, stepSizeFloats, muExpectedCol);
+
+          out.gantryDeg[nextCp] = g0 + a * (g1 - g0);
+          out.collimatorDeg[nextCp] = c0 + a * (c1 - c0);
+          out.mu[nextCp] = m0 + a * (m1 - m0);
+
+          if (out.mlc) {
+            const arr = new Float32Array(out.leafCount);
+            const base0 = prevIdx * stepSizeFloats;
+            const base1 = i * stepSizeFloats;
+            for (let leaf = 0; leaf < out.leafCount; leaf++) {
+              const col = mlcExpectedStartCol + (2 * leaf);
+              const p0 = floats[base0 + col];
+              const p1 = floats[base1 + col];
+              arr[leaf] = p0 + a * (p1 - p0);
+            }
+            out.mlc[nextCp] = arr;
+          }
+
+          nextCp++;
+        }
+        prevIdx = i;
+      }
+
+      if (nextCp < cpCount) return null;
+      // normalize MU to start at 0
+      const mu0 = out.mu[0] || 0;
+      for (let i = 0; i < out.mu.length; i++) out.mu[i] = out.mu[i] - mu0;
+      return out;
+    }
+
+    function parseVarianTrajectoryLogBin(arrayBuffer) {
+      const view = new DataView(arrayBuffer);
+      let off = 0;
+
+      const signature = readFixedString(view, off, 16); off += 16;
+      const versionStr = readFixedString(view, off, 16); off += 16;
+      const version = Number.parseFloat(versionStr);
+      const headerSize = view.getInt32(off, true); off += 4;
+      const samplingIntervalMs = view.getInt32(off, true); off += 4;
+      const numAxes = view.getInt32(off, true); off += 4;
+
+      const axisEnum = new Array(numAxes);
+      for (let i = 0; i < numAxes; i++) { axisEnum[i] = view.getInt32(off, true); off += 4; }
+      const samplesPerAxis = new Array(numAxes);
+      for (let i = 0; i < numAxes; i++) { samplesPerAxis[i] = view.getInt32(off, true); off += 4; }
+
+      const axisScale = view.getInt32(off, true); off += 4;
+      const numSubbeams = view.getInt32(off, true); off += 4;
+      const isTruncated = view.getInt32(off, true); off += 4;
+      const numSnapshots = view.getInt32(off, true); off += 4;
+      const mlcModel = view.getInt32(off, true); off += 4;
+
+      if (!signature.includes('VOSTL') && !signature.includes('VOST')) {
+        throw new Error(`Not a Trajectory Log .bin (signature="${signature || 'N/A'}")`);
+      }
+      if (!Number.isFinite(version) || version < 1.0) {
+        throw new Error(`Unrecognized trajectory log version string "${versionStr || 'N/A'}"`);
+      }
+      if (!Number.isFinite(headerSize) || headerSize < 256) {
+        throw new Error(`Invalid header size ${headerSize}`);
+      }
+      if (!Number.isFinite(numSnapshots) || numSnapshots < 2) {
+        throw new Error(`Invalid num_snapshots ${numSnapshots}`);
+      }
+      if (!Number.isFinite(samplingIntervalMs) || samplingIntervalMs <= 0) {
+        throw new Error(`Invalid sampling_interval_ms ${samplingIntervalMs}`);
+      }
+
+      const samplesSum = samplesPerAxis.reduce((a, b) => a + b, 0);
+      const stepSizeFloats = samplesSum * 2;
+      const totalFloats = stepSizeFloats * numSnapshots;
+
+      // After the 1024-byte header, there is the "Subbeam" block (if any), then axis snapshot data.
+      // Subbeam size follows pylinac's `Subbeam` parsing:
+      // - v3.0+: 4+4+4+4 + 512 + 32 = 560 bytes
+      // - <v3.0: 4+4+4+4 + 32 + 32 = 80 bytes
+      const subbeamSizeBytes = (version >= 3.0) ? 560 : 80;
+      let snapshotOffsetBytes = headerSize + (numSubbeams * subbeamSizeBytes);
+
+      // Heuristic: if headerSize isn't 1024 (should be), or if subbeam parsing is off, try to fallback to 1024.
+      // This is safer than hard-failing for small format variants.
+      const bytesNeeded = totalFloats * 4;
+      if (snapshotOffsetBytes + bytesNeeded > arrayBuffer.byteLength && headerSize !== 1024) {
+        snapshotOffsetBytes = 1024 + (numSubbeams * subbeamSizeBytes);
+      }
+      if (snapshotOffsetBytes + bytesNeeded > arrayBuffer.byteLength) {
+        throw new Error(`Binary file too small for snapshot payload. Need ${bytesNeeded} bytes at offset ${snapshotOffsetBytes}, file has ${arrayBuffer.byteLength}.`);
+      }
+      if ((snapshotOffsetBytes % 4) !== 0) {
+        throw new Error(`Unaligned snapshot offset (${snapshotOffsetBytes} bytes); cannot parse float32 array safely.`);
+      }
+
+      const floats = new Float32Array(arrayBuffer, snapshotOffsetBytes, totalFloats);
+
+      // Mirror pylinac's TrajectoryLogAxisData field ordering to locate MU and Beam Hold:
+      // collimator, gantry, jaws(y1,y2,x1,x2), couch(vrt,lng,lat,rtn[,pitch,roll]), mu, beam_hold, control_point, carriageA, carriageB, mlc...
+      // gantry actual column is 3 (expected at 2).
+      // collimator actual column is 1 (expected at 0).
+      const collimatorExpectedCol = 0;
+      const collimatorActualCol = 1;
+      const gantryExpectedCol = 2;
+      const gantryActualCol = 3;
+      const muExpectedCol = (version >= 3.0) ? 24 : 20;
+      const muActualCol = muExpectedCol + 1;
+      const beamHoldActualCol = muExpectedCol + 3;
+      const controlPointActualCol = muExpectedCol + 5;
+      const mlcExpectedStartCol = muExpectedCol + 10;
+
+      const timeSec = new Array(numSnapshots);
+      const cumMu = new Array(numSnapshots);
+      const cumMuExpected = new Array(numSnapshots);
+      const gantryDeg = new Array(numSnapshots);
+      const gantryExpectedDeg = new Array(numSnapshots);
+      const collimatorDeg = new Array(numSnapshots);
+      const collimatorExpectedDeg = new Array(numSnapshots);
+      const beamHold = new Array(numSnapshots);
+      const controlPoint = new Array(numSnapshots);
+
+      const stepSec = samplingIntervalMs / 1000.0;
+      const mu0 = floats[muActualCol]; // first snapshot
+      const muE0 = floats[muExpectedCol]; // first snapshot expected
+      for (let i = 0; i < numSnapshots; i++) {
+        const base = i * stepSizeFloats;
+        timeSec[i] = i * stepSec;
+        const mu = floats[base + muActualCol];
+        cumMu[i] = mu - mu0;
+        const muE = floats[base + muExpectedCol];
+        cumMuExpected[i] = muE - muE0;
+        gantryDeg[i] = floats[base + gantryActualCol];
+        gantryExpectedDeg[i] = floats[base + gantryExpectedCol];
+        collimatorDeg[i] = floats[base + collimatorActualCol];
+        collimatorExpectedDeg[i] = floats[base + collimatorExpectedCol];
+        beamHold[i] = floats[base + beamHoldActualCol];
+        controlPoint[i] = floats[base + controlPointActualCol];
+      }
+
+      const cpMon = makeMonotonicNonDecreasing(controlPoint);
+      const cpExpected = synthesizeExpectedCPsFromTrajectory({
+        floats,
+        stepSizeFloats,
+        cpSeries: cpMon,
+        cpEndIndex: cpMon[numSnapshots - 1],
+        muExpectedCol,
+        gantryExpectedCol,
+        collimatorExpectedCol,
+        mlcExpectedStartCol
+      });
+      let beamHoldCount = 0;
+      for (let i = 0; i < beamHold.length; i++) if (Math.round(beamHold[i] || 0) !== 0) beamHoldCount++;
+      const gantryStable05 = computeStableSpeedStatsFromAngleDeg(gantryDeg, stepSec, beamHold, 0.5);
+      const gantryStable20 = computeStableSpeedStatsFromAngleDeg(gantryDeg, stepSec, beamHold, 2.0);
+      const doseRateStable05 = computeStableDoseRateStatsFromCumMu(makeMonotonicNonDecreasing(cumMu), stepSec, beamHold, 0.5);
+      const doseRateStable20 = computeStableDoseRateStatsFromCumMu(makeMonotonicNonDecreasing(cumMu), stepSec, beamHold, 2.0);
+
+      return {
+        timeSec,
+        cumMu: makeMonotonicNonDecreasing(cumMu),
+        cumMuExpected: makeMonotonicNonDecreasing(cumMuExpected),
+        meta: {
+          format: 'VarianTrajectoryLogBin',
+          signature,
+          version,
+          headerSize,
+          samplingIntervalMs,
+          numAxes,
+          axisScale,
+          numSubbeams,
+          isTruncated,
+          numSnapshots,
+          mlcModel,
+          muColumnIndex: muActualCol,
+          beamHoldColumnIndex: beamHoldActualCol,
+          controlPointColumnIndex: controlPointActualCol,
+          controlPointEnd: cpMon[numSnapshots - 1],
+          beamHoldCount,
+          beamHoldTotalSec: beamHoldCount * stepSec,
+          beamHoldFraction: beamHoldCount / Math.max(1, numSnapshots),
+          cpExpected: cpExpected ? { cpCount: cpExpected.cpCount, leafCount: cpExpected.leafCount } : null,
+          axisEnum,
+          samplesPerAxis,
+          gantryStable05,
+          gantryStable20,
+          doseRateStable05,
+          doseRateStable20
+        },
+        gantryDeg,
+        gantryExpectedDeg,
+        collimatorDeg,
+        collimatorExpectedDeg,
+        beamHold,
+        controlPoint: cpMon,
+        cpExpected
+      };
+    }
+
+    function normalizeGantryAngleDiff(g1, g2) { let diff = Math.abs(g1 - g2); if (diff > 180) diff = 360 - diff; return diff; }
+
+    function effectiveAccelFromJerk(vmax, amax, jmax) {
+      const v = Number(vmax);
+      const a = Number(amax);
+      const j = Number(jmax);
+      if (!Number.isFinite(a) || a <= 0) return a;
+      if (!Number.isFinite(v) || v <= 0) return a;
+      if (!Number.isFinite(j) || j <= 0) return a;
+      // Simple S-curve proxy: if jerk is small, you may never reach the nominal amax before saturating at vmax.
+      const aJ = Math.sqrt(Math.max(0, v * j));
+      if (!Number.isFinite(aJ) || aJ <= 0) return a;
+      return Math.min(a, aJ);
+    }
+
+    function calculateProfiledMoveTime(distance, maxSpeed, maxAcceleration) {
+      if (distance <= 1e-9) return 0;
+      if (maxSpeed <= 0 || !Number.isFinite(maxAcceleration) || maxAcceleration <= 0) return Infinity;
+
+      const timeToMaxSpeed = maxSpeed / maxAcceleration;
+      const distanceToReachMaxSpeed = 0.5 * maxAcceleration * timeToMaxSpeed * timeToMaxSpeed;
+      if (distance <= 2 * distanceToReachMaxSpeed) {
+        return 2 * Math.sqrt(distance / (2 * maxAcceleration));
+      }
+      const constantSpeedDistance = distance - (2 * distanceToReachMaxSpeed);
+      return (2 * timeToMaxSpeed) + (constantSpeedDistance / maxSpeed);
+    }
+
+    function calculateContinuousMoveTimesForDistances(distances, vmax, amax) {
+      if (!distances || distances.length === 0) return [];
+      if (!Number.isFinite(vmax) || vmax <= 0) return distances.map(() => Infinity);
+      if (!Number.isFinite(amax) || amax <= 0) return distances.map(d => Math.max(0, d) / vmax);
+
+      const n = distances.length;
+      const v = new Array(n + 1).fill(0);
+
+      for (let i = 0; i < n; i++) {
+        const d = Math.max(0, distances[i]);
+        const vNextMax = Math.sqrt((v[i] * v[i]) + (2 * amax * d));
+        v[i + 1] = Math.min(vmax, vNextMax);
+      }
+
+      v[n] = 0;
+      for (let i = n - 1; i >= 0; i--) {
+        const d = Math.max(0, distances[i]);
+        const vMaxFromNext = Math.sqrt((v[i + 1] * v[i + 1]) + (2 * amax * d));
+        v[i] = Math.min(v[i], vMaxFromNext);
+      }
+
+      for (let iter = 0; iter < 2; iter++) {
+        for (let i = 0; i < n; i++) {
+          const d = Math.max(0, distances[i]);
+          const vNextMax = Math.sqrt((v[i] * v[i]) + (2 * amax * d));
+          v[i + 1] = Math.min(v[i + 1], vmax, vNextMax);
+        }
+        v[n] = 0;
+        for (let i = n - 1; i >= 0; i--) {
+          const d = Math.max(0, distances[i]);
+          const vMaxFromNext = Math.sqrt((v[i + 1] * v[i + 1]) + (2 * amax * d));
+          v[i] = Math.min(v[i], vMaxFromNext);
+        }
+      }
+
+      const t = new Array(n);
+      for (let i = 0; i < n; i++) {
+        const d = Math.max(0, distances[i]);
+        const denom = v[i] + v[i + 1];
+        t[i] = (denom > 1e-9) ? (2 * d / denom) : 0;
+      }
+      return t;
+    }
+
+    function getEffectiveMLCPositionsForCP(cp, beamData) {
+      if (!cp || !cp.mlcPositionData || cp.mlcPositionData.length === 0) return null;
+      if (!beamData.isRDSMachine || cp.mlcPositionData.length === 1) {
+        const mlcLayer = cp.mlcPositionData.find(p => p.type === 'MLCX' || (p.type || '').toUpperCase().startsWith('MLCX'));
+        return mlcLayer ? mlcLayer.positions : cp.mlcPositionData[0].positions;
+      }
+      if (beamData.isRDSMachine && cp.mlcPositionData.length >= 2) {
+        const layer1PosData = cp.mlcPositionData.find(p => (p.type || '').toUpperCase() === 'MLCX1');
+        const layer2PosData = cp.mlcPositionData.find(p => (p.type || '').toUpperCase() === 'MLCX2');
+        const layer1Def = (beamData.mlcDefinitions || []).find(def => (def.type || '').toUpperCase() === 'MLCX1');
+        const layer2Def = (beamData.mlcDefinitions || []).find(def => (def.type || '').toUpperCase() === 'MLCX2');
+        if (!layer1PosData || !layer2PosData || !layer1Def || !layer2Def) return cp.mlcPositionData[0].positions;
+
+        const virtualBoundaries = Array.from(new Set([...(layer1Def.boundaries || []), ...(layer2Def.boundaries || [])])).sort((a, b) => a - b);
+        const virtualPositionsA = [];
+        const virtualPositionsB = [];
+        for (let i = 0; i < virtualBoundaries.length - 1; i++) {
+          const vLeafCenterY = (virtualBoundaries[i] + virtualBoundaries[i + 1]) / 2;
+          let pos1A = -Infinity, pos1B = Infinity, pos2A = -Infinity, pos2B = Infinity;
+          for (let j = 0; j < (layer1Def.boundaries || []).length - 1; j++) {
+            if (vLeafCenterY >= layer1Def.boundaries[j] && vLeafCenterY < layer1Def.boundaries[j + 1]) {
+              const half = layer1PosData.positions.length / 2;
+              pos1A = layer1PosData.positions[j];
+              pos1B = layer1PosData.positions[j + half];
+              break;
+            }
+          }
+          for (let k = 0; k < (layer2Def.boundaries || []).length - 1; k++) {
+            if (vLeafCenterY >= layer2Def.boundaries[k] && vLeafCenterY < layer2Def.boundaries[k + 1]) {
+              const half = layer2PosData.positions.length / 2;
+              pos2A = layer2PosData.positions[k];
+              pos2B = layer2PosData.positions[k + half];
+              break;
+            }
+          }
+          virtualPositionsA.push(Math.max(pos1A, pos2A));
+          virtualPositionsB.push(Math.min(pos1B, pos2B));
+        }
+        return [...virtualPositionsA, ...virtualPositionsB];
+      }
+      return cp.mlcPositionData[0].positions;
+    }
+
+    function simulateBeamTiming(beam, primaryDoseRate, params) {
+      const cps = beam.controlPoints || [];
+      if (cps.length < 2) return { tCum: cps.map(() => 0), segmentDurations: [] };
+      const totalMU = Number(beam.totalMeterset) || 0;
+      const doseRateScale = (params.doseRateScale || 1);
+      const useAccurateMlc = !!(accurateMlcInput?.checked);
+
+      const tCum = new Array(cps.length).fill(0);
+      const seg = new Array(cps.length - 1).fill(0);
+
+      const beamStartOverheadSec = Number(params.beamStartOverheadSec) || 0;
+      if (beamStartOverheadSec > 0) tCum[0] = beamStartOverheadSec;
+
+      const nSeg = cps.length - 1;
+      const deltaG = new Array(nSeg).fill(0);
+      const deltaC = new Array(nSeg).fill(0);
+      const maxLeaf = new Array(nSeg).fill(0);
+      const deltaMU = new Array(nSeg).fill(0);
+      const doseRateSet = new Array(nSeg).fill(Number(primaryDoseRate) || 600);
+
+      let leafDistances = null;
+      if (useAccurateMlc) {
+        const eff0 = getEffectiveMLCPositionsForCP(cps[0], beam);
+        if (eff0 && eff0.length > 0) {
+          leafDistances = new Array(eff0.length);
+          for (let k = 0; k < eff0.length; k++) leafDistances[k] = new Float32Array(nSeg);
+        }
+      }
+
+      for (let i = 1; i < cps.length; i++) {
+        const prev = cps[i - 1];
+        const cur = cps[i];
+        const si = i - 1;
+
+        deltaG[si] = normalizeGantryAngleDiff(Number(cur.gantryAngle) || 0, Number(prev.gantryAngle) || 0);
+        let dC = Math.abs((Number(cur.collimatorAngle) || 0) - (Number(prev.collimatorAngle) || 0));
+        if (dC > 180) dC = 360 - dC;
+        deltaC[si] = dC;
+
+        const dW = (Number(cur.cumulativeMetersetWeight) || 0) - (Number(prev.cumulativeMetersetWeight) || 0);
+        deltaMU[si] = (dW > 1e-9 && totalMU > 0) ? (totalMU * dW) : 0;
+        const dr = Number(cur.doseRateSet) || Number(prev.doseRateSet) || Number(primaryDoseRate) || 600;
+        doseRateSet[si] = dr;
+
+        let mlcTravel = 0;
+        const prevEff = getEffectiveMLCPositionsForCP(prev, beam);
+        const curEff = getEffectiveMLCPositionsForCP(cur, beam);
+        if (prevEff && curEff && prevEff.length === curEff.length) {
+          if (leafDistances && leafDistances.length === curEff.length) {
+            for (let k = 0; k < curEff.length; k++) {
+              const d = Math.abs(curEff[k] - prevEff[k]);
+              leafDistances[k][si] = d;
+              if (d > mlcTravel) mlcTravel = d;
+            }
+          } else {
+            for (let k = 0; k < curEff.length; k++) mlcTravel = Math.max(mlcTravel, Math.abs(curEff[k] - prevEff[k]));
+          }
+        } else {
+          leafDistances = null;
+        }
+        maxLeaf[si] = mlcTravel;
+      }
+
+      const gAeff = effectiveAccelFromJerk(params.maxGantrySpeedDegPerSec, params.maxGantryAccelDegPerSec2, params.maxGantryJerkDegPerSec3);
+      const cAeff = effectiveAccelFromJerk(params.maxCollimatorSpeedDegPerSec, params.maxCollimatorAccelDegPerSec2, params.maxCollimatorJerkDegPerSec3);
+      const tGMin = calculateContinuousMoveTimesForDistances(deltaG, params.maxGantrySpeedDegPerSec, gAeff);
+      const tCMin = calculateContinuousMoveTimesForDistances(deltaC, params.maxCollimatorSpeedDegPerSec, cAeff);
+      let tMMin;
+      if (leafDistances && leafDistances.length > 0) {
+        tMMin = new Array(nSeg).fill(0);
+        for (let k = 0; k < leafDistances.length; k++) {
+          const tLeaf = calculateContinuousMoveTimesForDistances(leafDistances[k], params.maxMlcSpeedMmPerSec, params.maxMlcAccelMmPerSec2);
+          for (let si = 0; si < nSeg; si++) tMMin[si] = Math.max(tMMin[si], tLeaf[si] || 0);
+        }
+      } else {
+        tMMin = calculateContinuousMoveTimesForDistances(maxLeaf, params.maxMlcSpeedMmPerSec, params.maxMlcAccelMmPerSec2);
+      }
+
+      for (let si = 0; si < nSeg; si++) {
+        const maxDoseRatePerSec = (Number(doseRateSet[si]) || 0) * doseRateScale / 60.0;
+        const tDose = (maxDoseRatePerSec > 1e-9) ? (deltaMU[si] / maxDoseRatePerSec) : 0;
+        const base = Math.max(tGMin[si] || 0, tCMin[si] || 0, tMMin[si] || 0, tDose);
+        const dt = base + (params.segmentOverheadSec || 0);
+        seg[si] = dt;
+        tCum[si + 1] = tCum[si] + dt;
+      }
+      return { tCum, segmentDurations: seg };
+    }
+
+    function interpolateTimeAtMonotonicX(timeSec, x, targetX) {
+      if (!x || x.length === 0) return null;
+      if (targetX <= x[0]) return timeSec[0];
+      const last = x.length - 1;
+      if (targetX > x[last]) return null;
+
+      let lo = 0, hi = last;
+      while (lo + 1 < hi) {
+        const mid = (lo + hi) >> 1;
+        if (x[mid] >= targetX) hi = mid; else lo = mid;
+      }
+
+      const x0 = x[lo], x1 = x[hi];
+      const t0 = timeSec[lo], t1 = timeSec[hi];
+      if (Math.abs(x1 - x0) < 1e-9) return t1;
+      const a = (targetX - x0) / (x1 - x0);
+      return t0 + a * (t1 - t0);
+    }
+
+    function interpretThreshold(value, totalMu) {
+      const v = Number(value);
+      if (!Number.isFinite(v) || v < 0) return 0;
+      if (v <= 1.0 && Number.isFinite(totalMu) && totalMu > 0) return v * totalMu;
+      return v;
+    }
+
+    function computePairCurve(pair, params) {
+      const plan = state.plans[pair.planIndex]?.data;
+      const planBeam = plan?.beams?.[pair.beamIndex];
+      const log = state.logs[pair.logIndex]?.data;
+      if (!plan || !planBeam || !log) throw new Error('Invalid pair.');
+
+      const primaryDoseRate = (typeof plan.primaryDoseRate === 'number') ? plan.primaryDoseRate : 600.0;
+      const beam = (useLogExpectedPlanInput?.checked && log?.meta?.format === 'VarianTrajectoryLogBin')
+        ? (buildSyntheticBeamFromLogExpected(planBeam, log, primaryDoseRate) || planBeam)
+        : planBeam;
+
+      const totalMU = Number(beam.totalMeterset) || 0;
+      const muStartThreshold = interpretThreshold(muStartThresholdInput.value, totalMU);
+      const muEndMargin = interpretThreshold(muEndMarginInput.value, totalMU);
+
+      const cps = beam.controlPoints || [];
+      const targets = cps.map(cp => (Number(cp.cumulativeMetersetWeight) || 0) * totalMU);
+      const i0 = targets.findIndex(mu => mu >= muStartThreshold);
+      if (i0 < 0) throw new Error(`No CP reaches MU start threshold (${muStartThreshold}).`);
+      let i1 = targets.length - 1;
+      while (i1 > i0 && targets[i1] > totalMU - muEndMargin) i1--;
+      if (i1 <= i0) throw new Error('Not enough CPs in window after applying end margin.');
+
+      const tAct = new Array(cps.length).fill(null);
+      const mismatch = detectPlanLogMismatch(planBeam, log);
+      if (!usingSynth && (mismatch.cpMismatch || mismatch.muMismatch)) {
+        throw new Error(`Plan/log mismatch: ${(mismatch.reasons || []).join(', ') || 'CP/MU mismatch'}`);
+      }
+      let canUseCp = !!(useCpAxisInput?.checked && log.meta?.format === 'VarianTrajectoryLogBin' && Array.isArray(log.controlPoint));
+      if (canUseCp && beam?._syntheticFromTrajectoryExpected) {
+        // Synthetic beam is derived from the same log CP axis; allow CP mapping if lengths match.
+        const logCp = (Number.isFinite(Number(log?.controlPoint?.[log?.controlPoint?.length - 1]))) ? (Math.round(Number(log.controlPoint[log.controlPoint.length - 1])) + 1) : 0;
+        if (logCp > 0 && cps.length > 0 && Math.abs(logCp - cps.length) > 1) canUseCp = false;
+      } else if (canUseCp && (mismatch.cpMismatch || mismatch.muMismatch)) {
+        canUseCp = false;
+      }
+      for (let i = i0; i <= i1; i++) {
+        const t = canUseCp
+          ? interpolateTimeAtMonotonicX(log.timeSec, log.controlPoint, i)
+          : interpolateTimeAtMonotonicX(log.timeSec, log.cumMu, targets[i]);
+        tAct[i] = (t === null) ? null : t;
+      }
+      if (tAct[i0] === null || tAct[i1] === null) throw new Error('Log does not cover the selected CP window.');
+
+      const sim = simulateBeamTiming(beam, primaryDoseRate, params);
+      const tPred = sim.tCum;
+
+      const t0Act = tAct[i0];
+      const t0Pred = tPred[i0];
+
+      const xs = [];
+      const yAct = [];
+      const yPred = [];
+      const segAct = [];
+      const segPred = [];
+      const segW = [];
+      for (let i = i0; i <= i1; i++) {
+        if (tAct[i] === null) continue;
+        xs.push(i);
+        yAct.push(tAct[i] - t0Act);
+        yPred.push(tPred[i] - t0Pred);
+        if (i > i0 && tAct[i - 1] !== null) {
+          segAct.push((tAct[i] - tAct[i - 1]));
+          segPred.push((tPred[i] - tPred[i - 1]));
+          const dW = (Number(cps[i].cumulativeMetersetWeight) || 0) - (Number(cps[i - 1].cumulativeMetersetWeight) || 0);
+          segW.push(Math.max(0, (totalMU > 0 ? totalMU * dW : dW)));
+        }
+      }
+
+      return {
+        i0, i1,
+        cpIdx: xs,
+        actualSec: yAct,
+        predictedSec: yPred,
+        actualSegSec: segAct,
+        predictedSegSec: segPred,
+        segWeights: segW,
+        mismatch,
+        endErrorSec: (tPred[i1] - t0Pred) - (tAct[i1] - t0Act)
+      };
+    }
+
+    function evaluateAll(params) {
+      const model = String(modelSelect?.value || 'cp');
+      const perPair = [];
+
+      for (const pair of state.pairs) {
+        try {
+          if (model === 'ts') {
+            const curve = computePairCurveTS(pair, params);
+            let sse = 0;
+            for (let i = 0; i < curve.cpIdx.length; i++) {
+              const e = curve.predictedSec[i] - curve.actualSec[i];
+              sse += e * e;
+            }
+            const rmseTime = Math.sqrt(sse / Math.max(1, curve.cpIdx.length));
+            const rmseG = Number(curve.axisRmseDeg?.gantry) || 0;
+            const rmseC = Number(curve.axisRmseDeg?.collimator) || 0;
+            const axisPenaltySec = 0.02 * (rmseG + rmseC);
+            const rmse = rmseTime + axisPenaltySec;
+            perPair.push({ rmseSec: rmse, rmseTimeSec: rmseTime, axisPenaltySec, axisRmseDeg: curve.axisRmseDeg, endErrorSec: curve.endErrorSec });
+          } else {
+            const curve = computePairCurve(pair, params);
+            const metric = String(fitMetricSelect?.value || 'segment');
+            const useWeights = !!(weightByMuInput?.checked);
+
+            let sse = 0;
+            let wsum = 0;
+            if (metric === 'cumulative') {
+              for (let i = 0; i < curve.cpIdx.length; i++) {
+                const e = curve.predictedSec[i] - curve.actualSec[i];
+                sse += e * e;
+              }
+              wsum = Math.max(1, curve.cpIdx.length);
+            } else {
+              for (let i = 0; i < curve.actualSegSec.length; i++) {
+                const e = curve.predictedSegSec[i] - curve.actualSegSec[i];
+                const w = useWeights ? Math.max(1e-6, (curve.segWeights?.[i] ?? 1)) : 1.0;
+                sse += w * e * e;
+                wsum += w;
+              }
+              wsum = Math.max(1e-9, wsum);
+            }
+            const rmse = Math.sqrt(sse / wsum);
+            perPair.push({ rmseSec: rmse, endErrorSec: curve.endErrorSec });
+          }
+        } catch (e) {
+          perPair.push({ rmseSec: Infinity, endErrorSec: 0, error: e.message });
+        }
+      }
+
+      const agg = String(pairAggSelect?.value || 'median');
+      const rmses = perPair.map(p => p.rmseSec).filter(Number.isFinite).sort((a, b) => a - b);
+      const loss = (rmses.length === 0) ? Infinity : (agg === 'mean'
+        ? (rmses.reduce((a, b) => a + b, 0) / rmses.length)
+        : rmses[Math.floor((rmses.length - 1) / 2)]);
+      return { loss, perPair };
+    }
+
+    function combinedLoss(evalResult, weights) {
+      const wRmse = weights?.rmse ?? 1.0;
+      const wEnd = weights?.end ?? 0.35;
+      const rmseAgg = evalResult.loss;
+      const absEnds = evalResult.perPair.map(p => Math.abs(p.endErrorSec || 0)).filter(Number.isFinite).sort((a, b) => a - b);
+      const agg = String(pairAggSelect?.value || 'median');
+      const endAgg = (absEnds.length === 0) ? 0 : (agg === 'mean'
+        ? (absEnds.reduce((a, b) => a + b, 0) / absEnds.length)
+        : absEnds[Math.floor((absEnds.length - 1) / 2)]);
+      return (wRmse * rmseAgg) + (wEnd * endAgg);
+    }
+
+    function projectToBounds(params, defs) {
+      const out = { ...params };
+      for (const d of defs) {
+        const v = Number(out[d.key]);
+        if (!Number.isFinite(v)) out[d.key] = d.min;
+        else out[d.key] = clamp(v, d.min, d.max);
+      }
+      return out;
+    }
+
+    function makeInitialSimplex(baseParams, fitDefs) {
+      const simplex = [];
+      simplex.push(projectToBounds(baseParams, fitDefs));
+      for (const d of fitDefs) {
+        const p = { ...baseParams };
+        const step = (d.step && d.step > 0) ? d.step : (0.02 * (d.max - d.min));
+        p[d.key] = clamp((Number(p[d.key]) || 0) + step, d.min, d.max);
+        simplex.push(projectToBounds(p, fitDefs));
+      }
+      return simplex;
+    }
+
+    function nelderMeadOptimize({ baseParams, fitDefs, evaluate, maxIter = 220 }) {
+      const alpha = 1.0, gamma = 2.0, rho = 0.5, sigma = 0.5;
+      let simplex = makeInitialSimplex(baseParams, fitDefs);
+
+      function score(p) { return evaluate(p); }
+      let scored = simplex.map(p => ({ p, s: score(p) }));
+
+      for (let iter = 0; iter < maxIter; iter++) {
+        scored.sort((a, b) => a.s - b.s);
+        const best = scored[0];
+        const worst = scored[scored.length - 1];
+        const secondWorst = scored[scored.length - 2];
+
+        const centroid = {};
+        for (const d of fitDefs) centroid[d.key] = 0;
+        for (let i = 0; i < scored.length - 1; i++) {
+          for (const d of fitDefs) centroid[d.key] += scored[i].p[d.key];
+        }
+        for (const d of fitDefs) centroid[d.key] /= (scored.length - 1);
+
+        const reflect = { ...baseParams };
+        for (const d of fitDefs) {
+          reflect[d.key] = centroid[d.key] + alpha * (centroid[d.key] - worst.p[d.key]);
+        }
+        const xR = projectToBounds(reflect, fitDefs);
+        const fR = score(xR);
+
+        if (fR < best.s) {
+          const expand = { ...baseParams };
+          for (const d of fitDefs) {
+            expand[d.key] = centroid[d.key] + gamma * (xR[d.key] - centroid[d.key]);
+          }
+          const xE = projectToBounds(expand, fitDefs);
+          const fE = score(xE);
+          scored[scored.length - 1] = (fE < fR) ? { p: xE, s: fE } : { p: xR, s: fR };
+          continue;
+        }
+
+        if (fR < secondWorst.s) {
+          scored[scored.length - 1] = { p: xR, s: fR };
+          continue;
+        }
+
+        const contract = { ...baseParams };
+        for (const d of fitDefs) {
+          contract[d.key] = centroid[d.key] + rho * (worst.p[d.key] - centroid[d.key]);
+        }
+        const xC = projectToBounds(contract, fitDefs);
+        const fC = score(xC);
+
+        if (fC < worst.s) {
+          scored[scored.length - 1] = { p: xC, s: fC };
+          continue;
+        }
+
+        // shrink
+        const newScored = [best];
+        for (let i = 1; i < scored.length; i++) {
+          const shrunk = { ...baseParams };
+          for (const d of fitDefs) {
+            shrunk[d.key] = best.p[d.key] + sigma * (scored[i].p[d.key] - best.p[d.key]);
+          }
+          const xS = projectToBounds(shrunk, fitDefs);
+          newScored.push({ p: xS, s: score(xS) });
+        }
+        scored = newScored;
+      }
+
+      scored.sort((a, b) => a.s - b.s);
+      return scored[0];
+    }
+
+    function buildDefaultParams() {
+      return {
+        maxGantrySpeedDegPerSec: 6.0,
+        maxGantryAccelDegPerSec2: 8.0,
+        maxGantryJerkDegPerSec3: 80.0,
+        maxMlcSpeedMmPerSec: 25.0,
+        maxMlcAccelMmPerSec2: 80.0,
+        maxCollimatorSpeedDegPerSec: 9.0,
+        maxCollimatorAccelDegPerSec2: 10.0,
+        maxCollimatorJerkDegPerSec3: 100.0,
+        gantryDelaySec: 0.06,
+        collimatorDelaySec: 0.06,
+        muDelaySec: 0.04,
+        muTauSec: 0.10,
+        doseRateScale: 1.0,
+        beamStartOverheadSec: 0.0,
+        segmentOverheadSec: 0.02
+      };
+    }
+
+    function buildParamDefs() {
+      return [
+        { key: 'maxGantrySpeedDegPerSec', label: 'Max gantry speed', units: 'deg/s', min: 1.0, max: 10.0, step: 0.1, fit: false },
+        { key: 'maxGantryAccelDegPerSec2', label: 'Max gantry accel/decel', units: 'deg/s²', min: 5.0, max: 30.0, step: 0.5, fit: true },
+        { key: 'maxGantryJerkDegPerSec3', label: 'Max gantry jerk', units: 'deg/s³', min: 10.0, max: 400.0, step: 5.0, fit: false },
+        { key: 'maxMlcSpeedMmPerSec', label: 'Max MLC speed', units: 'mm/s', min: 5.0, max: 60.0, step: 0.5, fit: false },
+        { key: 'maxMlcAccelMmPerSec2', label: 'Max MLC accel/decel', units: 'mm/s²', min: 20.0, max: 400.0, step: 5.0, fit: true },
+        { key: 'maxCollimatorSpeedDegPerSec', label: 'Max collimator speed', units: 'deg/s', min: 1.0, max: 20.0, step: 0.5, fit: false },
+        { key: 'maxCollimatorAccelDegPerSec2', label: 'Max collimator accel/decel', units: 'deg/s²', min: 5.0, max: 40.0, step: 0.5, fit: true },
+        { key: 'maxCollimatorJerkDegPerSec3', label: 'Max collimator jerk', units: 'deg/s³', min: 10.0, max: 500.0, step: 5.0, fit: false },
+        { key: 'gantryDelaySec', label: 'Gantry latency', units: 's', min: 0.0, max: 0.25, step: 0.005, fit: true },
+        { key: 'collimatorDelaySec', label: 'Collimator latency', units: 's', min: 0.0, max: 0.25, step: 0.005, fit: true },
+        { key: 'muDelaySec', label: 'MU latency', units: 's', min: 0.0, max: 0.25, step: 0.005, fit: true },
+        { key: 'muTauSec', label: 'MU time constant', units: 's', min: 0.02, max: 0.40, step: 0.01, fit: true },
+        { key: 'doseRateScale', label: 'Dose rate scale', units: '× plan DR', min: 1.0, max: 1.0, step: 0.0, fit: false },
+        { key: 'beamStartOverheadSec', label: 'Beam start overhead', units: 's', min: 0.0, max: 5.0, step: 0.05, fit: true },
+        { key: 'segmentOverheadSec', label: 'Per-CP overhead', units: 's', min: 0.0, max: 0.08, step: 0.001, fit: true }
+      ];
+    }
+
+    function renderParamTable() {
+      paramTableBody.innerHTML = '';
+      for (const def of state.paramDefs) {
+        const tr = document.createElement('tr');
+
+        const fitTd = document.createElement('td');
+        const fitCb = document.createElement('input');
+        fitCb.type = 'checkbox';
+        fitCb.checked = !!def.fit;
+        fitCb.addEventListener('change', () => { def.fit = fitCb.checked; });
+        fitTd.appendChild(fitCb);
+
+        const nameTd = document.createElement('td');
+        nameTd.textContent = def.label;
+
+        const valTd = document.createElement('td');
+        const valInput = document.createElement('input');
+        valInput.type = 'number';
+        valInput.step = 'any';
+        valInput.value = state.params[def.key];
+        valInput.addEventListener('change', () => {
+          const v = Number(valInput.value);
+          if (Number.isFinite(v)) state.params[def.key] = v;
+        });
+        valTd.appendChild(valInput);
+
+        const minTd = document.createElement('td'); minTd.textContent = def.min;
+        const maxTd = document.createElement('td'); maxTd.textContent = def.max;
+        const stepTd = document.createElement('td'); stepTd.textContent = def.step;
+        const unitsTd = document.createElement('td'); unitsTd.textContent = def.units;
+
+        tr.appendChild(fitTd);
+        tr.appendChild(nameTd);
+        tr.appendChild(valTd);
+        tr.appendChild(minTd);
+        tr.appendChild(maxTd);
+        tr.appendChild(stepTd);
+        tr.appendChild(unitsTd);
+        paramTableBody.appendChild(tr);
+      }
+    }
+
+    function canAddPairs() {
+      return state.plans.length > 0 && state.logs.length > 0;
+    }
+
+    function updateControls() {
+      const readyPairs = state.pairs.length > 0;
+      addPairBtn.disabled = !canAddPairs();
+      clearPairsBtn.disabled = state.pairs.length === 0;
+      fitBtn.disabled = !readyPairs;
+      evalBtn.disabled = !readyPairs;
+      exportBtn.disabled = !readyPairs;
+      plotPairSelect.disabled = !readyPairs;
+      plotModeSelect.disabled = !readyPairs;
+      plotBtn.disabled = !readyPairs;
+
+      fileSummary.textContent = `Loaded: ${state.plans.length} plan(s), ${state.logs.length} log(s), ${state.pairs.length} pair(s).`;
+
+      exportLogSelect.innerHTML = '';
+      state.logs.forEach((l, idx) => {
+        const opt = document.createElement('option');
+        opt.value = String(idx);
+        opt.textContent = l.name;
+        exportLogSelect.appendChild(opt);
+      });
+      exportLogBtn.disabled = state.logs.length === 0;
+
+      // Inferred gantry max from loaded .bin logs (stable 2s window, max across log)
+      const inferred = state.logs
+        .map(l => l?.data?.meta?.gantryStable20?.max)
+        .filter(v => Number.isFinite(v))
+        .sort((a, b) => a - b);
+      if (inferred.length > 0) {
+        const p95Idx = Math.floor((inferred.length - 1) * 0.95);
+        const p95 = inferred[p95Idx];
+        const mx = inferred[inferred.length - 1];
+        inferredGantryText.textContent = `From .bin logs: gantry stable(2s) p95≈${formatNum(p95, 3)} deg/s, max≈${formatNum(mx, 3)} deg/s`;
+        applyInferredGantryBtn.disabled = false;
+      } else {
+        inferredGantryText.textContent = '';
+        applyInferredGantryBtn.disabled = true;
+      }
+
+      plotPairSelect.innerHTML = '';
+      state.pairs.forEach((p, idx) => {
+        const planName = state.plans[p.planIndex]?.name || 'Plan?';
+        const logName = state.logs[p.logIndex]?.name || 'Log?';
+        const opt = document.createElement('option');
+        opt.value = String(idx);
+        opt.textContent = `#${idx + 1}: ${planName} | beam ${p.beamIndex + 1} | ${logName}`;
+        plotPairSelect.appendChild(opt);
+      });
+    }
+
+    function renderPairs() {
+      if (!canAddPairs() && state.pairs.length === 0) {
+        pairsContainer.textContent = 'Load plans and logs to add pairs.';
+        updateControls();
+        return;
+      }
+      if (state.pairs.length === 0) {
+        pairsContainer.textContent = 'Click "Add Pair" to start.';
+        updateControls();
+        return;
+      }
+
+      const wrapper = document.createElement('div');
+      wrapper.style.display = 'flex';
+      wrapper.style.flexDirection = 'column';
+      wrapper.style.gap = '10px';
+
+      state.pairs.forEach((pair, idx) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.style.padding = '8px';
+        row.style.border = '1px solid #e5e7eb';
+        row.style.borderRadius = '10px';
+        row.style.background = '#ffffff';
+
+        const planSel = document.createElement('select');
+        state.plans.forEach((p, i) => {
+          const opt = document.createElement('option');
+          opt.value = String(i);
+          opt.textContent = p.name;
+          planSel.appendChild(opt);
+        });
+        planSel.value = String(pair.planIndex);
+
+        const beamSel = document.createElement('select');
+        function populateBeams(planIndex) {
+          beamSel.innerHTML = '';
+          const plan = state.plans[planIndex]?.data;
+          const beams = plan?.beams || [];
+          beams.forEach((b, i) => {
+            const opt = document.createElement('option');
+            opt.value = String(i);
+            opt.textContent = b.beamName ? `${i + 1}: ${b.beamName}` : `Beam ${i + 1}`;
+            beamSel.appendChild(opt);
+          });
+        }
+        populateBeams(pair.planIndex);
+        beamSel.value = String(pair.beamIndex);
+
+        const logSel = document.createElement('select');
+        state.logs.forEach((l, i) => {
+          const opt = document.createElement('option');
+          opt.value = String(i);
+          opt.textContent = l.name;
+          logSel.appendChild(opt);
+        });
+        logSel.value = String(pair.logIndex);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'secondary';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', () => {
+          state.pairs.splice(idx, 1);
+          renderPairs();
+        });
+
+        planSel.addEventListener('change', () => {
+          pair.planIndex = Number(planSel.value);
+          pair.beamIndex = 0;
+          populateBeams(pair.planIndex);
+          beamSel.value = '0';
+          updateControls();
+        });
+        beamSel.addEventListener('change', () => { pair.beamIndex = Number(beamSel.value); updateControls(); });
+        logSel.addEventListener('change', () => { pair.logIndex = Number(logSel.value); updateControls(); });
+
+        const info = document.createElement('div');
+        info.className = 'small';
+        info.style.flex = '1';
+        info.textContent = '—';
+
+        try {
+          const model = String(modelSelect?.value || 'cp');
+          const curve = (model === 'ts') ? computePairCurveTS(pair, state.params) : computePairCurve(pair, state.params);
+          const durationPred = curve.predictedSec[curve.predictedSec.length - 1];
+          const durationAct = curve.actualSec[curve.actualSec.length - 1];
+          const err = durationPred - durationAct;
+          const plan = state.plans[pair.planIndex]?.data;
+          const beam = plan?.beams?.[pair.beamIndex];
+          const log = state.logs[pair.logIndex]?.data;
+          const mismatch = detectPlanLogMismatch(beam, log);
+          const dr = Number(plan?.primaryDoseRate) || 600;
+          const dtms = Number(log?.meta?.samplingIntervalMs);
+          const holdSec = Number(log?.meta?.beamHoldTotalSec);
+          const canUseCp = !!(useCpAxisInput?.checked && log?.meta?.format === 'VarianTrajectoryLogBin' && Array.isArray(log?.controlPoint) && !mismatch.cpMismatch && !mismatch.muMismatch);
+          const usingSynth = !!(useLogExpectedPlanInput?.checked && log?.meta?.format === 'VarianTrajectoryLogBin' && log?.cpExpected && !beam?.isRDSMachine);
+          const mapping = canUseCp ? 'CP' : 'MU';
+          const extra = [
+            `model=${model}`,
+            `map=${mapping}`,
+            usingSynth ? 'synth=logExpected' : null,
+            mismatch.planMu > 0 ? `planMU≈${mismatch.planMu.toFixed(1)}` : null,
+            mismatch.planCp > 0 ? `planCP=${mismatch.planCp}` : null,
+            mismatch.logMu > 0 ? `logMU≈${mismatch.logMu.toFixed(1)}` : null,
+            mismatch.logCp > 0 ? `logCP=${mismatch.logCp}` : null,
+            ...(mismatch.reasons || []),
+            `DR=${dr}`,
+            Number.isFinite(dtms) ? `dt=${dtms}ms` : null,
+            Number.isFinite(holdSec) ? `hold≈${holdSec.toFixed(1)}s` : null
+          ].filter(Boolean).join(', ');
+          info.textContent = `CP window: [${curve.i0}..${curve.i1}] | actual ${durationAct.toFixed(2)}s, predicted ${durationPred.toFixed(2)}s (end Δ ${err.toFixed(2)}s) | ${extra}`;
+        } catch (e) {
+          info.textContent = `Pair not evaluatable: ${e.message}`;
+        }
+
+        row.appendChild(planSel);
+        row.appendChild(beamSel);
+        row.appendChild(logSel);
+        row.appendChild(removeBtn);
+        row.appendChild(info);
+        wrapper.appendChild(row);
+      });
+
+      pairsContainer.innerHTML = '';
+      pairsContainer.appendChild(wrapper);
+      updateControls();
+    }
+
+    function addPair() {
+      state.pairs.push({ planIndex: 0, beamIndex: 0, logIndex: 0 });
+      renderPairs();
+    }
+
+    function optimizeParams() {
+      const model = String(modelSelect?.value || 'cp');
+      const allowed = fitKeysForModel(model);
+      const ignored = state.paramDefs.filter(d => d.fit && !allowed.has(d.key));
+      const defs = state.paramDefs.filter(d => d.fit && allowed.has(d.key));
+      if (defs.length === 0) {
+        const hint = ignored.length > 0
+          ? ` (selected ${ignored.length} param(s) that are not used by model=${model})`
+          : '';
+        throw new Error(`No model-relevant parameters selected for fitting.${hint}`);
+      }
+      if (ignored.length > 0) {
+        logStatus(`Note: ignoring ${ignored.length} fit param(s) not used by model=${model}: ${ignored.map(d => d.key).join(', ')}`);
+      }
+      const maxPasses = Number(maxPassesInput.value) || 60;
+      const rand = seededRand(Number(seedInput.value) || 1);
+      const weights = { rmse: 1.0, end: 0.35 };
+
+      const evaluate = (params) => {
+        const ev = evaluateAll(params);
+        return combinedLoss(ev, weights);
+      };
+
+      let best = { p: { ...state.params }, s: evaluate({ ...state.params }) };
+      logStatus(`Initial loss: ${best.s.toFixed(4)} (RMSE + end-error penalty)`);
+
+      const restarts = Math.max(1, Math.min(12, Math.round(maxPasses / 10)));
+      for (let r = 0; r < restarts; r++) {
+        const start = { ...state.params };
+        for (const d of defs) {
+          const span = d.max - d.min;
+          const jitter = (span > 0) ? (0.15 * span * (rand() - 0.5)) : 0;
+          start[d.key] = clamp((Number(start[d.key]) || d.min) + jitter, d.min, d.max);
+        }
+
+        const res = nelderMeadOptimize({
+          baseParams: start,
+          fitDefs: defs,
+          evaluate,
+          maxIter: 120 + (r * 10)
+        });
+
+        if (res.s < best.s) {
+          best = res;
+          logStatus(`Restart ${r + 1}/${restarts}: improved loss -> ${best.s.toFixed(4)}`);
+        }
+      }
+
+      state.params = { ...state.params, ...best.p };
+      renderParamTable();
+      renderPairs();
+      const finalEval = evaluateAll(state.params);
+      logStatus(`Final RMSE: ${finalEval.loss.toFixed(4)} s (${String(pairAggSelect?.value || 'median')} across pairs, model=${String(modelSelect?.value || 'cp')}, metric=${String(fitMetricSelect?.value || 'segment')})`);
+      finalEval.perPair.forEach((p, idx) => {
+        if (p.error) {
+          logStatus(`Pair #${idx + 1}: skipped (${p.error})`);
+          return;
+        }
+        const extra = (p.axisRmseDeg && (modelSelect?.value === 'ts'))
+          ? ` | axis RMSE g=${formatNum(p.axisRmseDeg.gantry, 3)}° c=${formatNum(p.axisRmseDeg.collimator, 3)}°`
+          : '';
+        logStatus(`Pair #${idx + 1}: RMSE ${p.rmseSec.toFixed(4)} s | end Δ ${p.endErrorSec.toFixed(3)} s${extra}`);
+      });
+    }
+
+    function fitKeysForModel(model) {
+      const m = String(model || 'cp');
+      if (m === 'ts') {
+        return new Set([
+          'maxGantrySpeedDegPerSec',
+          'maxGantryAccelDegPerSec2',
+          'maxGantryJerkDegPerSec3',
+          'gantryDelaySec',
+          'maxCollimatorSpeedDegPerSec',
+          'maxCollimatorAccelDegPerSec2',
+          'maxCollimatorJerkDegPerSec3',
+          'collimatorDelaySec',
+          'muDelaySec',
+          'muTauSec'
+        ]);
+      }
+      // CP kinematics model
+      return new Set([
+        'maxGantrySpeedDegPerSec',
+        'maxGantryAccelDegPerSec2',
+        'maxGantryJerkDegPerSec3',
+        'maxMlcSpeedMmPerSec',
+        'maxMlcAccelMmPerSec2',
+        'maxCollimatorSpeedDegPerSec',
+        'maxCollimatorAccelDegPerSec2',
+        'maxCollimatorJerkDegPerSec3',
+        'doseRateScale',
+        'beamStartOverheadSec',
+        'segmentOverheadSec'
+      ]);
+    }
+
+    function exportParamsJson() {
+      const out = {
+        generatedAt: new Date().toISOString(),
+        params: state.params,
+        notes: {
+          mlcSpeedCmPerSec: state.params.maxMlcSpeedMmPerSec / 10.0,
+          mlcAccelCmPerSec2: state.params.maxMlcAccelMmPerSec2 / 10.0
+        }
+      };
+      const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'timing-calibration-params.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportSelectedLogJson() {
+      const idx = Number(exportLogSelect.value);
+      if (!Number.isFinite(idx) || idx < 0 || idx >= state.logs.length) throw new Error('Select a log to export.');
+      const entry = state.logs[idx];
+      const log = entry?.data;
+      if (!log) throw new Error('Log not loaded.');
+
+      const stride = Math.max(1, Math.round(Number(exportStrideInput.value) || 1));
+      const includeCpExpected = !!exportIncludeCpExpectedInput?.checked;
+
+      function take(arr) {
+        if (!Array.isArray(arr)) return null;
+        const out = [];
+        for (let i = 0; i < arr.length; i += stride) out.push(arr[i]);
+        return out;
+      }
+
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        name: entry.name,
+        stride,
+        meta: log.meta || {},
+        channels: {
+          timeSec: take(log.timeSec),
+          controlPoint: take(log.controlPoint),
+          beamHold: take(log.beamHold),
+          cumMu: take(log.cumMu),
+          cumMuExpected: take(log.cumMuExpected),
+          gantryActualDeg: take(log.gantryDeg),
+          gantryExpectedDeg: take(log.gantryExpectedDeg),
+          collimatorActualDeg: take(log.collimatorDeg),
+          collimatorExpectedDeg: take(log.collimatorExpectedDeg)
+        }
+      };
+
+      if (includeCpExpected) {
+        const cp = log.cpExpected;
+        if (cp && cp.cpCount && cp.cpCount > 0) {
+          payload.cpExpected = {
+            cpCount: cp.cpCount,
+            leafCount: cp.leafCount,
+            gantryDeg: cp.gantryDeg,
+            collimatorDeg: cp.collimatorDeg,
+            mu: cp.mu,
+            // MLC is huge; include only if present and user asked for cpExpected at all.
+            mlc: cp.mlc ? cp.mlc.map(a => Array.from(a)) : null
+          };
+        } else {
+          payload.cpExpected = null;
+        }
+      }
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeName = (entry.name || 'trajectory-log').replace(/[^a-z0-9._-]+/gi, '_');
+      a.download = `${safeName}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function plotSelectedPair() {
+      if (!window.Chart) {
+        logStatus('Chart.js is not available; plot disabled.');
+        return;
+      }
+
+      const mode = plotModeSelect.value || 'curve';
+      if (mode === 'parity') {
+        await plotTrainingParity();
+        return;
+      }
+      if (mode === 'parityEnds') {
+        await plotPairEndParity();
+        return;
+      }
+      if (mode === 'gantryAxis') {
+        await plotAxisTimeSeries('gantry');
+        return;
+      }
+      if (mode === 'collimatorAxis') {
+        await plotAxisTimeSeries('collimator');
+        return;
+      }
+      if (mode === 'gantryParity') {
+        await plotAxisParity('gantry');
+        return;
+      }
+      if (mode === 'collimatorParity') {
+        await plotAxisParity('collimator');
+        return;
+      }
+      if (mode === 'gantryTs' || mode === 'collimatorTs' || mode === 'muTs') {
+        const idx = Number(plotPairSelect.value);
+        const pair = state.pairs[idx];
+        const s = buildTsWindowSeries(pair, state.params);
+        let yTitle = '';
+        let series;
+        if (mode === 'gantryTs') { yTitle = 'Gantry angle (deg) (unwrapped, relative)'; series = s.gantry; }
+        else if (mode === 'collimatorTs') { yTitle = 'Collimator angle (deg) (unwrapped, relative)'; series = s.collimator; }
+        else { yTitle = 'Cumulative MU (relative)'; series = s.mu; }
+
+        const ptsE = s.tRel.map((t, i) => ({ x: t, y: series.expected[i] ?? null }));
+        const ptsM = s.tRel.map((t, i) => ({ x: t, y: series.modeled[i] ?? null }));
+        const ptsA = s.tRel.map((t, i) => ({ x: t, y: series.actual[i] ?? null }));
+
+        if (state.chart) state.chart.destroy();
+        state.chart = new Chart(plotCanvas.getContext('2d'), {
+          type: 'scatter',
+          data: {
+            datasets: [
+              { label: 'Expected (log)', data: downsampleXY(ptsE, 2500), showLine: true, borderColor: '#059669', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2, parsing: false, tension: 0.0 },
+              { label: 'Modeled', data: downsampleXY(ptsM, 2500), showLine: true, borderColor: '#7c3aed', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2, parsing: false, tension: 0.0 },
+              { label: 'Actual (log)', data: downsampleXY(ptsA, 2500), showLine: true, borderColor: '#2563eb', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2, parsing: false, tension: 0.0 }
+            ]
+          },
+          options: {
+            animation: false,
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { type: 'linear', title: { display: true, text: 'Time (s) (relative to window start)' } },
+              y: { type: 'linear', title: { display: true, text: yTitle } }
+            },
+            plugins: {
+              legend: { position: 'bottom' },
+              tooltip: { enabled: true }
+            }
+          }
+        });
+        plotNote.textContent = `Mode: ${mode} | model=${String(modelSelect?.value || 'cp')} | CP window [${s.i0}..${s.i1}] | stride=${Math.max(1, Math.round(Number(tsStrideInput?.value) || 1))}`;
+        return;
+      }
+      if (mode === 'residuals') {
+        if (String(modelSelect?.value || 'cp') !== 'cp') {
+          throw new Error('Segment residual plot is only available for the CP kinematics model.');
+        }
+        const idx = Number(plotPairSelect.value);
+        const pair = state.pairs[idx];
+        const curve = computePairCurve(pair, state.params);
+
+        const labels = curve.cpIdx.slice(1).map(i => String(i));
+        const residuals = curve.predictedSegSec.map((p, i) => p - (curve.actualSegSec[i] || 0));
+
+        let sse = 0;
+        let sum = 0;
+        for (const r of residuals) { sse += r * r; sum += r; }
+        const rmse = Math.sqrt(sse / Math.max(1, residuals.length));
+        const mean = sum / Math.max(1, residuals.length);
+
+        if (state.chart) state.chart.destroy();
+        state.chart = new Chart(plotCanvas.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [
+              { label: 'Residual (s)', data: residuals, borderColor: '#7c3aed', backgroundColor: 'rgba(124, 58, 237, 0.35)', borderWidth: 1 }
+            ]
+          },
+          options: {
+            animation: false,
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { title: { display: true, text: 'Control point index (segment end)' }, ticks: { maxTicksLimit: 16 } },
+              y: { title: { display: true, text: 'Predicted - Actual (s)' } }
+            },
+            plugins: {
+              legend: { position: 'bottom' },
+              tooltip: { enabled: true }
+            }
+          }
+        });
+        plotNote.textContent = `Mode: Segment residuals | Window CPs [${curve.i0}..${curve.i1}] | RMSE≈${rmse.toFixed(4)}s, mean≈${mean.toFixed(4)}s`;
+        return;
+      }
+
+      const idx = Number(plotPairSelect.value);
+      const pair = state.pairs[idx];
+      const model = String(modelSelect?.value || 'cp');
+      const curve = (model === 'ts') ? computePairCurveTS(pair, state.params) : computePairCurve(pair, state.params);
+
+      const labels = curve.cpIdx.map(i => String(i));
+      const dataAct = curve.actualSec;
+      const dataPred = curve.predictedSec;
+
+      if (state.chart) state.chart.destroy();
+      state.chart = new Chart(plotCanvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Actual (log)', data: dataAct, borderColor: '#2563eb', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2, tension: 0.2 },
+            { label: 'Predicted (sim)', data: dataPred, borderColor: '#dc2626', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2, tension: 0.2 }
+          ]
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { title: { display: true, text: 'Control point index (windowed)' } },
+            y: { title: { display: true, text: 'Cumulative time (s), relative to window start' } }
+          },
+          plugins: {
+            legend: { position: 'bottom' },
+            tooltip: { enabled: true }
+          }
+        }
+      });
+      const axisText = (model === 'ts' && curve.axisRmseDeg)
+        ? ` | axis RMSE g≈${formatNum(curve.axisRmseDeg.gantry, 3)}° c≈${formatNum(curve.axisRmseDeg.collimator, 3)}°`
+        : '';
+      plotNote.textContent = `Mode: Time vs CP | model=${model} | Window CPs [${curve.i0}..${curve.i1}] | end Δ ${(curve.endErrorSec).toFixed(3)} s${axisText}`;
+    }
+
+    async function plotPairEndParity() {
+      const model = String(modelSelect?.value || 'cp');
+      const points = [];
+      const labels = [];
+
+      for (let idx = 0; idx < state.pairs.length; idx++) {
+        const pair = state.pairs[idx];
+        try {
+          const curve = (model === 'ts') ? computePairCurveTS(pair, state.params) : computePairCurve(pair, state.params);
+          const actual = curve.actualSec[curve.actualSec.length - 1];
+          const predicted = curve.predictedSec[curve.predictedSec.length - 1];
+          if (!Number.isFinite(actual) || !Number.isFinite(predicted)) continue;
+          points.push({ x: actual, y: predicted });
+          labels.push(`#${idx + 1}`);
+        } catch (e) {
+          // skip
+        }
+      }
+
+      let maxT = 0;
+      for (const p of points) maxT = Math.max(maxT, p.x, p.y);
+      if (!Number.isFinite(maxT) || maxT <= 0) maxT = 1;
+
+      const identity = [{ x: 0, y: 0 }, { x: maxT, y: maxT }];
+      const fit = linearFitXY(points);
+
+      if (state.chart) state.chart.destroy();
+      state.chart = new Chart(plotCanvas.getContext('2d'), {
+        type: 'scatter',
+        data: {
+          datasets: [
+            { label: 'Parity y=x', data: identity, showLine: true, borderColor: '#9ca3af', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2 },
+            { label: 'Pair end times', data: points, showLine: false, borderColor: '#1f2937', backgroundColor: 'rgba(31,41,55,0.25)', pointRadius: 4 }
+          ]
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { type: 'linear', title: { display: true, text: 'Actual duration (s) (window)' }, min: 0, max: maxT },
+            y: { type: 'linear', title: { display: true, text: 'Predicted duration (s) (window)' }, min: 0, max: maxT }
+          },
+          plugins: {
+            legend: { position: 'bottom' },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const i = ctx.dataIndex;
+                  const p = points[i];
+                  const tag = labels[i] || '';
+                  const dx = (p && Number.isFinite(p.x) && Number.isFinite(p.y)) ? (p.y - p.x) : NaN;
+                  return `${tag} actual=${formatNum(p?.x, 3)}s pred=${formatNum(p?.y, 3)}s (Δ=${formatNum(dx, 3)}s)`;
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const fitText = fit ? `fit: pred ≈ ${fit.slope.toFixed(3)}·act + ${fit.intercept.toFixed(3)} (n=${fit.n})` : 'fit: N/A';
+      plotNote.textContent = `Mode: Pair end-time parity | pairs=${points.length}/${state.pairs.length} | model=${model} | ${fitText}`;
+    }
+
+    function binarySearchSegment(times, t) {
+      // returns i such that times[i] <= t < times[i+1], clamped
+      if (!times || times.length < 2) return 0;
+      if (t <= times[0]) return 0;
+      const last = times.length - 1;
+      if (t >= times[last]) return last - 1;
+      let lo = 0, hi = last;
+      while (lo + 1 < hi) {
+        const mid = (lo + hi) >> 1;
+        if (times[mid] > t) hi = mid; else lo = mid;
+      }
+      return lo;
+    }
+
+    function interpolatePiecewiseLinear(times, values, t) {
+      const i = binarySearchSegment(times, t);
+      const t0 = times[i], t1 = times[i + 1];
+      const v0 = values[i], v1 = values[i + 1];
+      const dt = t1 - t0;
+      if (dt <= 1e-9) return v1;
+      const a = (t - t0) / dt;
+      return v0 + a * (v1 - v0);
+    }
+
+    function buildPairWindow(pair, params) {
+      const plan = state.plans[pair.planIndex]?.data;
+      const planBeam = plan?.beams?.[pair.beamIndex];
+      const log = state.logs[pair.logIndex]?.data;
+      if (!plan || !planBeam || !log) throw new Error('Invalid pair.');
+
+      const primaryDoseRate = (typeof plan.primaryDoseRate === 'number') ? plan.primaryDoseRate : 600.0;
+      const beam = (useLogExpectedPlanInput?.checked && log?.meta?.format === 'VarianTrajectoryLogBin')
+        ? (buildSyntheticBeamFromLogExpected(planBeam, log, primaryDoseRate) || planBeam)
+        : planBeam;
+
+      const totalMU = Number(beam.totalMeterset) || 0;
+      const muStartThreshold = interpretThreshold(muStartThresholdInput.value, totalMU);
+      const muEndMargin = interpretThreshold(muEndMarginInput.value, totalMU);
+
+      const cps = beam.controlPoints || [];
+      const targets = cps.map(cp => (Number(cp.cumulativeMetersetWeight) || 0) * totalMU);
+      const i0 = targets.findIndex(mu => mu >= muStartThreshold);
+      if (i0 < 0) throw new Error(`No CP reaches MU start threshold (${muStartThreshold}).`);
+      let i1 = targets.length - 1;
+      while (i1 > i0 && targets[i1] > totalMU - muEndMargin) i1--;
+      if (i1 <= i0) throw new Error('Not enough CPs in window after applying end margin.');
+
+      const tAct = new Array(cps.length).fill(null);
+      const mismatch = detectPlanLogMismatch(planBeam, log);
+      if (!usingSynth && (mismatch.cpMismatch || mismatch.muMismatch)) {
+        throw new Error(`Plan/log mismatch: ${(mismatch.reasons || []).join(', ') || 'CP/MU mismatch'}`);
+      }
+      let canUseCp = !!(useCpAxisInput?.checked && log.meta?.format === 'VarianTrajectoryLogBin' && Array.isArray(log.controlPoint));
+      if (canUseCp && beam?._syntheticFromTrajectoryExpected) {
+        const logCp = (Number.isFinite(Number(log?.controlPoint?.[log?.controlPoint?.length - 1]))) ? (Math.round(Number(log.controlPoint[log.controlPoint.length - 1])) + 1) : 0;
+        if (logCp > 0 && cps.length > 0 && Math.abs(logCp - cps.length) > 1) canUseCp = false;
+      } else if (canUseCp && (mismatch.cpMismatch || mismatch.muMismatch)) {
+        canUseCp = false;
+      }
+      for (let i = i0; i <= i1; i++) {
+        const t = canUseCp
+          ? interpolateTimeAtMonotonicX(log.timeSec, log.controlPoint, i)
+          : interpolateTimeAtMonotonicX(log.timeSec, log.cumMu, targets[i]);
+        tAct[i] = (t === null) ? null : t;
+      }
+      if (tAct[i0] === null || tAct[i1] === null) throw new Error('Log does not cover the selected CP window.');
+
+      const sim = simulateBeamTiming(beam, primaryDoseRate, params);
+      const tPred = sim.tCum;
+      return {
+        plan,
+        beam,
+        log,
+        i0,
+        i1,
+        tStartAct: tAct[i0],
+        tEndAct: tAct[i1],
+        tStartPred: tPred[i0],
+        mismatch,
+        tPred
+      };
+    }
+
+    function downsampleXY(points, maxPoints) {
+      if (!points || points.length <= maxPoints) return points;
+      const stride = Math.ceil(points.length / maxPoints);
+      const out = [];
+      for (let i = 0; i < points.length; i += stride) out.push(points[i]);
+      return out;
+    }
+
+    function sliceStrideRange(arr, iStart, iEnd, stride) {
+      const out = [];
+      for (let i = iStart; i <= iEnd; i += stride) out.push(arr[i]);
+      return out;
+    }
+
+    function buildTsWindowSeries(pair, params) {
+      const plan = state.plans[pair.planIndex]?.data;
+      const planBeam = plan?.beams?.[pair.beamIndex];
+      const log = state.logs[pair.logIndex]?.data;
+      if (!plan || !planBeam || !log) throw new Error('Invalid pair.');
+      if (!log.meta || log.meta.format !== 'VarianTrajectoryLogBin') throw new Error('TS series requires a .bin trajectory log.');
+
+      const primaryDoseRate = (typeof plan.primaryDoseRate === 'number') ? plan.primaryDoseRate : 600.0;
+      const beam = (useLogExpectedPlanInput?.checked && log?.meta?.format === 'VarianTrajectoryLogBin')
+        ? (buildSyntheticBeamFromLogExpected(planBeam, log, primaryDoseRate) || planBeam)
+        : planBeam;
+
+      const totalMU = Number(beam.totalMeterset) || 0;
+      const muStartThreshold = interpretThreshold(muStartThresholdInput.value, totalMU);
+      const muEndMargin = interpretThreshold(muEndMarginInput.value, totalMU);
+
+      const cps = beam.controlPoints || [];
+      const targets = cps.map(cp => (Number(cp.cumulativeMetersetWeight) || 0) * totalMU);
+      const i0 = targets.findIndex(mu => mu >= muStartThreshold);
+      if (i0 < 0) throw new Error(`No CP reaches MU start threshold (${muStartThreshold}).`);
+      let i1 = targets.length - 1;
+      while (i1 > i0 && targets[i1] > totalMU - muEndMargin) i1--;
+      if (i1 <= i0) throw new Error('Not enough CPs in window after applying end margin.');
+
+      const mismatch = detectPlanLogMismatch(planBeam, log);
+      if (!usingSynth && (mismatch.cpMismatch || mismatch.muMismatch)) {
+        throw new Error(`Plan/log mismatch: ${(mismatch.reasons || []).join(', ') || 'CP/MU mismatch'}`);
+      }
+      let canUseCp = !!(useCpAxisInput?.checked && log.meta?.format === 'VarianTrajectoryLogBin' && Array.isArray(log.controlPoint));
+      if (canUseCp && beam?._syntheticFromTrajectoryExpected) {
+        const logCp = (Number.isFinite(Number(log?.controlPoint?.[log?.controlPoint?.length - 1]))) ? (Math.round(Number(log.controlPoint[log.controlPoint.length - 1])) + 1) : 0;
+        if (logCp > 0 && cps.length > 0 && Math.abs(logCp - cps.length) > 1) canUseCp = false;
+      } else if (canUseCp && (mismatch.cpMismatch || mismatch.muMismatch)) {
+        canUseCp = false;
+      }
+
+      const tAct0 = canUseCp
+        ? interpolateTimeAtMonotonicX(log.timeSec, log.controlPoint, i0)
+        : interpolateTimeAtMonotonicX(log.timeSec, log.cumMu, targets[i0]);
+      const tAct1 = canUseCp
+        ? interpolateTimeAtMonotonicX(log.timeSec, log.controlPoint, i1)
+        : interpolateTimeAtMonotonicX(log.timeSec, log.cumMu, targets[i1]);
+      if (tAct0 === null || tAct1 === null) throw new Error('Log does not cover the selected CP window.');
+
+      const tStart = tAct0;
+      const tEnd = tAct1;
+      const idxStart = binarySearchFirstIndexGE(log.timeSec, tStart);
+      const idxEnd = binarySearchFirstIndexGE(log.timeSec, tEnd);
+      const stride = Math.max(1, Math.round(Number(tsStrideInput?.value) || 1));
+      const dt = (Number(log.meta.samplingIntervalMs) || 20) / 1000.0 * stride;
+
+      const gExp = unwrapAngleSeries(sliceStrideRange(log.gantryExpectedDeg, idxStart, idxEnd, stride));
+      const gAct = unwrapAngleSeries(sliceStrideRange(log.gantryDeg, idxStart, idxEnd, stride));
+      const cExp = unwrapAngleSeries(sliceStrideRange(log.collimatorExpectedDeg, idxStart, idxEnd, stride));
+      const cAct = unwrapAngleSeries(sliceStrideRange(log.collimatorDeg, idxStart, idxEnd, stride));
+      const muExpRaw = sliceStrideRange(log.cumMuExpected, idxStart, idxEnd, stride);
+      const muActRaw = sliceStrideRange(log.cumMu, idxStart, idxEnd, stride);
+      const holdRaw = sliceStrideRange(log.beamHold || [], idxStart, idxEnd, stride);
+
+      const muExp0 = Number(muExpRaw[0]) || 0;
+      const muAct0 = Number(muActRaw[0]) || 0;
+      const muExp = makeMonotonicNonDecreasing(muExpRaw.map(v => (Number(v) || 0) - muExp0));
+      const muAct = makeMonotonicNonDecreasing(muActRaw.map(v => (Number(v) || 0) - muAct0));
+
+      const gSimObj = simulateAxisTrackingJerk({
+        expectedUnwrapped: gExp,
+        dtSec: dt,
+        vmax: Number(params.maxGantrySpeedDegPerSec) || 0,
+        amax: Number(params.maxGantryAccelDegPerSec2) || 0,
+        jmax: Number(params.maxGantryJerkDegPerSec3) || 0,
+        delaySec: Number(params.gantryDelaySec) || 0,
+        x0: gAct[0],
+        v0: 0
+      });
+      const cSimObj = simulateAxisTrackingJerk({
+        expectedUnwrapped: cExp,
+        dtSec: dt,
+        vmax: Number(params.maxCollimatorSpeedDegPerSec) || 0,
+        amax: Number(params.maxCollimatorAccelDegPerSec2) || 0,
+        jmax: Number(params.maxCollimatorJerkDegPerSec3) || 0,
+        delaySec: Number(params.collimatorDelaySec) || 0,
+        x0: cAct[0],
+        v0: 0
+      });
+      const gSim = gSimObj.pos;
+      const cSim = cSimObj.pos;
+
+      const muPred = simulateMuTracking({
+        muExpected: muExp,
+        dtSec: dt,
+        beamHold: holdRaw,
+        delaySec: Number(params.muDelaySec) || 0,
+        tauSec: Number(params.muTauSec) || 0.10
+      }).mu;
+
+      const tRel = new Array(muExp.length);
+      for (let i = 0; i < tRel.length; i++) tRel[i] = i * dt;
+
+      return {
+        i0,
+        i1,
+        tRel,
+        gantry: { expected: gExp, modeled: gSim, actual: gAct },
+        collimator: { expected: cExp, modeled: cSim, actual: cAct },
+        mu: { expected: muExp, modeled: muPred, actual: muAct }
+      };
+    }
+
+    async function plotAxisTimeSeries(axisKey) {
+      const idx = Number(plotPairSelect.value);
+      const pair = state.pairs[idx];
+      const w = buildPairWindow(pair, state.params);
+
+      if (!w.log?.meta || w.log.meta.format !== 'VarianTrajectoryLogBin') {
+        throw new Error('Axis plots require a Varian trajectory .bin log (not CSV/TSV).');
+      }
+
+      const timeSec = w.log.timeSec;
+      const beamHold = w.log.beamHold || null;
+
+      let actualRaw;
+      let predictedCpRaw;
+      let yTitle;
+      if (axisKey === 'gantry') {
+        actualRaw = w.log.gantryDeg;
+        predictedCpRaw = (w.beam.controlPoints || []).map(cp => Number(cp.gantryAngle) || 0);
+        yTitle = 'Δ Gantry angle (deg)';
+      } else if (axisKey === 'collimator') {
+        actualRaw = w.log.collimatorDeg;
+        predictedCpRaw = (w.beam.controlPoints || []).map(cp => Number(cp.collimatorAngle) || 0);
+        yTitle = 'Δ Collimator angle (deg)';
+      } else {
+        throw new Error(`Unknown axis: ${axisKey}`);
+      }
+
+      if (!actualRaw || actualRaw.length !== timeSec.length) throw new Error('Axis data missing from log.');
+
+      const actualUnwrapped = unwrapAngleSeries(actualRaw);
+      const predUnwrapped = unwrapAngleSeries(predictedCpRaw);
+
+      // Determine if the log axis direction is flipped vs the plan by choosing the sign
+      // that minimizes RMSE on relative (start-aligned) angle.
+      let best = { sign: 1, rmse: Infinity };
+      for (const sign of [1, -1]) {
+        let sse = 0;
+        let n = 0;
+        let act0 = null;
+        let pred0 = null;
+        for (let i = 0; i < timeSec.length; i++) {
+          const t = timeSec[i];
+          if (t < w.tStartAct || t > w.tEndAct) continue;
+          if (beamHold && Math.round(beamHold[i] || 0) !== 0) continue;
+
+          const x = t - w.tStartAct;
+          const tSim = w.tStartPred + x;
+          const yAct = actualUnwrapped[i];
+          const yPred = interpolatePiecewiseLinear(w.tPred, predUnwrapped, tSim);
+          if (!Number.isFinite(yAct) || !Number.isFinite(yPred)) continue;
+
+          if (act0 === null) { act0 = yAct; pred0 = yPred; }
+          const e = (yPred - pred0) - (sign * (yAct - act0));
+          sse += e * e;
+          n++;
+        }
+        if (n > 10) {
+          const rmse = Math.sqrt(sse / n);
+          if (rmse < best.rmse) best = { sign, rmse };
+        }
+      }
+
+      const pointsAct = [];
+      const pointsPred = [];
+      let act0 = null;
+      let pred0 = null;
+
+      for (let i = 0; i < timeSec.length; i++) {
+        const t = timeSec[i];
+        if (t < w.tStartAct || t > w.tEndAct) continue;
+        if (beamHold && Math.round(beamHold[i] || 0) !== 0) continue;
+
+        const x = t - w.tStartAct;
+        const tSim = w.tStartPred + x;
+
+        const yActAbs = actualUnwrapped[i];
+        const yPredAbs = interpolatePiecewiseLinear(w.tPred, predUnwrapped, tSim);
+        if (!Number.isFinite(yActAbs) || !Number.isFinite(yPredAbs)) continue;
+        if (act0 === null) { act0 = yActAbs; pred0 = yPredAbs; }
+
+        const yAct = best.sign * (yActAbs - act0);
+        const yPred = (yPredAbs - pred0);
+        pointsAct.push({ x, y: yAct });
+        pointsPred.push({ x, y: yPred });
+      }
+
+      const dsAct = downsampleXY(pointsAct, 2500);
+      const dsPred = downsampleXY(pointsPred, 2500);
+
+      if (state.chart) state.chart.destroy();
+      state.chart = new Chart(plotCanvas.getContext('2d'), {
+        type: 'scatter',
+        data: {
+          datasets: [
+            { label: 'Actual (log)', data: dsAct, showLine: true, borderColor: '#2563eb', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2, parsing: false, tension: 0.0 },
+            { label: 'Predicted (plan + timing)', data: dsPred, showLine: true, borderColor: '#dc2626', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2, parsing: false, tension: 0.0 }
+          ]
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { type: 'linear', title: { display: true, text: 'Time (s) (relative to window start)' } },
+            y: { type: 'linear', title: { display: true, text: yTitle } }
+          },
+          plugins: {
+            legend: { position: 'bottom' },
+            tooltip: { enabled: true }
+          }
+        }
+      });
+
+      const flipText = best.sign === -1 ? ' (log axis flipped)' : '';
+      plotNote.textContent = `Mode: Δ${axisKey} vs time${flipText} | CP window [${w.i0}..${w.i1}] | points=${dsAct.length} | align RMSE≈${best.rmse.toFixed(3)} deg`;
+    }
+
+    async function plotAxisParity(axisKey) {
+      const idx = Number(plotPairSelect.value);
+      const pair = state.pairs[idx];
+      const w = buildPairWindow(pair, state.params);
+
+      if (!w.log?.meta || w.log.meta.format !== 'VarianTrajectoryLogBin') {
+        throw new Error('Axis parity plots require a Varian trajectory .bin log (not CSV/TSV).');
+      }
+
+      const timeSec = w.log.timeSec;
+      const beamHold = w.log.beamHold || null;
+
+      let actualRaw;
+      let predictedCpRaw;
+      let xTitle;
+      let yTitle;
+      if (axisKey === 'gantry') {
+        actualRaw = w.log.gantryDeg;
+        predictedCpRaw = (w.beam.controlPoints || []).map(cp => Number(cp.gantryAngle) || 0);
+        xTitle = 'Actual Δ gantry (deg)';
+        yTitle = 'Predicted Δ gantry (deg)';
+      } else if (axisKey === 'collimator') {
+        actualRaw = w.log.collimatorDeg;
+        predictedCpRaw = (w.beam.controlPoints || []).map(cp => Number(cp.collimatorAngle) || 0);
+        xTitle = 'Actual Δ collimator (deg)';
+        yTitle = 'Predicted Δ collimator (deg)';
+      } else {
+        throw new Error(`Unknown axis: ${axisKey}`);
+      }
+
+      if (!actualRaw || actualRaw.length !== timeSec.length) throw new Error('Axis data missing from log.');
+
+      const actualUnwrapped = unwrapAngleSeries(actualRaw);
+      const predUnwrapped = unwrapAngleSeries(predictedCpRaw);
+
+      // Determine if the log axis direction is flipped vs the plan by choosing the sign
+      // that minimizes RMSE on relative (start-aligned) angle.
+      let best = { sign: 1, rmse: Infinity };
+      for (const sign of [1, -1]) {
+        let sse = 0;
+        let n = 0;
+        let act0 = null;
+        let pred0 = null;
+        for (let i = 0; i < timeSec.length; i++) {
+          const t = timeSec[i];
+          if (t < w.tStartAct || t > w.tEndAct) continue;
+          if (beamHold && Math.round(beamHold[i] || 0) !== 0) continue;
+
+          const x = t - w.tStartAct;
+          const tSim = w.tStartPred + x;
+          const yAct = actualUnwrapped[i];
+          const yPred = interpolatePiecewiseLinear(w.tPred, predUnwrapped, tSim);
+          if (!Number.isFinite(yAct) || !Number.isFinite(yPred)) continue;
+          if (act0 === null) { act0 = yAct; pred0 = yPred; }
+          const e = (yPred - pred0) - (sign * (yAct - act0));
+          sse += e * e;
+          n++;
+        }
+        if (n > 10) {
+          const rmse = Math.sqrt(sse / n);
+          if (rmse < best.rmse) best = { sign, rmse };
+        }
+      }
+
+      const points = [];
+      let act0 = null;
+      let pred0 = null;
+      for (let i = 0; i < timeSec.length; i++) {
+        const t = timeSec[i];
+        if (t < w.tStartAct || t > w.tEndAct) continue;
+        if (beamHold && Math.round(beamHold[i] || 0) !== 0) continue;
+        const x = t - w.tStartAct;
+        const tSim = w.tStartPred + x;
+        const yActAbs = actualUnwrapped[i];
+        const yPredAbs = interpolatePiecewiseLinear(w.tPred, predUnwrapped, tSim);
+        if (!Number.isFinite(yActAbs) || !Number.isFinite(yPredAbs)) continue;
+        if (act0 === null) { act0 = yActAbs; pred0 = yPredAbs; }
+        const ax = best.sign * (yActAbs - act0);
+        const py = (yPredAbs - pred0);
+        points.push({ x: ax, y: py });
+      }
+
+      // Downsample while preserving overall shape.
+      const ds = downsampleXY(points, 3000);
+
+      let maxAbs = 0;
+      for (const p of ds) maxAbs = Math.max(maxAbs, Math.abs(p.x), Math.abs(p.y));
+      if (!Number.isFinite(maxAbs) || maxAbs <= 0) maxAbs = 1;
+
+      const identity = [{ x: -maxAbs, y: -maxAbs }, { x: maxAbs, y: maxAbs }];
+      const fit = linearFitXY(ds);
+
+      if (state.chart) state.chart.destroy();
+      state.chart = new Chart(plotCanvas.getContext('2d'), {
+        type: 'scatter',
+        data: {
+          datasets: [
+            { label: 'Parity y=x', data: identity, showLine: true, borderColor: '#9ca3af', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2 },
+            { label: 'Samples', data: ds, showLine: false, borderColor: '#1f2937', backgroundColor: 'rgba(31,41,55,0.22)', pointRadius: 1.5 }
+          ]
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { type: 'linear', title: { display: true, text: xTitle }, min: -maxAbs, max: maxAbs },
+            y: { type: 'linear', title: { display: true, text: yTitle }, min: -maxAbs, max: maxAbs }
+          },
+          plugins: {
+            legend: { position: 'bottom' },
+            tooltip: { enabled: true }
+          }
+        }
+      });
+
+      const fitText = fit ? `fit: pred ≈ ${fit.slope.toFixed(3)}·act + ${fit.intercept.toFixed(3)} (n=${fit.n})` : 'fit: N/A';
+      const flipText = best.sign === -1 ? ' (log axis flipped)' : '';
+      plotNote.textContent = `Mode: ${axisKey} parity${flipText} | points=${ds.length} | align RMSE≈${best.rmse.toFixed(3)} deg | ${fitText}`;
+    }
+
+    function linearFitXY(points) {
+      // points: [{x,y}]
+      if (!points || points.length < 2) return null;
+      let n = 0;
+      let sumX = 0, sumY = 0, sumXX = 0, sumXY = 0;
+      for (const p of points) {
+        if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+        n++;
+        sumX += p.x;
+        sumY += p.y;
+        sumXX += p.x * p.x;
+        sumXY += p.x * p.y;
+      }
+      if (n < 2) return null;
+      const denom = (n * sumXX) - (sumX * sumX);
+      if (Math.abs(denom) < 1e-12) return null;
+      const slope = ((n * sumXY) - (sumX * sumY)) / denom;
+      const intercept = (sumY - (slope * sumX)) / n;
+      return { slope, intercept, n };
+    }
+
+    async function plotTrainingParity() {
+      const points = [];
+      const downsampleTarget = 1500;
+
+      for (const pair of state.pairs) {
+        const curve = computePairCurve(pair, state.params);
+        const len = curve.actualSec.length;
+        const stride = Math.max(1, Math.ceil(len / Math.max(200, downsampleTarget / Math.max(1, state.pairs.length))));
+        for (let i = 0; i < len; i += stride) {
+          points.push({ x: curve.actualSec[i], y: curve.predictedSec[i] });
+        }
+      }
+
+      let maxT = 0;
+      for (const p of points) maxT = Math.max(maxT, p.x, p.y);
+      if (!Number.isFinite(maxT) || maxT <= 0) maxT = 1;
+
+      const fit = linearFitXY(points);
+      const identity = [{ x: 0, y: 0 }, { x: maxT, y: maxT }];
+
+      if (state.chart) state.chart.destroy();
+      state.chart = new Chart(plotCanvas.getContext('2d'), {
+        type: 'scatter',
+        data: {
+          datasets: [
+            { label: 'Parity y=x', data: identity, showLine: true, borderColor: '#9ca3af', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2 },
+            { label: 'Training points (all pairs)', data: points, showLine: false, borderColor: '#1f2937', backgroundColor: 'rgba(31,41,55,0.25)', pointRadius: 1.5 }
+          ]
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { type: 'linear', title: { display: true, text: 'Actual time (s) (relative to window start)' }, min: 0, max: maxT },
+            y: { type: 'linear', title: { display: true, text: 'Predicted time (s) (relative to window start)' }, min: 0, max: maxT }
+          },
+          plugins: {
+            legend: { position: 'bottom' },
+            tooltip: { enabled: true }
+          }
+        }
+      });
+
+      const fitText = fit ? `fit: predicted ≈ ${fit.slope.toFixed(3)}·actual + ${fit.intercept.toFixed(3)} (n=${fit.n})` : 'fit: N/A';
+      plotNote.textContent = `Mode: Actual vs Predicted (training) | points=${points.length} | ${fitText}`;
+    }
+
+    planInput.addEventListener('change', async (ev) => {
+      const files = Array.from(ev.target.files || []);
+      for (const file of files) {
+        const text = await file.text();
+        const parsed = safeJsonParse(text);
+        if (!parsed.ok) {
+          logStatus(`Plan ${file.name}: JSON parse error: ${parsed.error.message}`);
+          continue;
+        }
+        const plan = unwrapPlanJson(parsed.value);
+        if (!plan) {
+          logStatus(`Plan ${file.name}: not a recognized plan JSON (expected {parsedDicomPlan:{beams:[...]}}).`);
+          continue;
+        }
+        state.plans.push({ name: file.name, data: plan });
+        logStatus(`Loaded plan: ${file.name} (${(plan.beams || []).length} beam(s))`);
+      }
+      renderPairs();
+      updateControls();
+    });
+
+    logInput.addEventListener('change', async (ev) => {
+      const files = Array.from(ev.target.files || []);
+      for (const file of files) {
+        try {
+          let series;
+          if (file.name.toLowerCase().endsWith('.bin')) {
+            const buf = await file.arrayBuffer();
+            series = parseVarianTrajectoryLogBin(buf);
+          } else {
+            const text = await file.text();
+            const parsed = parseDelimitedNumeric(text);
+            series = buildTimeMuSeries(parsed);
+          }
+          state.logs.push({ name: file.name, data: series });
+          const newLogIndex = state.logs.length - 1;
+          const muEnd = series.cumMu[series.cumMu.length - 1];
+          const tEnd = series.timeSec[series.timeSec.length - 1];
+          if (series.meta && series.meta.format === 'VarianTrajectoryLogBin') {
+            const stable2s = series.meta.gantryStable20;
+            const dr = series.meta.doseRateStable20;
+            const dr95 = (dr && Number.isFinite(dr.p95MuPerSec)) ? (dr.p95MuPerSec * 60.0) : null;
+            logStatus(`Loaded .bin log: ${file.name} (t≈${tEnd.toFixed(2)}s, MU≈${muEnd.toFixed(2)}; Δt=${series.meta.samplingIntervalMs}ms, snapshots=${series.meta.numSnapshots}, v=${series.meta.version}; gantry stable(2s) max≈${formatNum(stable2s?.max, 3)} deg/s; DR p95≈${formatNum(dr95, 1)} MU/min)`);
+
+            if (autoSynthesizePairsInput?.checked) {
+              const synthPlan = buildSyntheticPlanFromLog(series, file.name);
+              if (synthPlan) {
+                state.plans.push({ name: `[SYNTH] ${file.name}`, data: synthPlan });
+                const newPlanIndex = state.plans.length - 1;
+                state.pairs.push({ planIndex: newPlanIndex, beamIndex: 0, logIndex: newLogIndex });
+                logStatus(`Auto-added pair: [SYNTH] ${file.name} ↔ ${file.name}`);
+              } else {
+                logStatus(`Auto-synthesize skipped for ${file.name} (expected CP extraction unavailable).`);
+              }
+            }
+          } else {
+            logStatus(`Loaded log: ${file.name} (t≈${tEnd.toFixed(2)}s, MU≈${muEnd.toFixed(2)}; time=${series.meta.timeCol} (${series.meta.timeUnit}), mu=${series.meta.muCol})`);
+          }
+        } catch (e) {
+          logStatus(`Log ${file.name}: ${e.message}`);
+        }
+      }
+      renderPairs();
+      updateControls();
+    });
+
+    addPairBtn.addEventListener('click', () => addPair());
+    clearPairsBtn.addEventListener('click', () => { state.pairs = []; renderPairs(); });
+    fitBtn.addEventListener('click', () => { try { optimizeParams(); } catch (e) { logStatus(`Fit error: ${e.message}`); } });
+    evalBtn.addEventListener('click', () => {
+      try {
+        const ev = evaluateAll(state.params);
+        logStatus(`Evaluate: RMSE ${ev.loss.toFixed(4)} s (${String(pairAggSelect?.value || 'median')} across pairs, model=${String(modelSelect?.value || 'cp')}, metric=${String(fitMetricSelect?.value || 'segment')})`);
+        ev.perPair.forEach((p, idx) => {
+          if (p.error) {
+            logStatus(`Pair #${idx + 1}: skipped (${p.error})`);
+            return;
+          }
+          const extra = (p.axisRmseDeg && (modelSelect?.value === 'ts'))
+            ? ` | axis RMSE g=${formatNum(p.axisRmseDeg.gantry, 3)}° c=${formatNum(p.axisRmseDeg.collimator, 3)}°`
+            : '';
+          logStatus(`Pair #${idx + 1}: RMSE ${p.rmseSec.toFixed(4)} s | end Δ ${p.endErrorSec.toFixed(3)} s${extra}`);
+        });
+        renderPairs();
+      } catch (e) {
+        logStatus(`Evaluate error: ${e.message}`);
+      }
+    });
+    exportBtn.addEventListener('click', () => exportParamsJson());
+    exportLogBtn.addEventListener('click', () => { try { exportSelectedLogJson(); } catch (e) { logStatus(`Export log error: ${e.message}`); } });
+    plotBtn.addEventListener('click', () => plotSelectedPair().catch(e => logStatus(`Plot error: ${e.message}`)));
+    applyInferredGantryBtn.addEventListener('click', () => {
+      const inferred = state.logs
+        .map(l => l?.data?.meta?.gantryStable20?.max)
+        .filter(v => Number.isFinite(v))
+        .sort((a, b) => a - b);
+      if (inferred.length === 0) return;
+      const p95Idx = Math.floor((inferred.length - 1) * 0.95);
+      const v = inferred[p95Idx];
+      state.params.maxGantrySpeedDegPerSec = Math.round(v * 10) / 10;
+      renderParamTable();
+      renderPairs();
+      logStatus(`Applied inferred gantry max ≈ ${state.params.maxGantrySpeedDegPerSec.toFixed(1)} deg/s (p95 stable 2s).`);
+    });
+
+    muStartThresholdInput.addEventListener('change', () => renderPairs());
+    muEndMarginInput.addEventListener('change', () => renderPairs());
+    modelSelect.addEventListener('change', () => { renderPairs(); updateControls(); });
+    tsStrideInput.addEventListener('change', () => { renderPairs(); });
+
+    async function main() {
+      try {
+        await loadCriticalScripts();
+      } catch (e) {
+        logStatus(`Warning: ${e.message} (plots disabled)`);
+      }
+      state.params = buildDefaultParams();
+      state.paramDefs = buildParamDefs();
+      renderParamTable();
+      renderPairs();
+      updateControls();
+      logStatus('Ready.');
+    }
+    main();
+  </script>
+</body>
+
+</html>
