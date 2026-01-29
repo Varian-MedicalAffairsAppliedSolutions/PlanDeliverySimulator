@@ -38,6 +38,8 @@ The DICOM RT Plan Delivery Simulator is a web-based tool designed to visualize a
     * MIsport (Modulation Index for SPORT, adapted from Li & Xing, 2013).
     * Local MIt (Local Modulation Index total, adapted from Park et al., 2014).
     * Overall MCSv (Modulation Complexity Score for VMAT, adapted from Masi et al., 2013).
+    * Avg Leaf Gap (average leaf opening, mm).
+    * Plan Complexity (Younge et al. aperture complexity metric, mm⁻¹).
 * Examine these metrics through static radial plots and dynamic XY-time plots (in simulation mode).
 
 The tool aims to provide insights into the mechanical aspects of VMAT plan delivery for educational and research applications.
@@ -82,7 +84,7 @@ Upon successful loading, overall plan information (patient name, ID, plan label,
 * **Audible Feedback**:
     * Check "Beep per MU (Sim Mode)" to enable an audible beep for each (integer) MU delivered during "Simulate Delivery" mode (max 20 beeps/sec, requires Tone.js).
 * **Parameter Exploration**:
-    * **Radial Plots**: Hover your mouse cursor over the static radial plots (Gantry Speed, Max MLC Speed, Collimator Speed, Dose Rate, MIsport, Local MIt) to scrub through control points. The BEV and parameter display will update. These plots visually exclude the first and last CPs for MIsport and Local MIt due to their rolling window calculation.
+    * **Radial Plots**: Hover your mouse cursor over the static radial plots (Gantry Speed, Max MLC Speed, Collimator Speed, Dose Rate, Avg Leaf Gap, Plan Complexity (Younge), MIsport, Local MIt) to scrub through control points. The BEV and parameter display will update. These plots visually exclude the first and last CPs for MIsport and Local MIt due to their rolling window calculation.
     * **Control Point Slider**: Use the slider below the radial plots to manually select a control point.
     * **Parameter Display**: Shows values for the currently selected/animated control point, including gantry/collimator angles, speeds, dose rate, MIsport, and Local MIt.
 * **Fine Tune Visualization**: Adjust structure transparency, MLC transparency, and point blur (sigma) in the block directly under the BEV.
@@ -240,6 +242,31 @@ Current implementation (simplified description):
 
 Displayed in radial plots (note: near the start/end of the CP list, the window is truncated).
 
+#### 3.3.6. Avg Leaf Gap (Average Leaf Opening)
+Calculated per CP as `avgLeafGap` from the effective MLC aperture at that CP (`calculateAverageLeafGap`).
+
+Conceptually, this is the **area-weighted mean opening** across all open leaf pairs:
+
+* For each leaf pair `i` with opening `opening_i = (bankB_i - bankA_i) > 0` and leaf width `w_i`:
+  * Add to aperture area: `area += w_i * opening_i`
+  * Add to open height: `openHeight += w_i`
+* `avgLeafGap = area / openHeight` (mm), or 0 if nothing is open.
+
+Beam-level and plan-level summaries are MU-weighted averages across control-point segments (see `computeBeamApertureSummaryMetricsFromControlPoints` and `updateOverallPlanInfoDisplay` in `RP_Delivery_Simulator.html`).
+
+#### 3.3.7. Plan Complexity (Younge et al. Aperture Complexity)
+Calculated per CP as `edgeComplexity`. This is the aperture complexity metric shown in the UI as **Plan Complexity (Younge)**.
+
+The current implementation follows the Younge et al. approach using **leaf-side perimeter only** (excluding leaf-end perimeter), normalized by aperture area:
+
+* Compute:
+  * `area` (mm²) from the MLC aperture (`calculateApertureArea`)
+  * `leafSidePerimeter` (mm) from the aperture outline (`calculateApertureEdgePerimeters`)
+* Then:
+  * `edgeComplexity = (EDGE_COMPLEXITY_C2 * leafSidePerimeter) / area` (mm⁻¹), or 0 if `area` is ~0
+
+Beam-level and plan-level summaries are MU-weighted averages across control-point segments.
+
 ---
 
 ## 4. User Customizable Parameters (Speed & Acceleration Limits)
@@ -279,3 +306,4 @@ Clicking "Apply & Recalculate Simulation" updates these limits and re-runs `init
 * McNiven, A. L., Sharpe, M. B., & Purdie, T. G. (2010). A new metric for assessing IMRT modulation complexity and plan deliverability. *Medical Physics, 37*(2), 505-515. doi: 10.1118/1.3276772
 * Park, J. M., Park, S. Y., Kim, H., Kim, J. H., Carlson, J., & Ye, S. J. (2014). Modulation indices for volumetric modulated arc therapy. *Physics in Medicine & Biology, 59*(23), 7315-7340. doi: 10.1088/0031-9155/59/23/7315
 * Webb, S. (2003). Use of a quantitative index of beam modulation to characterize dose conformality: illustration by a comparison of full beamlet IMRT, few-segment IMRT (fsIMRT) and conformal unmodulated radiotherapy. *Physics in Medicine & Biology, 48*(14), 2051-2062. doi: 10.1088/0031-9155/48/14/305
+* Younge, K. C., Roberts, D., Janes, L. A., Anderson, C., Moran, J. M., & Matuszak, M. M. (2016). Predicting deliverability of volumetric-modulated arc therapy (VMAT) plans using aperture complexity analysis. *Journal of Applied Clinical Medical Physics, 17*(4), 124-131. doi: 10.1120/jacmp.v17i4.6241
