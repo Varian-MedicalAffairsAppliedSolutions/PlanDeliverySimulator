@@ -448,10 +448,115 @@
             justify-content: center;
         }
 
-        .primary-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
-        }
+	        .primary-btn:hover {
+	            transform: translateY(-1px);
+	            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+	        }
+
+	        .isoqa-backdrop {
+	            position: fixed;
+	            inset: 0;
+	            background: rgba(15, 23, 42, 0.55);
+	            display: none;
+	            align-items: center;
+	            justify-content: center;
+	            z-index: 10050;
+	            padding: 18px;
+	            box-sizing: border-box;
+	        }
+
+	        .isoqa-modal {
+	            width: min(1180px, 96vw);
+	            max-height: 92vh;
+	            overflow: auto;
+	            background: #ffffff;
+	            border-radius: 10px;
+	            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+	            padding: 14px 14px 10px 14px;
+	            box-sizing: border-box;
+	        }
+
+	        .isoqa-header {
+	            display: flex;
+	            align-items: center;
+	            justify-content: space-between;
+	            gap: 12px;
+	            flex-wrap: wrap;
+	        }
+
+	        .isoqa-actions {
+	            display: flex;
+	            gap: 10px;
+	            flex-wrap: wrap;
+	        }
+
+	        .isoqa-subtitle {
+	            font-size: 0.9em;
+	            color: #475569;
+	            margin-top: 4px;
+	        }
+
+	        .isoqa-info {
+	            margin-top: 10px;
+	            font-size: 0.9em;
+	            color: #0f172a;
+	            background: #f8fafc;
+	            border: 1px solid #e2e8f0;
+	            border-radius: 8px;
+	            padding: 10px;
+	            line-height: 1.35;
+	        }
+
+	        .isoqa-grid {
+	            margin-top: 12px;
+	            display: grid;
+	            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+	            gap: 12px;
+	        }
+
+	        .isoqa-panel {
+	            border: 1px solid #e2e8f0;
+	            border-radius: 10px;
+	            padding: 10px;
+	            background: #ffffff;
+	        }
+
+	        .isoqa-panel-title {
+	            font-weight: 700;
+	            color: #0f172a;
+	            margin-bottom: 8px;
+	        }
+
+	        .isoqa-panel canvas {
+	            width: 100%;
+	            height: auto;
+	            background: #ffffff;
+	            border: 1px solid #e5e7eb;
+	            border-radius: 8px;
+	        }
+
+	        .isoqa-legend {
+	            display: flex;
+	            gap: 12px;
+	            align-items: center;
+	            flex-wrap: wrap;
+	            margin-top: 10px;
+	            font-size: 0.9em;
+	            color: #334155;
+	        }
+
+	        .isoqa-swatch {
+	            width: 14px;
+	            height: 14px;
+	            border-radius: 3px;
+	            display: inline-block;
+	            margin: 0 6px 0 12px;
+	            border: 1px solid rgba(0, 0, 0, 0.25);
+	        }
+
+	        .isoqa-swatch.isoqa-body { background: rgba(100, 116, 139, 0.9); }
+	        .isoqa-swatch.isoqa-target { background: rgba(16, 185, 129, 0.9); }
+	        .isoqa-swatch.isoqa-iso { background: rgba(220, 38, 38, 0.95); }
 
         .file-input-section input[type="file"] {
             margin-right: 8px;
@@ -627,27 +732,6 @@
             background: transparent;
             display: block;
         }
-        .orientation-widget {
-            position: absolute;
-            right: 12px;
-            bottom: 12px;
-            width: 130px;
-            height: 130px;
-            pointer-events: none;
-            z-index: 4;
-            background: transparent;
-            border: none;
-        }
-        .orientation-widget canvas {
-            width: 100%;
-            height: 100%;
-            display: block;
-            pointer-events: none;
-            background: transparent;
-            border: none;
-            box-shadow: none;
-        }
-
         .bev-axis-labels {
             position: absolute;
             pointer-events: none;
@@ -1090,6 +1174,14 @@
                         <label for="maxCollimatorAccelDecelInput">Max Collimator Accel/Decel (°/s²):</label>
                         <input type="number" id="maxCollimatorAccelDecelInput" step="0.1">
                     </div>
+                    <div>
+                        <label for="beamStartOverheadMsInput">Beam Start Overhead (ms):</label>
+                        <input type="number" id="beamStartOverheadMsInput" step="1" min="0" value="0">
+                    </div>
+                    <div>
+                        <label for="segmentOverheadMsInput">Per-CP Overhead (ms):</label>
+                        <input type="number" id="segmentOverheadMsInput" step="1" min="0" value="20">
+                    </div>
                     <button id="applySpeedLimitsBtn" class="primary-btn">Apply & Recalculate Simulation</button>
                 </div>
             </div>
@@ -1102,6 +1194,8 @@
                 <p><strong>Total Beams in Plan:</strong> <span id="planTotalBeams">N/A</span></p>
                 <p><strong>Total Plan MU:</strong> <span id="planTotalMU">N/A</span></p>
                 <p><strong>Primary Dose Rate (First Beam, CP0):</strong> <span id="planDoseRate">N/A</span> MU/min</p>
+                <p><strong>Avg Leaf Gap (MU-wt):</strong> <span id="planAvgLeafGap">N/A</span> mm</p>
+                <p><strong>Plan Complexity (Younge et al, MU-wt):</strong> <span id="planEdgeComplexity">N/A</span> 1/mm</p>
                 <p><strong>Est. Total Plan Time (All Beams):</strong> <span id="totalPlanSimTime">N/A</span> s</p>
                 <div id="individualBeamInfoContainer">
                 </div>
@@ -1139,6 +1233,20 @@
                     <div class="radial-plot-container">
                         <h3>Dose Rate</h3>
                         <canvas id="doseRateCanvas" width="220" height="220"></canvas>
+                    </div>
+                    <div class="radial-plot-container">
+                        <div class="tooltip-container">
+                            <h3>Avg Leaf Gap</h3>
+                            <span class="tooltip-text">Aperture average leaf gap (mm), computed as aperture area divided by total open leaf height for each control point.</span>
+                        </div>
+                        <canvas id="leafGapCanvas" width="220" height="220"></canvas>
+                    </div>
+                    <div class="radial-plot-container">
+                        <div class="tooltip-container">
+                            <h3>Plan Complexity</h3>
+                            <span class="tooltip-text">Plan Complexity (Younge et al) per control point: y/A, where y is aperture perimeter excluding MLC leaf ends (leaf-side perimeter only) and A is aperture area.</span>
+                        </div>
+                        <canvas id="edgeComplexityCanvas" width="220" height="220"></canvas>
                     </div>
                     <div class="radial-plot-container">
                         <div class="tooltip-container">
@@ -1235,9 +1343,6 @@
                 <div class="bev-canvas-wrapper" style="margin-bottom: 16px;" >
                     <canvas id="bevCanvas" width="400" height="400"></canvas>
                     <canvas id="bevWebglCanvas" width="400" height="400" style="position:absolute; left:0; top:0; pointer-events:none;"></canvas>
-                    <div class="orientation-widget">
-                        <canvas id="orientationWidgetCanvas" width="140" height="140"></canvas>
-                    </div>
                     <div class="bev-axis-labels" id="bevAxisLabels"></div>
                     <div class="bev-render-mode" id="bevRenderMode">Structures: --</div>
                 </div>
@@ -1285,32 +1390,33 @@
                             <span><strong>% MU in STAMP:</strong> <span id="percentStampDoseVal">0.0%</span></span>
                         </div>
                     </div>
-                    <div class="param-item structure-panel">
-                        <div class="structure-header">
-                            <label class="structure-toggle"><input type="checkbox" id="showStructuresToggle"> Show Structures (beta)</label>
-                            <div class="structure-actions">
-                                <button id="showAllStructuresBtn" class="primary-btn" style="min-width:90px; padding:6px 10px;">Show All</button>
-                                <button id="hideAllStructuresBtn" class="primary-btn" style="min-width:90px; padding:6px 10px; background:#e11d48; border-color:#be123c;">Hide All</button>
-                            </div>
-                        </div>
-                        <div id="structureFoRStatus" class="structure-for-status"></div>
-                        <div id="structureList" class="structure-list">
-                            <div style="font-size:0.85em; color:#475569;">Load an RTSTRUCT to list structures.</div>
+	                    <div class="param-item structure-panel">
+	                        <div class="structure-header">
+	                            <label class="structure-toggle"><input type="checkbox" id="showStructuresToggle"> Show Structures (beta)</label>
+	                            <div class="structure-actions">
+	                                <button id="showAllStructuresBtn" class="primary-btn" style="min-width:90px; padding:6px 10px;">Show All</button>
+	                                <button id="hideAllStructuresBtn" class="primary-btn" style="min-width:90px; padding:6px 10px; background:#e11d48; border-color:#be123c;">Hide All</button>
+	                                <button id="isoQaBtn" class="primary-btn" style="min-width:90px; padding:6px 10px; background:#4b5563; border-color:#374151;">Iso QA</button>
+	                            </div>
+	                        </div>
+	                        <div id="structureFoRStatus" class="structure-for-status"></div>
+	                        <div id="structureList" class="structure-list">
+	                            <div style="font-size:0.85em; color:#475569;">Load an RTSTRUCT to list structures.</div>
                         </div>
                     </div>
-                    <details class="param-item" style="gap:12px; align-items:center; flex-wrap:wrap;">
-                        <summary style="cursor:pointer; font-weight:600;">Fine Tune BEV Alignment (mm)</summary>
-                        <div class="speed-limit-controls" style="margin:0; width:auto; gap:10px; justify-content:flex-start;">
-                            <div>
-                                <label for="alignXInput">Horizontal:</label>
-                                <input type="number" id="alignXInput" step="1" style="width:65px;">
-                            </div>
-                            <div>
-                                <label for="alignYInput">Vertical:</label>
-                                <input type="number" id="alignYInput" step="1" style="width:65px;">
-                            </div>
-                        </div>
-                    </details>
+	                    <details class="param-item" style="gap:12px; align-items:center; flex-wrap:wrap;">
+	                        <summary style="cursor:pointer; font-weight:600;">Fine Tune BEV Alignment (mm)</summary>
+	                        <div class="speed-limit-controls" style="margin:0; width:auto; gap:10px; justify-content:flex-start;">
+	                            <div>
+	                                <label for="alignXInput">Horizontal:</label>
+	                                <input type="number" id="alignXInput" step="1" style="width:65px;">
+	                            </div>
+	                            <div>
+	                                <label for="alignYInput">Vertical:</label>
+	                                <input type="number" id="alignYInput" step="1" style="width:65px;">
+	                            </div>
+	                        </div>
+	                    </details>
                     <div class="param-item">
                         <strong>Gantry Angle:</strong>
                         <span><span id="gantryAngle">N/A</span>°</span>
@@ -1374,19 +1480,55 @@
     <div class="author-info-header">
         <p><strong>Author:</strong> Taoran Li, PhD</p>
         <p><strong>Contact:</strong> taoran.li@varian.com</p>
-        <p><strong>Version:</strong> 1.1.0</p>
-        <p><strong>Date:</strong> Nov 30, 2025</p>
-        <p><strong>Rights & Disclaimer:</strong> © 2025 Taoran Li. All rights reserved. This software is provided
+        <p><strong>Version:</strong> 1.1.1</p>
+        <p><strong>Date:</strong> Jan 29, 2026</p>
+        <p><strong>Rights & Disclaimer:</strong> © 2025–2026 Taoran Li. All rights reserved. This software is provided
             "as is" for educational and research purposes only. It is not intended for clinical use, patient
             diagnosis, or treatment planning. The accuracy of simulations and any derived data is not guaranteed.
             The user assumes all responsibility for the use of this software.</p>
     </div>
 
-    <div class="disclaimer-footer">
-        Bound by the terms of the <a href="gate/VarianLUSLA.html" target="_blank">VarianLUSLA</a>
-    </div>
+	    <div class="disclaimer-footer">
+	        Bound by the terms of the <a href="gate/VarianLUSLA.html" target="_blank">VarianLUSLA</a>
+	    </div>
 
-    </div>
+	    </div>
+
+	    <!-- Isocenter QA modal -->
+	    <div id="isoQaModal" class="isoqa-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="isoQaTitle">
+	        <div class="isoqa-modal">
+	            <div class="isoqa-header">
+	                <div>
+	                    <h3 id="isoQaTitle" style="margin:0;">Isocenter QA</h3>
+	                    <div id="isoQaSubtitle" class="isoqa-subtitle"></div>
+	                </div>
+	                <div class="isoqa-actions">
+	                    <button id="isoQaRefreshBtn" class="primary-btn" style="padding:6px 10px;">Refresh</button>
+	                    <button id="isoQaCloseBtn" class="primary-btn" style="padding:6px 10px; background:#e11d48; border-color:#be123c;">Close</button>
+	                </div>
+	            </div>
+	            <div id="isoQaInfo" class="isoqa-info"></div>
+	            <div class="isoqa-grid">
+	                <div class="isoqa-panel">
+		                    <div class="isoqa-panel-title">Axial (feet→head; L/R vs A/P)</div>
+	                    <canvas id="isoQaAxial" width="360" height="360"></canvas>
+	                </div>
+	                <div class="isoqa-panel">
+	                    <div class="isoqa-panel-title">Sagittal (P/A vs I/S)</div>
+	                    <canvas id="isoQaSagittal" width="360" height="360"></canvas>
+	                </div>
+	                <div class="isoqa-panel">
+	                    <div class="isoqa-panel-title">Coronal (L/R vs I/S)</div>
+	                    <canvas id="isoQaCoronal" width="360" height="360"></canvas>
+	                </div>
+	            </div>
+	            <div class="isoqa-legend">
+	                <span class="isoqa-swatch isoqa-body"></span> External/BODY
+	                <span class="isoqa-swatch isoqa-target"></span> Target(s)
+	                <span class="isoqa-swatch isoqa-iso"></span> Isocenter (0,0)
+	            </div>
+	        </div>
+	    </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', async function () {
@@ -1418,11 +1560,11 @@
                 MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS: 9.0
             };
             const DEFAULTS_TDS = {
-                MAX_GANTRY_SPEED_DEGPS: 4.8,
-                MAX_MLC_SPEED_CMPS: 2.25,
+                MAX_GANTRY_SPEED_DEGPS: 6.0,
+                MAX_MLC_SPEED_CMPS: 2.5,
                 MAX_COLLIMATOR_SPEED_DEGPS: 9.0,
                 MAX_GANTRY_ACCEL_DECEL_DEGPSS: 4.8,
-                MAX_MLC_ACCEL_DECEL_CMPS2: 2.25,
+                MAX_MLC_ACCEL_DECEL_CMPS2: 2.5,
                 MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS: 9.0
             };
             const COMPONENT_COLORS = {
@@ -1433,6 +1575,8 @@
                 cpDensity: '#4db6ac',
                 miSport: '#e74c3c',
                 localMIt: '#e67e22',
+                leafGap: '#3F51B5',
+                edgeComplexity: '#607D8B',
                 sas: '#E91E63',
                 aav: '#00BCD4',
                 mcs: '#8D6E63'
@@ -1450,6 +1594,9 @@
             const MIT_GAMMA = 0.1;
             const ACCEL_CHECK_FACTOR = 1.05;
             const COLLIMATOR_WEIGHTING_FACTOR = 0.1;
+            // Younge et al plan complexity uses perimeter excluding leaf ends => C1=0 by default.
+            const EDGE_COMPLEXITY_C1 = 0.0; // leaf ends (vertical perimeter) [excluded]
+            const EDGE_COMPLEXITY_C2 = 1.0; // leaf sides (horizontal perimeter) [included]
 
             // --- DICOM PARSING HELPERS ---
             const DICOM_TAG_MAP = {
@@ -1571,10 +1718,11 @@
             let cpMarker = null;
             const FLEX_GAP_PX = 18;
             let segmentStartTime = null;
-            let currentSegmentIndex = 0;
-            let rtStructData = null;
-            let structureVisibility = {};
-            let showStructures = false;
+	            let currentSegmentIndex = 0;
+	            let rtStructData = null;
+	            let rtStructRevision = 0;
+	            let structureVisibility = {};
+	            let showStructures = false;
             const DEFAULT_STRUCTURE_OPACITY = 0.18;
             const MIN_STRUCTURE_OPACITY = 0.0;
             let structureOpacity = DEFAULT_STRUCTURE_OPACITY; // cap structures at ~30% of prior max
@@ -1608,6 +1756,17 @@
             let glRimVertices = [];
             let glRimVertexCount = 0;
             let glDrawBatches = [];
+            const WEBGL_RENDER_SCALE_THRESHOLDS = [
+                { minPoints: 250000, scale: 0.5 },
+                { minPoints: 120000, scale: 0.75 },
+            ];
+            function getWebglRenderScale(pointCount) {
+                const n = Number(pointCount) || 0;
+                for (const t of WEBGL_RENDER_SCALE_THRESHOLDS) {
+                    if (n >= t.minPoints) return t.scale;
+                }
+                return 1.0;
+            }
             let eclipseContextInfo = null;
 
 
@@ -1615,12 +1774,6 @@
             const bevCanvas = document.getElementById('bevCanvas');
             let bevCtx = bevCanvas ? bevCanvas.getContext('2d') : null;
             const bevWebglCanvas = document.getElementById('bevWebglCanvas');
-            const orientationWidgetCanvas = document.getElementById('orientationWidgetCanvas');
-            let orientationGl = null;
-            let orientationWidgetProgram = null;
-            let orientationWidgetAttributes = null;
-            let orientationWidgetUniforms = null;
-            let orientationFigureBuffers = null;
             const bevCanvasWrapper = document.querySelector('.bev-canvas-wrapper');
             const bevRenderMode = document.getElementById('bevRenderMode');
             const columnResizer = document.getElementById('columnResizer');
@@ -1635,6 +1788,8 @@
             const planTotalBeamsSpan = document.getElementById('planTotalBeams');
             const planTotalMUSpan = document.getElementById('planTotalMU');
             const planDoseRateSpan = document.getElementById('planDoseRate');
+            const planAvgLeafGapSpan = document.getElementById('planAvgLeafGap');
+            const planEdgeComplexitySpan = document.getElementById('planEdgeComplexity');
             const totalPlanSimTimeSpan = document.getElementById('totalPlanSimTime');
             const individualBeamInfoContainer = document.getElementById('individualBeamInfoContainer');
 
@@ -1643,6 +1798,8 @@
             const collimatorSpeedCanvasElem = document.getElementById('collimatorSpeedCanvas');
             const cpDensityCanvasElem = document.getElementById('cpDensityCanvas');
             const doseRateCanvasElem = document.getElementById('doseRateCanvas');
+            const leafGapCanvasElem = document.getElementById('leafGapCanvas');
+            const edgeComplexityCanvasElem = document.getElementById('edgeComplexityCanvas');
             const localMItCanvasElem = document.getElementById('localMItCanvas');
             const miCanvasElem = document.getElementById('miCanvas');
             const sasCanvasElem = document.getElementById('sasCanvas');
@@ -1658,6 +1815,8 @@
                 collimatorSpeed: collimatorSpeedCanvasElem,
                 cpDensity: cpDensityCanvasElem,
                 doseRate: doseRateCanvasElem,
+                leafGap: leafGapCanvasElem,
+                edgeComplexity: edgeComplexityCanvasElem,
                 localMIt: localMItCanvasElem,
                 mi: miCanvasElem,
                 sas: sasCanvasElem,
@@ -1671,6 +1830,8 @@
                 collimatorSpeed: collimatorSpeedCanvasElem ? collimatorSpeedCanvasElem.getContext('2d') : null,
                 cpDensity: cpDensityCanvasElem ? cpDensityCanvasElem.getContext('2d') : null,
                 doseRate: doseRateCanvasElem ? doseRateCanvasElem.getContext('2d') : null,
+                leafGap: leafGapCanvasElem ? leafGapCanvasElem.getContext('2d') : null,
+                edgeComplexity: edgeComplexityCanvasElem ? edgeComplexityCanvasElem.getContext('2d') : null,
                 localMIt: localMItCanvasElem ? localMItCanvasElem.getContext('2d') : null,
                 mi: miCanvasElem ? miCanvasElem.getContext('2d') : null,
                 sas: sasCanvasElem ? sasCanvasElem.getContext('2d') : null,
@@ -1678,7 +1839,6 @@
                 mcs: mcsCanvasElem ? mcsCanvasElem.getContext('2d') : null
             };
             initWebgl();
-            initOrientationWidget();
             resizeBevCanvas();
             applyManualOverlayOffset();
             updateWebglSize();
@@ -1718,10 +1878,19 @@
             const showStructuresToggle = document.getElementById('showStructuresToggle');
             const structureOpacityInput = document.getElementById('structureOpacity');
             const structureList = document.getElementById('structureList');
-            const structureFoRStatus = document.getElementById('structureFoRStatus');
-            const showAllStructuresBtn = document.getElementById('showAllStructuresBtn');
-            const hideAllStructuresBtn = document.getElementById('hideAllStructuresBtn');
-            const bevBgToggle = document.getElementById('bevBgToggle');
+	            const structureFoRStatus = document.getElementById('structureFoRStatus');
+	            const showAllStructuresBtn = document.getElementById('showAllStructuresBtn');
+	            const hideAllStructuresBtn = document.getElementById('hideAllStructuresBtn');
+	            const isoQaBtn = document.getElementById('isoQaBtn');
+	            const isoQaModal = document.getElementById('isoQaModal');
+	            const isoQaCloseBtn = document.getElementById('isoQaCloseBtn');
+	            const isoQaRefreshBtn = document.getElementById('isoQaRefreshBtn');
+	            const isoQaSubtitle = document.getElementById('isoQaSubtitle');
+	            const isoQaInfo = document.getElementById('isoQaInfo');
+	            const isoQaAxial = document.getElementById('isoQaAxial');
+	            const isoQaSagittal = document.getElementById('isoQaSagittal');
+	            const isoQaCoronal = document.getElementById('isoQaCoronal');
+	            const bevBgToggle = document.getElementById('bevBgToggle');
             const simTimeDisplay = document.getElementById('simTimeDisplay');
             const simTimeElapsedSpan = document.getElementById('simTimeElapsed');
             const totalSimTimeDisplay = document.getElementById('totalSimTimeDisplay');
@@ -1737,10 +1906,10 @@
             const mlcBlendContainer = document.getElementById('mlcBlendContainer');
             const mlcBlendSlider = document.getElementById('mlcBlendSlider');
             const mlcFillOpacityInput = document.getElementById('mlcFillOpacity');
-            const alignXInput = document.getElementById('alignXInput');
-            const alignYInput = document.getElementById('alignYInput');
-            const sigmaScaleInput = document.getElementById('sigmaScaleInput');
-            const sigmaScaleDisplay = document.getElementById('sigmaScaleDisplay');
+	            const alignXInput = document.getElementById('alignXInput');
+	            const alignYInput = document.getElementById('alignYInput');
+	            const sigmaScaleInput = document.getElementById('sigmaScaleInput');
+	            const sigmaScaleDisplay = document.getElementById('sigmaScaleDisplay');
             const showStampToggle = document.getElementById('showStampToggle');
             const dicomDropZone = document.getElementById('dicomDropZone');
             const dicomFileInput = document.getElementById('dicomFileInput');
@@ -1751,6 +1920,8 @@
             const maxGantryAccelDecelInput = document.getElementById('maxGantryAccelDecelInput');
             const maxMlcAccelDecelInput = document.getElementById('maxMlcAccelDecelInput');
             const maxCollimatorAccelDecelInput = document.getElementById('maxCollimatorAccelDecelInput');
+            const beamStartOverheadMsInput = document.getElementById('beamStartOverheadMsInput');
+            const segmentOverheadMsInput = document.getElementById('segmentOverheadMsInput');
 
 
             const applySpeedLimitsBtn = document.getElementById('applySpeedLimitsBtn');
@@ -1760,22 +1931,23 @@
             if (exportCsvBtn) { exportCsvBtn.addEventListener('click', exportSimulationDataAsCsv); } else { console.error("DEBUG ERROR: exportCsvBtn element not found!"); }
             if (showStampToggle) { showStampToggle.addEventListener('change', () => { showStampMiniPlots = showStampToggle.checked; renderStampStrips(); }); }
 
-            function redrawBev() {
-                if (!rtPlanData || !rtPlanData.beams || !rtPlanData.beams[selectedBeamIndex]) return;
-                if (!processedData || processedData.length === 0) return;
-                const beam = rtPlanData.beams[selectedBeamIndex];
-                const cpObj = processedData[currentCP]?.cp || processedData[0]?.cp;
-                if (!cpObj) return;
-                const blendFactor = mlcBlendSlider ? (parseFloat(mlcBlendSlider.value) || 0) / 100 : 0.5;
-                applyManualOverlayOffset();
-                drawBEV(cpObj.collimatorAngle || 0, cpObj.gantryAngle || 0, beam, blendFactor, cpObj);
-            }
-            function updateManualAlignmentDisplays() {
-                if (alignXInput) alignXInput.value = mlcRenderXOffsetMm.toFixed(1);
-                if (alignYInput) alignYInput.value = mlcRenderYOffsetMm.toFixed(1);
-                if (sigmaScaleDisplay) sigmaScaleDisplay.textContent = structureSigmaScale.toFixed(2);
-                if (sigmaScaleInput) sigmaScaleInput.value = structureSigmaScale.toFixed(2);
-            }
+	            function redrawBev() {
+	                if (!rtPlanData || !rtPlanData.beams || !rtPlanData.beams[selectedBeamIndex]) return;
+	                if (!processedData || processedData.length === 0) return;
+	                const beam = rtPlanData.beams[selectedBeamIndex];
+	                const cpObj = processedData[currentCP]?.cp || processedData[0]?.cp;
+	                if (!cpObj) return;
+	                const blendFactor = mlcBlendSlider ? (parseFloat(mlcBlendSlider.value) || 0) / 100 : 0.5;
+	                applyManualOverlayOffset();
+	                drawBEV(cpObj.collimatorAngle || 0, cpObj.gantryAngle || 0, beam, blendFactor, cpObj);
+	            }
+
+	            function updateManualAlignmentDisplays() {
+	                if (alignXInput) alignXInput.value = mlcRenderXOffsetMm.toFixed(1);
+	                if (alignYInput) alignYInput.value = mlcRenderYOffsetMm.toFixed(1);
+	                if (sigmaScaleDisplay) sigmaScaleDisplay.textContent = structureSigmaScale.toFixed(2);
+	                if (sigmaScaleInput) sigmaScaleInput.value = structureSigmaScale.toFixed(2);
+	            }
             function setManualAlignmentOffset(axis, deltaMm) {
                 if (axis === 'x') mlcRenderXOffsetMm = Math.round((mlcRenderXOffsetMm + deltaMm) * 10) / 10;
                 if (axis === 'y') mlcRenderYOffsetMm = Math.round((mlcRenderYOffsetMm + deltaMm) * 10) / 10;
@@ -1806,9 +1978,9 @@
                 }
                 redrawBev();
             }
-            if (alignXInput) alignXInput.addEventListener('change', () => setManualAlignmentValue('x', parseFloat(alignXInput.value)));
-            if (alignYInput) alignYInput.addEventListener('change', () => setManualAlignmentValue('y', parseFloat(alignYInput.value)));
-            if (sigmaScaleInput) sigmaScaleInput.addEventListener('input', () => setSigmaScale(parseFloat(sigmaScaleInput.value)));
+	            if (alignXInput) alignXInput.addEventListener('change', () => setManualAlignmentValue('x', parseFloat(alignXInput.value)));
+	            if (alignYInput) alignYInput.addEventListener('change', () => setManualAlignmentValue('y', parseFloat(alignYInput.value)));
+	            if (sigmaScaleInput) sigmaScaleInput.addEventListener('input', () => setSigmaScale(parseFloat(sigmaScaleInput.value)));
             if (bevBgToggle) {
                 bevBgToggle.addEventListener('change', () => {
                     bevDarkBackground = bevBgToggle.checked;
@@ -1915,22 +2087,54 @@
                     redrawBev();
                 });
             }
-            if (hideAllStructuresBtn) {
-                hideAllStructuresBtn.addEventListener('click', () => {
-                    if (!rtStructData || !rtStructData.rois) return;
-                    rtStructData.rois.forEach(roi => { structureVisibility[roi.roiNumber] = false; });
-                    renderStructureList();
-                    redrawBev();
-                });
-            }
-            renderStructureList();
-            applyBevBackground();
+	            if (hideAllStructuresBtn) {
+	                hideAllStructuresBtn.addEventListener('click', () => {
+	                    if (!rtStructData || !rtStructData.rois) return;
+	                    rtStructData.rois.forEach(roi => { structureVisibility[roi.roiNumber] = false; });
+	                    renderStructureList();
+	                    redrawBev();
+	                });
+	            }
+	            function openIsoQaModal() {
+	                if (!isoQaModal) return;
+	                if (!rtPlanData || !rtPlanData.beams || !rtPlanData.beams[selectedBeamIndex]) {
+	                    showMessageModal("Isocenter QA", "Load a plan and select a beam first.");
+	                    return;
+	                }
+	                if (!rtStructData || !rtStructData.rois || rtStructData.rois.length === 0) {
+	                    showMessageModal("Isocenter QA", "Load an RTSTRUCT (structures) first.");
+	                    return;
+	                }
+	                isoQaModal.style.display = 'flex';
+	                renderIsoQaModal();
+	            }
+	            function closeIsoQaModal() {
+	                if (!isoQaModal) return;
+	                isoQaModal.style.display = 'none';
+	            }
+	            if (isoQaBtn) isoQaBtn.addEventListener('click', openIsoQaModal);
+	            if (isoQaCloseBtn) isoQaCloseBtn.addEventListener('click', closeIsoQaModal);
+	            if (isoQaRefreshBtn) isoQaRefreshBtn.addEventListener('click', () => {
+	                if (isoQaModal && isoQaModal.style.display !== 'none') renderIsoQaModal();
+	            });
+	            if (isoQaModal) {
+	                isoQaModal.addEventListener('click', (e) => {
+	                    if (e && e.target === isoQaModal) closeIsoQaModal();
+	                });
+	            }
+	            document.addEventListener('keydown', (e) => {
+	                if (e && e.key === 'Escape') {
+	                    if (isoQaModal && isoQaModal.style.display !== 'none') closeIsoQaModal();
+	                }
+	            });
+	            renderStructureList();
+	            applyBevBackground();
 
 
-            let currentMaxGantrySpeed, currentMaxMlcSpeedMMPS, currentMaxCollimatorSpeed, currentMaxGantryAccelDecel, currentMaxMlcAccelDecelMMPS2, currentMaxCollimatorAccelDecel;
-            let maxGantrySpeedOverall = 0, maxMlcSpeedOverall = 0, maxCollimatorSpeedOverall = 0, maxDoseRateOverall = 0, maxModulationIndexOverall = 0, maxLocalMItFactorOverall = 0, maxCpDensityOverall = 0;
+            let currentMaxGantrySpeed, currentMaxMlcSpeedMMPS, currentMaxCollimatorSpeed, currentMaxGantryAccelDecel, currentMaxMlcAccelDecelMMPS2, currentMaxCollimatorAccelDecel, currentBeamStartOverheadSec, currentSegmentOverheadSec;
+            let maxGantrySpeedOverall = 0, maxMlcSpeedOverall = 0, maxCollimatorSpeedOverall = 0, maxDoseRateOverall = 0, maxModulationIndexOverall = 0, maxLocalMItFactorOverall = 0, maxCpDensityOverall = 0, maxAvgLeafGapOverall = 0, maxEdgeComplexityOverall = 0;
             let miniMetricScales = {};
-            const STAMP_METRIC_KEYS = ['gantrySpeed', 'mlcSpeed', 'collimatorSpeed', 'cpDensity', 'doseRate', 'modulationIndex', 'localMItFactor', 'sasValue', 'aavValue', 'mcsValue_cp'];
+            const STAMP_METRIC_KEYS = ['gantrySpeed', 'mlcSpeed', 'collimatorSpeed', 'cpDensity', 'doseRate', 'avgLeafGap', 'edgeComplexity', 'modulationIndex', 'localMItFactor', 'sasValue', 'aavValue', 'mcsValue_cp'];
 
 
             if (clearAllBtn) { clearAllBtn.addEventListener('click', clearAll); } else { console.error("DEBUG ERROR: clearAllBtn element not found!"); }
@@ -1942,7 +2146,7 @@
                     successMessage = "Plan data successfully loaded from JSON file.",
                     errorTitle = "JSON Parsing Error",
                     errorMessage = "Failed to parse JSON plan or no valid beams found.",
-                    suppressSuccessModal = false,
+                    suppressSuccessModal = true,
                     silent = false,
                     onSuccess = null
                 } = options;
@@ -2248,6 +2452,109 @@
                 }
             };
 
+            function normalizeRtStructJson(jsonData) {
+                if (!jsonData) return null;
+                const data = jsonData.rtStructData ? jsonData.rtStructData : jsonData;
+                if (!data || !Array.isArray(data.rois)) return null;
+
+                const rois = data.rois
+                    .map((roi, idx) => {
+                        if (!roi) return null;
+                        const roiNumber = Number.isFinite(roi.roiNumber) ? roi.roiNumber : (idx + 1);
+                        const name = roi.name || roi.roiName || roi.ROIName || `ROI ${roiNumber}`;
+                        const contours = Array.isArray(roi.contours) ? roi.contours : [];
+                        const frameOfReferenceUID = roi.frameOfReferenceUID || data.frameOfReferenceUID || '';
+                        const displayColor = Array.isArray(roi.displayColor) ? roi.displayColor.slice(0, 3) : null;
+                        return { ...roi, roiNumber, name, contours, frameOfReferenceUID, displayColor };
+                    })
+                    .filter(Boolean)
+                    .filter(roi => Array.isArray(roi.contours) && roi.contours.length > 0);
+
+                const frameOfReferenceUID = data.frameOfReferenceUID || '';
+                const frameOfReferenceUIDs = Array.isArray(data.frameOfReferenceUIDs) && data.frameOfReferenceUIDs.length
+                    ? data.frameOfReferenceUIDs
+                    : Array.from(new Set(rois.map(r => r.frameOfReferenceUID).filter(Boolean)));
+
+                return {
+                    sopClassUID: data.sopClassUID || '1.2.840.10008.5.1.4.1.1.481.3',
+                    frameOfReferenceUID,
+                    frameOfReferenceUIDs,
+                    rois,
+                    frameOfReferenceOrigin: Array.isArray(data.frameOfReferenceOrigin) ? data.frameOfReferenceOrigin : [0, 0, 0]
+                };
+            }
+
+	            function processStructData(jsonData, sourceInfo) {
+	                const normalized = normalizeRtStructJson(jsonData);
+	                if (!normalized || !normalized.rois || normalized.rois.length === 0) {
+	                    showMessageModal("RTSTRUCT Loading Error", "No valid structures/contours were found in the provided RS data.");
+	                    return;
+	                }
+
+	                rtStructData = normalized;
+	                rtStructRevision += 1;
+	                updateStructureSpacingFromStruct(rtStructData);
+	                setDefaultStructureVisibility(rtStructData.rois);
+                showStructures = true;
+                if (showStructuresToggle) {
+                    showStructuresToggle.checked = true;
+                    showStructuresToggle.disabled = false;
+                }
+	                renderStructureList();
+	                buildStructureGeometry();
+	                redrawBev();
+	                if (isoQaModal && isoQaModal.style.display !== 'none') renderIsoQaModal();
+
+	                if (sourceInfo) {
+	                    console.log("DEBUG: RS loaded from:", sourceInfo);
+	                }
+            }
+
+            function loadStructFromFile(structFilePath) {
+                console.log("DEBUG: Attempting to load struct file:", structFilePath);
+                const fileUrl = 'file:///' + structFilePath.replace(/\\/g, '/');
+                fetch(fileUrl)
+                    .then(resp => {
+                        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                        return resp.text();
+                    })
+                    .then(text => {
+                        const json = JSON.parse(text);
+                        processStructData(json, structFilePath);
+                    })
+                    .catch(err => {
+                        console.error("DEBUG ERROR: Failed to load struct file:", err);
+                        showMessageModal("RTSTRUCT Loading Error",
+                            `Automatic RS loading failed due to browser restrictions.\n\n` +
+                            `You can still load an RTSTRUCT DICOM (.dcm) manually in the simulator.\n\n` +
+                            `Debug file path (JSON export):\n${structFilePath || 'N/A'}`);
+                    });
+            }
+
+            window.loadEclipseStruct = function (params) {
+                console.log("DEBUG: loadEclipseStruct called with params:", params);
+                if (!params || params.mode !== 'eclipse') return;
+
+                if (params.structData) {
+                    setTimeout(() => {
+                        try {
+                            const jsonText = params.structDataIsBase64 ? atob(params.structData) : params.structData;
+                            const jsonData = JSON.parse(jsonText);
+                            processStructData(jsonData, params.structFile);
+                        } catch (error) {
+                            console.error("DEBUG ERROR: Error parsing embedded RS data:", error);
+                            if (params.structFile) {
+                                loadStructFromFile(params.structFile);
+                            } else {
+                                showMessageModal("RTSTRUCT Loading Error", `Error parsing RS data: ${error.message}`);
+                            }
+                        }
+                    }, 150);
+                } else if (params.structFile) {
+                    loadStructFromFile(params.structFile);
+                }
+            };
+
             function checkAndLoadPlanFromEclipse() {
                 console.log("DEBUG: Checking for eclipse-launch-params.js file...");
                 const script = document.createElement('script');
@@ -2299,12 +2606,18 @@
                 reader.onload = function (e) {
                     try {
                         const jsonData = JSON.parse(e.target.result);
-                        ingestPlanWrapper(jsonData, {
-                            successTitle: "JSON Plan Loaded",
-                            successMessage: "Plan data successfully loaded from JSON file.",
-                            errorTitle: "JSON Format Error",
-                            errorMessage: "The provided JSON file does not have the expected 'parsedDicomPlan' structure."
-                        });
+                        if (jsonData && jsonData.parsedDicomPlan) {
+                            ingestPlanWrapper(jsonData, {
+                                successTitle: "JSON Plan Loaded",
+                                successMessage: "Plan data successfully loaded from JSON file.",
+                                errorTitle: "JSON Format Error",
+                                errorMessage: "The provided JSON file does not have the expected 'parsedDicomPlan' structure."
+                            });
+                        } else if (jsonData && (Array.isArray(jsonData.rois) || (jsonData.rtStructData && Array.isArray(jsonData.rtStructData.rois)))) {
+                            processStructData(jsonData, file.name);
+                        } else {
+                            showMessageModal("JSON Format Error", "Unrecognized JSON format. Expected a plan ('parsedDicomPlan') or structures ('rois').");
+                        }
                     } catch (error) {
                         console.error("DEBUG ERROR: Error parsing JSON file:", error);
                         showMessageModal("JSON Parsing Error", `Error parsing JSON file: ${error.message}.`);
@@ -2612,6 +2925,7 @@
                     let lastCouch = beam.patientSupportAngle || 0;
                     let lastCouchDir = beam.patientSupportRotationDirection || 'NONE';
 
+                    let lastIso = null;
                     cpSeq.forEach((cpi, cidx) => {
                         const cp = {};
                         cp.controlPointIndex = cidx;
@@ -2633,6 +2947,10 @@
                         const isoPos = parseNumericArray(isoPosRaw);
                         if (isoPos && isoPos.length >= 3) {
                             cp.isocenterPosition = [parseFloat(isoPos[0]), parseFloat(isoPos[1]), parseFloat(isoPos[2])];
+                            lastIso = cp.isocenterPosition;
+                        } else if (Array.isArray(lastIso) && lastIso.length === 3) {
+                            // Some plans only include IsocenterPosition in a subset of CPs; keep it stable per beam.
+                            cp.isocenterPosition = lastIso;
                         }
 
                         cp.mlcPositionData = [];
@@ -2690,6 +3008,43 @@
                 return rtPlan;
             }
 
+            function computeBeamApertureSummaryMetricsFromControlPoints(beam) {
+                if (!beam || !Array.isArray(beam.controlPoints) || beam.controlPoints.length < 2) {
+                    return { avgLeafGap: 0, edgeComplexity: 0 };
+                }
+
+                const controlPoints = beam.controlPoints;
+                let sumGap = 0;
+                let sumCx = 0;
+                let sumWt = 0;
+
+                for (let i = 0; i < controlPoints.length - 1; i++) {
+                    const cp = controlPoints[i];
+                    const next = controlPoints[i + 1];
+                    if (!cp || !next) continue;
+                    const muWtSegment = (next.cumulativeMetersetWeight - cp.cumulativeMetersetWeight) || 0;
+                    if (muWtSegment <= 0) continue;
+
+                    const eff = getEffectiveMLCPositionsForCP(cp, beam);
+                    if (!eff || eff.length === 0) continue;
+
+                    const avgGap = calculateAverageLeafGap(eff, beam);
+                    const area = calculateApertureArea(eff, beam);
+                    const { leafEndPerimeter, leafSidePerimeter } = calculateApertureEdgePerimeters(eff, beam);
+                    const edgeCx = area > 1e-6
+                        ? ((EDGE_COMPLEXITY_C2 * leafSidePerimeter) / area) // Younge et al: leaf-side perimeter only (exclude leaf ends)
+                        : 0;
+
+                    sumGap += avgGap * muWtSegment;
+                    sumCx += edgeCx * muWtSegment;
+                    sumWt += muWtSegment;
+                }
+
+                return sumWt > 0
+                    ? { avgLeafGap: sumGap / sumWt, edgeComplexity: sumCx / sumWt }
+                    : { avgLeafGap: 0, edgeComplexity: 0 };
+            }
+
             function updateOverallPlanInfoDisplay(planData) {
                 if (planData) {
                     planPatientNameSpan.textContent = planData.patientName || 'N/A';
@@ -2701,15 +3056,38 @@
                     totalPlanSimTimeSpan.textContent = 'N/A';
 
                     if (planData.beams) {
+                        let planSumGap = 0;
+                        let planSumCx = 0;
+                        let planSumMu = 0;
                         planData.beams.forEach(beam => {
                             beam.mcsValue = calculateMCSForScope(beam, COLLIMATOR_WEIGHTING_FACTOR);
+                            const { avgLeafGap, edgeComplexity } = computeBeamApertureSummaryMetricsFromControlPoints(beam);
+                            beam.avgLeafGap = avgLeafGap;
+                            beam.edgeComplexity = edgeComplexity;
+                            const beamMu = beam.totalMeterset || 0;
+                            if (beamMu > 0) {
+                                planSumGap += avgLeafGap * beamMu;
+                                planSumCx += edgeComplexity * beamMu;
+                                planSumMu += beamMu;
+                            }
                         });
+
+                        planData.avgLeafGap = planSumMu > 0 ? (planSumGap / planSumMu) : 0;
+                        planData.edgeComplexity = planSumMu > 0 ? (planSumCx / planSumMu) : 0;
                     }
 
+                    if (planAvgLeafGapSpan) {
+                        planAvgLeafGapSpan.textContent = (typeof planData.avgLeafGap === 'number') ? planData.avgLeafGap.toFixed(2) : 'N/A';
+                    }
+                    if (planEdgeComplexitySpan) {
+                        planEdgeComplexitySpan.textContent = (typeof planData.edgeComplexity === 'number') ? planData.edgeComplexity.toFixed(4) : 'N/A';
+                    }
                     displayIndividualBeamInfoWithMCS(planData.beams);
                     if (overallPlanInfoContainer) overallPlanInfoContainer.style.display = 'block';
                 } else {
                     planPatientNameSpan.textContent = 'N/A'; planPatientIDSpan.textContent = 'N/A'; planLabelSpan.textContent = 'N/A'; planTotalBeamsSpan.textContent = 'N/A'; planTotalMUSpan.textContent = 'N/A'; planDoseRateSpan.textContent = 'N/A'; totalPlanSimTimeSpan.textContent = 'N/A';
+                    if (planAvgLeafGapSpan) planAvgLeafGapSpan.textContent = 'N/A';
+                    if (planEdgeComplexitySpan) planEdgeComplexitySpan.textContent = 'N/A';
                     individualBeamInfoContainer.innerHTML = '';
                     if (overallPlanInfoContainer) overallPlanInfoContainer.style.display = 'none';
                 }
@@ -2721,8 +3099,10 @@
                 if (beams && beams.length > 0) {
                     beams.forEach(beam => {
                         const mcsText = (typeof beam.mcsValue === 'number') ? beam.mcsValue.toFixed(3) : 'N/A';
+                        const gapText = (typeof beam.avgLeafGap === 'number') ? beam.avgLeafGap.toFixed(2) : 'N/A';
+                        const edgeCxText = (typeof beam.edgeComplexity === 'number') ? beam.edgeComplexity.toFixed(4) : 'N/A';
                         const li = document.createElement('li');
-                        li.innerHTML = `<strong>${beam.beamName || 'Beam ' + beam.beamNumber}:</strong> ${beam.totalMeterset.toFixed(2)} MU, ${beam.controlPoints.length} CPs, Overall MCSv (coll-adj): ${mcsText}`;
+                        li.innerHTML = `<strong>${beam.beamName || 'Beam ' + beam.beamNumber}:</strong> ${beam.totalMeterset.toFixed(2)} MU, ${beam.controlPoints.length} CPs, MCSv (coll-adj): ${mcsText}, Avg Gap: ${gapText} mm, Plan Cx (Younge): ${edgeCxText} 1/mm`;
                         ul.appendChild(li);
                     });
                 }
@@ -2751,6 +3131,8 @@
                 maxGantryAccelDecelInput.value = defaultsToUse.MAX_GANTRY_ACCEL_DECEL_DEGPSS;
                 maxMlcAccelDecelInput.value = defaultsToUse.MAX_MLC_ACCEL_DECEL_CMPS2;
                 maxCollimatorAccelDecelInput.value = defaultsToUse.MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS;
+                if (beamStartOverheadMsInput) beamStartOverheadMsInput.value = 0;
+                if (segmentOverheadMsInput) segmentOverheadMsInput.value = 20;
 
                 updateCurrentSpeedLimits();
             }
@@ -2768,23 +3150,25 @@
                 } else { beamSelectorContainer.style.display = 'none'; }
             }
 
-            beamSelector.addEventListener('change', function () {
-                selectedBeamIndex = parseInt(this.value, 10);
-                if (fullPlanToggle.checked) {
-                    fullPlanToggle.checked = false;
-                }
-                isSimulatingAllBeams = false;
-                globalCPIndex = mapLocalToGlobal(selectedBeamIndex, 0);
-                renderCpTrackBar();
-                initVisualizationForSelectedBeam();
-                renderStructureList();
-            });
+	            beamSelector.addEventListener('change', function () {
+	                selectedBeamIndex = parseInt(this.value, 10);
+	                if (fullPlanToggle.checked) {
+	                    fullPlanToggle.checked = false;
+	                }
+	                isSimulatingAllBeams = false;
+	                globalCPIndex = mapLocalToGlobal(selectedBeamIndex, 0);
+	                renderCpTrackBar();
+	                initVisualizationForSelectedBeam();
+	                renderStructureList();
+	                if (isoQaModal && isoQaModal.style.display !== 'none') renderIsoQaModal();
+	            });
 
 
-            function clearAll() {
-                rtPlanData = null;
-                rtStructData = null;
-                rtDoseData = null;
+	            function clearAll() {
+	                rtPlanData = null;
+	                rtStructData = null;
+	                rtStructRevision += 1;
+	                rtDoseData = null;
                 structureVisibility = {};
                 showStructures = false;
                 if (showStructuresToggle) { showStructuresToggle.checked = false; showStructuresToggle.disabled = true; }
@@ -2855,7 +3239,9 @@
                 if (cpTrack) cpTrack.innerHTML = '';
 
                 maxGantrySpeedOverall = 0; maxMlcSpeedOverall = 0; maxCollimatorSpeedOverall = 0; maxDoseRateOverall = 0;
+                maxCpDensityOverall = 0; maxAvgLeafGapOverall = 0; maxEdgeComplexityOverall = 0;
                 maxLocalMItFactorOverall = 0.0; maxModulationIndexOverall = 0;
+                window.maxSasOverall = 0; window.maxAavOverall = 0; window.maxMcsOverall = 0;
 
                 updateParamDisplay();
             }
@@ -2868,6 +3254,8 @@
                 currentMaxGantryAccelDecel = parseFloat(maxGantryAccelDecelInput.value) || defaults.MAX_GANTRY_ACCEL_DECEL_DEGPSS;
                 currentMaxMlcAccelDecelMMPS2 = (parseFloat(maxMlcAccelDecelInput.value) || defaults.MAX_MLC_ACCEL_DECEL_CMPS2) * 10;
                 currentMaxCollimatorAccelDecel = parseFloat(maxCollimatorAccelDecelInput.value) || defaults.MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS;
+                currentBeamStartOverheadSec = ((parseFloat(beamStartOverheadMsInput?.value) || 0) / 1000.0);
+                currentSegmentOverheadSec = ((parseFloat(segmentOverheadMsInput?.value) || 0) / 1000.0);
             }
 
             applySpeedLimitsBtn.addEventListener('click', () => {
@@ -2916,19 +3304,84 @@
                 }
             }
 
+            function calculateContinuousMoveTimesForDistances(distances, vmax, amax) {
+                if (!distances || distances.length === 0) return [];
+                if (!isFinite(vmax) || vmax <= 0) return distances.map(() => Infinity);
+                if (!isFinite(amax) || amax <= 0) return distances.map(d => Math.max(0, d) / vmax);
+
+                const n = distances.length;
+                const v = new Array(n + 1).fill(0);
+
+                for (let i = 0; i < n; i++) {
+                    const d = Math.max(0, distances[i]);
+                    const vNextMax = Math.sqrt((v[i] * v[i]) + (2 * amax * d));
+                    v[i + 1] = Math.min(vmax, vNextMax);
+                }
+
+                v[n] = 0;
+                for (let i = n - 1; i >= 0; i--) {
+                    const d = Math.max(0, distances[i]);
+                    const vMaxFromNext = Math.sqrt((v[i + 1] * v[i + 1]) + (2 * amax * d));
+                    v[i] = Math.min(v[i], vMaxFromNext);
+                }
+
+                for (let iter = 0; iter < 2; iter++) {
+                    for (let i = 0; i < n; i++) {
+                        const d = Math.max(0, distances[i]);
+                        const vNextMax = Math.sqrt((v[i] * v[i]) + (2 * amax * d));
+                        v[i + 1] = Math.min(v[i + 1], vmax, vNextMax);
+                    }
+                    v[n] = 0;
+                    for (let i = n - 1; i >= 0; i--) {
+                        const d = Math.max(0, distances[i]);
+                        const vMaxFromNext = Math.sqrt((v[i + 1] * v[i + 1]) + (2 * amax * d));
+                        v[i] = Math.min(v[i], vMaxFromNext);
+                    }
+                }
+
+                const t = new Array(n);
+                for (let i = 0; i < n; i++) {
+                    const d = Math.max(0, distances[i]);
+                    const denom = v[i] + v[i + 1];
+                    t[i] = (denom > 1e-9) ? (2 * d / denom) : 0;
+                }
+                return t;
+            }
+
             function calculateSegmentTimes(beamData, controlPoints, dataToProcess, primaryDoseRate) {
                 if (!beamData || !controlPoints || controlPoints.length < 2) return 0;
 
-                const MAX_GANTRY_SPEED = currentMaxGantrySpeed || DEFAULTS_RDS.MAX_GANTRY_SPEED_DEGPS;
-                const MAX_MLC_SPEED_MMPS = currentMaxMlcSpeedMMPS || (DEFAULTS_RDS.MAX_MLC_SPEED_CMPS * 10);
-                const MAX_COLL_SPEED = currentMaxCollimatorSpeed || DEFAULTS_RDS.MAX_COLLIMATOR_SPEED_DEGPS;
+                const defaults = beamData.isRDSMachine ? DEFAULTS_RDS : DEFAULTS_TDS;
+
+                const MAX_GANTRY_SPEED = currentMaxGantrySpeed || defaults.MAX_GANTRY_SPEED_DEGPS;
+                const MAX_MLC_SPEED_MMPS = currentMaxMlcSpeedMMPS || (defaults.MAX_MLC_SPEED_CMPS * 10);
+                const MAX_COLL_SPEED = currentMaxCollimatorSpeed || defaults.MAX_COLLIMATOR_SPEED_DEGPS;
+                const MAX_GANTRY_ACCEL = currentMaxGantryAccelDecel || defaults.MAX_GANTRY_ACCEL_DECEL_DEGPSS;
+                const MAX_MLC_ACCEL_MMPS2 = currentMaxMlcAccelDecelMMPS2 || (defaults.MAX_MLC_ACCEL_DECEL_CMPS2 * 10);
+                const MAX_COLL_ACCEL = currentMaxCollimatorAccelDecel || defaults.MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS;
                 const MAX_DOSE_RATE = primaryDoseRate || 600.0;
                 const MAX_DOSE_RATE_PER_SEC = MAX_DOSE_RATE / 60.0;
 
-                let totalBeamSimTime = 0;
+                const BEAM_START_OVERHEAD_SEC = currentBeamStartOverheadSec || 0;
+                const SEGMENT_OVERHEAD_SEC = currentSegmentOverheadSec || 0;
+
+                let totalBeamSimTime = BEAM_START_OVERHEAD_SEC;
+
+                const numSegments = controlPoints.length - 1;
+                const segmentDeltaG = new Array(numSegments).fill(0);
+                const segmentDeltaColl = new Array(numSegments).fill(0);
+                const segmentMaxLeafTravel = new Array(numSegments).fill(0);
+                const segmentDoseRateSet = new Array(numSegments).fill(MAX_DOSE_RATE);
+
+                let leafDistances = null;
+                const eff0 = getEffectiveMLCPositionsForCP(controlPoints[0], beamData);
+                if (eff0 && eff0.length > 0) {
+                    leafDistances = new Array(eff0.length);
+                    for (let k = 0; k < eff0.length; k++) leafDistances[k] = new Float32Array(numSegments);
+                }
 
                 if (!dataToProcess[0]) dataToProcess[0] = { cp: controlPoints[0] };
-                dataToProcess[0].cumulativeSimTime = 0;
+                dataToProcess[0].cumulativeSimTime = totalBeamSimTime;
                 dataToProcess[0].segmentDuration = 0;
 
                 for (let i = 1; i < controlPoints.length; i++) {
@@ -2936,12 +3389,9 @@
                     const currentCP = controlPoints[i];
                     const segmentIndex = i - 1;
 
-                    let deltaGantryAngle = normalizeGantryAngleDiff(currentCP.gantryAngle, prevCP.gantryAngle);
+	                    let deltaGantryAngle = gantryAngleDeltaMagnitude(prevCP.gantryAngle, currentCP.gantryAngle, beamData);
                     let deltaCollAngle = Math.abs(currentCP.collimatorAngle - prevCP.collimatorAngle);
                     if (deltaCollAngle > 180) deltaCollAngle = 360 - deltaCollAngle;
-
-                    const dMU_WEIGHT = currentCP.cumulativeMetersetWeight - prevCP.cumulativeMetersetWeight;
-                    let deltaDose = (dMU_WEIGHT > 1e-6) ? beamData.totalMeterset * dMU_WEIGHT : 0;
 
                     let maxLeafTravel = 0;
                     if (beamData.mlcDefinitions && currentCP.mlcPositionData && prevCP.mlcPositionData) {
@@ -2949,27 +3399,71 @@
                         const currentEffective = getEffectiveMLCPositionsForCP(currentCP, beamData);
 
                         if (prevEffective && currentEffective && prevEffective.length === currentEffective.length) {
-                            for (let l = 0; l < currentEffective.length; l++) {
-                                maxLeafTravel = Math.max(maxLeafTravel, Math.abs(currentEffective[l] - prevEffective[l]));
+                            if (leafDistances && leafDistances.length === currentEffective.length) {
+                                for (let l = 0; l < currentEffective.length; l++) {
+                                    const d = Math.abs(currentEffective[l] - prevEffective[l]);
+                                    leafDistances[l][segmentIndex] = d;
+                                    if (d > maxLeafTravel) maxLeafTravel = d;
+                                }
+                            } else {
+                                for (let l = 0; l < currentEffective.length; l++) {
+                                    maxLeafTravel = Math.max(maxLeafTravel, Math.abs(currentEffective[l] - prevEffective[l]));
+                                }
                             }
+                        } else {
+                            leafDistances = null;
                         }
                     }
 
                     if (isNaN(deltaGantryAngle)) deltaGantryAngle = 0;
                     if (isNaN(deltaCollAngle)) deltaCollAngle = 0;
                     if (isNaN(maxLeafTravel)) maxLeafTravel = 0;
+
+                    segmentDeltaG[segmentIndex] = deltaGantryAngle;
+                    segmentDeltaColl[segmentIndex] = deltaCollAngle;
+                    segmentMaxLeafTravel[segmentIndex] = maxLeafTravel;
+                    const drSet = (Number(currentCP.doseRateSet) || Number(prevCP.doseRateSet) || MAX_DOSE_RATE);
+                    segmentDoseRateSet[segmentIndex] = drSet;
+                }
+
+                const gantryMinTimes = calculateContinuousMoveTimesForDistances(segmentDeltaG, MAX_GANTRY_SPEED, MAX_GANTRY_ACCEL);
+                const collMinTimes = calculateContinuousMoveTimesForDistances(segmentDeltaColl, MAX_COLL_SPEED, MAX_COLL_ACCEL);
+                let mlcMinTimes;
+                if (leafDistances && leafDistances.length > 0) {
+                    mlcMinTimes = new Array(numSegments).fill(0);
+                    for (let l = 0; l < leafDistances.length; l++) {
+                        const tLeaf = calculateContinuousMoveTimesForDistances(leafDistances[l], MAX_MLC_SPEED_MMPS, MAX_MLC_ACCEL_MMPS2);
+                        for (let si = 0; si < numSegments; si++) mlcMinTimes[si] = Math.max(mlcMinTimes[si], tLeaf[si] || 0);
+                    }
+                } else {
+                    mlcMinTimes = calculateContinuousMoveTimesForDistances(segmentMaxLeafTravel, MAX_MLC_SPEED_MMPS, MAX_MLC_ACCEL_MMPS2);
+                }
+
+                for (let i = 1; i < controlPoints.length; i++) {
+                    const prevCP = controlPoints[i - 1];
+                    const currentCP = controlPoints[i];
+                    const segmentIndex = i - 1;
+
+                    const deltaGantryAngle = segmentDeltaG[segmentIndex] || 0;
+                    const deltaCollAngle = segmentDeltaColl[segmentIndex] || 0;
+                    const maxLeafTravel = segmentMaxLeafTravel[segmentIndex] || 0;
+
+                    const dMU_WEIGHT = currentCP.cumulativeMetersetWeight - prevCP.cumulativeMetersetWeight;
+                    let deltaDose = (dMU_WEIGHT > 1e-6) ? beamData.totalMeterset * dMU_WEIGHT : 0;
                     if (isNaN(deltaDose)) deltaDose = 0;
 
-                    const timeGantry = (MAX_GANTRY_SPEED > 1e-6) ? deltaGantryAngle / MAX_GANTRY_SPEED : 0;
-                    const timeMlc = (MAX_MLC_SPEED_MMPS > 1e-6) ? maxLeafTravel / MAX_MLC_SPEED_MMPS : 0;
-                    const timeColl = (MAX_COLL_SPEED > 1e-6) ? deltaCollAngle / MAX_COLL_SPEED : 0;
-                    const timeDose = (MAX_DOSE_RATE_PER_SEC > 1e-6) ? deltaDose / MAX_DOSE_RATE_PER_SEC : 0;
+                    const timeGantry = gantryMinTimes[segmentIndex] || 0;
+                    const timeMlc = mlcMinTimes[segmentIndex] || 0;
+                    const timeColl = collMinTimes[segmentIndex] || 0;
+                    const maxDrPerSec = (Number(segmentDoseRateSet[segmentIndex]) || 0) / 60.0;
+                    const timeDose = (maxDrPerSec > 1e-6) ? deltaDose / maxDrPerSec : 0;
 
-                    const segmentDuration = Math.max(timeGantry, timeMlc, timeColl, timeDose);
+                    const baseSegmentDuration = Math.max(timeGantry, timeMlc, timeColl, timeDose);
+                    const segmentDuration = baseSegmentDuration + SEGMENT_OVERHEAD_SEC;
                     totalBeamSimTime += segmentDuration;
 
                     let limitingComponent = 'None';
-                    if (segmentDuration > 1e-9) {
+                    if (baseSegmentDuration > 1e-9) {
                         const times = { Gantry: timeGantry, MLC: timeMlc, Collimator: timeColl, 'Dose Rate': timeDose };
                         limitingComponent = Object.keys(times).reduce((a, b) => times[a] >= times[b] ? a : b);
                     }
@@ -2981,9 +3475,10 @@
                     dataToProcess[segmentIndex].maxLeafTravel = maxLeafTravel;
                     dataToProcess[segmentIndex].limitingComponent = limitingComponent;
 
-                    const avgGantrySpeed = (segmentDuration > 1e-9) ? deltaGantryAngle / segmentDuration : 0;
-                    const avgMlcSpeed = (segmentDuration > 1e-9) ? maxLeafTravel / segmentDuration : 0;
-                    const avgCollSpeed = (segmentDuration > 1e-9) ? deltaCollAngle / segmentDuration : 0;
+                    const motionDuration = Math.max(1e-9, segmentDuration - SEGMENT_OVERHEAD_SEC);
+                    const avgGantrySpeed = (motionDuration > 1e-9) ? deltaGantryAngle / motionDuration : 0;
+                    const avgMlcSpeed = (motionDuration > 1e-9) ? maxLeafTravel / motionDuration : 0;
+                    const avgCollSpeed = (motionDuration > 1e-9) ? deltaCollAngle / motionDuration : 0;
                     const avgDoseRate = (segmentDuration > 1e-9) ? (deltaDose / segmentDuration) * 60 : 0;
 
                     dataToProcess[segmentIndex].gantryCapability = MAX_GANTRY_SPEED > 0 ? (avgGantrySpeed / MAX_GANTRY_SPEED) * 100 : 0;
@@ -3243,7 +3738,59 @@
                 return localAAV * normalizedLSV * collimatorRotationFactor;
             }
 
-            function normalizeGantryAngleDiff(g1, g2) { let diff = Math.abs(g1 - g2); if (diff > 180) diff = 360 - diff; return diff; }
+	            function normalizeGantryAngleDiff(g1, g2) { let diff = Math.abs(g1 - g2); if (diff > 180) diff = 360 - diff; return diff; }
+
+	            function normalizeAngle360(deg) {
+	                const x = Number(deg);
+	                if (!isFinite(x)) return null;
+	                return ((x % 360) + 360) % 360;
+	            }
+
+	            function inferGantryRotationDirectionFromControlPoints(controlPoints) {
+	                const cps = controlPoints || [];
+	                if (!Array.isArray(cps) || cps.length < 3) return 'NONE';
+	                let wrapUp = 0;    // prev ~ 359 -> next ~ 0  (CCW across 360)
+	                let wrapDown = 0;  // prev ~ 0 -> next ~ 359 (CW across 0)
+	                let pos = 0;
+	                let neg = 0;
+	                let prev = normalizeAngle360(cps[0]?.gantryAngle);
+	                if (prev == null) return 'NONE';
+	                for (let i = 1; i < cps.length; i++) {
+	                    const next = normalizeAngle360(cps[i]?.gantryAngle);
+	                    if (next == null) continue;
+	                    const d = next - prev;
+	                    if (d < -180) wrapUp += 1;
+	                    else if (d > 180) wrapDown += 1;
+	                    else if (d > 1e-6) pos += 1;
+	                    else if (d < -1e-6) neg += 1;
+	                    prev = next;
+	                }
+	                if (wrapUp > wrapDown) return 'CCW';
+	                if (wrapDown > wrapUp) return 'CW';
+	                if (pos > neg) return 'CCW';
+	                if (neg > pos) return 'CW';
+	                return 'NONE';
+	            }
+
+	            function getBeamGantryRotationDirection(beamData) {
+	                if (!beamData || typeof beamData !== 'object') return 'NONE';
+	                const raw = (beamData.gantryRotationDirection || '').toString().toUpperCase();
+	                if (raw === 'CW' || raw === 'CCW') return raw;
+	                if (beamData.__gantryRotationDirectionInferred) return beamData.__gantryRotationDirectionInferred;
+	                const inferred = inferGantryRotationDirectionFromControlPoints(beamData.controlPoints);
+	                beamData.__gantryRotationDirectionInferred = inferred;
+	                return inferred;
+	            }
+
+	            function gantryAngleDeltaMagnitude(prevDeg, nextDeg, beamData) {
+	                const prev = normalizeAngle360(prevDeg);
+	                const next = normalizeAngle360(nextDeg);
+	                if (prev == null || next == null) return 0;
+	                const dir = getBeamGantryRotationDirection(beamData);
+	                if (dir === 'CCW') return (next - prev + 360) % 360;
+	                if (dir === 'CW') return (prev - next + 360) % 360;
+	                return normalizeGantryAngleDiff(prev, next);
+	            }
             function calculateStdDev(dataArray, key) {
                 const values = dataArray.map(item => item[key]).filter(val => typeof val === 'number' && isFinite(val));
                 if (values.length < 2) return 0;
@@ -3316,6 +3863,97 @@
                 return totalArea;
             }
 
+            function getVirtualLeafBoundariesForEffectivePositions(beamData, numLeafPairs) {
+                if (!beamData || !beamData.mlcDefinitions || beamData.mlcDefinitions.length === 0) return null;
+
+                let virtualBoundaries = null;
+                if (beamData.isRDSMachine && beamData.mlcDefinitions.length >= 2) {
+                    const layer1Def = beamData.mlcDefinitions.find(def => def.type === 'MLCX1');
+                    const layer2Def = beamData.mlcDefinitions.find(def => def.type === 'MLCX2');
+                    if (layer1Def && layer2Def) {
+                        virtualBoundaries = Array.from(new Set([...layer1Def.boundaries, ...layer2Def.boundaries])).sort((a, b) => a - b);
+                    } else {
+                        virtualBoundaries = beamData.mlcDefinitions[0].boundaries;
+                    }
+                } else {
+                    virtualBoundaries = beamData.mlcDefinitions[0].boundaries;
+                }
+
+                if (!Array.isArray(virtualBoundaries) || virtualBoundaries.length !== numLeafPairs + 1) return null;
+                return virtualBoundaries;
+            }
+
+            function calculateAverageLeafGap(effectiveMlcPositions, beamData) {
+                if (!effectiveMlcPositions || effectiveMlcPositions.length === 0) return 0;
+                const numLeafPairs = effectiveMlcPositions.length / 2;
+                if (!Number.isFinite(numLeafPairs) || numLeafPairs < 1) return 0;
+
+                const virtualBoundaries = getVirtualLeafBoundariesForEffectivePositions(beamData, numLeafPairs);
+                if (!virtualBoundaries) return 0;
+
+                let openHeight = 0;
+                let area = 0;
+                for (let i = 0; i < numLeafPairs; i++) {
+                    const w = virtualBoundaries[i + 1] - virtualBoundaries[i];
+                    const opening = effectiveMlcPositions[i + numLeafPairs] - effectiveMlcPositions[i];
+                    if (opening > 0 && w > 0) {
+                        openHeight += w;
+                        area += w * opening;
+                    }
+                }
+                return openHeight > 1e-9 ? (area / openHeight) : 0;
+            }
+
+            function calculateApertureEdgePerimeters(effectiveMlcPositions, beamData) {
+                if (!effectiveMlcPositions || effectiveMlcPositions.length === 0) return { leafEndPerimeter: 0, leafSidePerimeter: 0 };
+                const numLeafPairs = effectiveMlcPositions.length / 2;
+                if (!Number.isFinite(numLeafPairs) || numLeafPairs < 1) return { leafEndPerimeter: 0, leafSidePerimeter: 0 };
+
+                const virtualBoundaries = getVirtualLeafBoundariesForEffectivePositions(beamData, numLeafPairs);
+                if (!virtualBoundaries) return { leafEndPerimeter: 0, leafSidePerimeter: 0 };
+
+                const intervals = new Array(numLeafPairs);
+                let openHeight = 0;
+                for (let i = 0; i < numLeafPairs; i++) {
+                    const a = effectiveMlcPositions[i];
+                    const b = effectiveMlcPositions[i + numLeafPairs];
+                    const opening = b - a;
+                    if (opening > 0) {
+                        intervals[i] = { a, b, len: opening };
+                        const w = virtualBoundaries[i + 1] - virtualBoundaries[i];
+                        if (w > 0) openHeight += w;
+                    } else {
+                        intervals[i] = null;
+                    }
+                }
+
+                const leafEndPerimeter = 2 * openHeight;
+
+                const intervalLen = (iv) => iv ? Math.max(0, iv.len || (iv.b - iv.a)) : 0;
+                const overlapLen = (iv1, iv2) => {
+                    if (!iv1 || !iv2) return 0;
+                    const left = Math.max(iv1.a, iv2.a);
+                    const right = Math.min(iv1.b, iv2.b);
+                    return Math.max(0, right - left);
+                };
+                const symmetricDiffLen = (iv1, iv2) => {
+                    const l1 = intervalLen(iv1);
+                    const l2 = intervalLen(iv2);
+                    if (l1 <= 0 && l2 <= 0) return 0;
+                    const ov = overlapLen(iv1, iv2);
+                    return Math.max(0, l1 + l2 - 2 * ov);
+                };
+
+                let leafSidePerimeter = 0;
+                if (intervals[0]) leafSidePerimeter += intervalLen(intervals[0]); // bottom edge
+                if (intervals[numLeafPairs - 1]) leafSidePerimeter += intervalLen(intervals[numLeafPairs - 1]); // top edge
+                for (let i = 0; i < numLeafPairs - 1; i++) {
+                    leafSidePerimeter += symmetricDiffLen(intervals[i], intervals[i + 1]);
+                }
+
+                return { leafEndPerimeter, leafSidePerimeter };
+            }
+
             function calculateInterBeamTime(beam1, beam2) {
                 if (!beam1 || !beam2 || !beam1.controlPoints || beam1.controlPoints.length === 0 || !beam2.controlPoints || beam2.controlPoints.length === 0) {
                     return { timeGantry: 0, timeColl: 0, timeMlc: 0, totalTime: 0 };
@@ -3360,9 +3998,7 @@
                 let totalPlanTime = 0;
                 allBeamsProcessedData = [];
 
-                currentMaxGantrySpeed = parseFloat(maxGantrySpeedInput.value) || DEFAULTS_RDS.MAX_GANTRY_SPEED_DEGPS;
-                currentMaxMlcSpeedMMPS = (parseFloat(maxMlcSpeedInput.value) || DEFAULTS_RDS.MAX_MLC_SPEED_CMPS) * 10;
-                currentMaxCollimatorSpeed = parseFloat(maxCollimatorSpeedInput.value) || DEFAULTS_RDS.MAX_COLLIMATOR_SPEED_DEGPS;
+                updateCurrentSpeedLimits();
 
                 const planPrimaryDoseRate = (typeof rtPlanData.primaryDoseRate === 'number') ? rtPlanData.primaryDoseRate : 600.0;
 
@@ -3527,8 +4163,8 @@
                         const contourArray = parseNumericArray(contourDataRaw);
                         const points = [];
                         for (let i = 0; i + 2 < contourArray.length; i += 3) {
-                            // Mirror X at parse time so patient right maps to screen left consistently
-                            const x = -contourArray[i], y = contourArray[i + 1], z = contourArray[i + 2];
+                            // ContourData is in DICOM patient coordinates (LPS). Keep as-is; map to screen only at render time.
+                            const x = contourArray[i], y = contourArray[i + 1], z = contourArray[i + 2];
                             if ([x, y, z].every(v => typeof v === 'number' && !isNaN(v))) {
                                 points.push([x, y, z]);
                             }
@@ -3563,9 +4199,12 @@
             }
 
             function getBeamIsocenter(beam) {
-                const cp0Iso = beam?.controlPoints?.[0]?.isocenterPosition;
-                if (Array.isArray(cp0Iso) && cp0Iso.length === 3 && cp0Iso.every(v => typeof v === 'number' && isFinite(v))) {
-                    return cp0Iso;
+                const cps = beam?.controlPoints || [];
+                for (let i = 0; i < cps.length; i++) {
+                    const iso = cps[i]?.isocenterPosition;
+                    if (Array.isArray(iso) && iso.length === 3 && iso.every(v => typeof v === 'number' && isFinite(v))) {
+                        return iso;
+                    }
                 }
                 return [0, 0, 0];
             }
@@ -3832,11 +4471,11 @@
             }
 
             const PATIENT_AXIS_DEFS = [
-                // Swap LR labels to align with mirrored BEV presentation for BEV.
+                // Patient axes in DICOM LPS (x=Left, y=Posterior, z=Superior).
                 { label: 'R', vec: [-1, 0, 0] },
                 { label: 'L', vec: [1, 0, 0] },
-                { label: 'A', vec: [0, 1, 0] },
-                { label: 'P', vec: [0, -1, 0] },
+                { label: 'A', vec: [0, -1, 0] },
+                { label: 'P', vec: [0, 1, 0] },
                 { label: 'S', vec: [0, 0, 1] },
                 { label: 'I', vec: [0, 0, -1] }
             ];
@@ -3882,7 +4521,8 @@
                     const py = by * persp * scalePxPerMm;
                     const fontSize = Math.max(10, 16 * persp); // grow more when closer
                     ctx.save();
-                    ctx.translate(px, -py);
+                    // Canvas is already in BEV space (Y up). Place label at (px, py) and flip text upright.
+                    ctx.translate(px, py);
                     ctx.scale(1, -1); // flip letters vertically, keep position
                     ctx.fillStyle = orientationColor;
                     ctx.font = `bold ${fontSize}px Arial`;
@@ -3892,274 +4532,6 @@
                     ctx.restore();
                 });
                 ctx.restore();
-            }
-
-            const orientationAxisFloat32 = {
-                x: new Float32Array(getAxisVector('R') || [-1, 0, 0]),
-                y: new Float32Array(getAxisVector('A') || [0, 1, 0]),
-                z: new Float32Array(getAxisVector('S') || [0, 0, 1])
-            };
-
-            function initOrientationWidget() {
-                if (!orientationWidgetCanvas) return;
-                try {
-                    orientationGl = orientationWidgetCanvas.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: false });
-                } catch (err) {
-                    console.warn('Orientation widget WebGL init error', err);
-                    orientationGl = null;
-                }
-                if (!orientationGl) {
-                    console.warn('Orientation widget WebGL unavailable.');
-                    return;
-                }
-                orientationWidgetProgram = createOrientationWidgetProgram(orientationGl);
-                if (!orientationWidgetProgram) {
-                    orientationGl = null;
-                    return;
-                }
-                orientationWidgetAttributes = {
-                    position: orientationGl.getAttribLocation(orientationWidgetProgram, 'aPosition'),
-                    normal: orientationGl.getAttribLocation(orientationWidgetProgram, 'aNormal'),
-                    color: orientationGl.getAttribLocation(orientationWidgetProgram, 'aColor')
-                };
-                orientationWidgetUniforms = {
-                    frameRight: orientationGl.getUniformLocation(orientationWidgetProgram, 'uFrameRight'),
-                    frameUp: orientationGl.getUniformLocation(orientationWidgetProgram, 'uFrameUp'),
-                    frameDir: orientationGl.getUniformLocation(orientationWidgetProgram, 'uFrameDir'),
-                    tilt: orientationGl.getUniformLocation(orientationWidgetProgram, 'uTilt'),
-                    scale: orientationGl.getUniformLocation(orientationWidgetProgram, 'uScale'),
-                    aspect: orientationGl.getUniformLocation(orientationWidgetProgram, 'uAspect'),
-                    lightDir: orientationGl.getUniformLocation(orientationWidgetProgram, 'uLightDir'),
-                    axisX: orientationGl.getUniformLocation(orientationWidgetProgram, 'uAxisX'),
-                    axisY: orientationGl.getUniformLocation(orientationWidgetProgram, 'uAxisY'),
-                    axisZ: orientationGl.getUniformLocation(orientationWidgetProgram, 'uAxisZ')
-                };
-                orientationFigureBuffers = buildOrientationFigureGeometry(orientationGl);
-            }
-
-            function createOrientationWidgetProgram(gl) {
-                const vsSource = `
-                    attribute vec3 aPosition;
-                    attribute vec3 aNormal;
-                    attribute vec3 aColor;
-                    uniform vec3 uFrameRight;
-                    uniform vec3 uFrameUp;
-                    uniform vec3 uFrameDir;
-                    uniform vec3 uAxisX;
-                    uniform vec3 uAxisY;
-                    uniform vec3 uAxisZ;
-                    uniform float uTilt;
-                    uniform float uScale;
-                    uniform float uAspect;
-                    uniform vec3 uLightDir;
-                    varying vec3 vColor;
-                    varying float vLighting;
-                    vec3 remapToPatient(vec3 local) {
-                        return local.x * uAxisX + local.y * uAxisY + local.z * uAxisZ;
-                    }
-                    vec3 rotateX(vec3 v, float angle) {
-                        float s = sin(angle);
-                        float c = cos(angle);
-                        return vec3(v.x, v.y * c - v.z * s, v.y * s + v.z * c);
-                    }
-                    vec3 projectToBeam(vec3 v) {
-                        return vec3(
-                            dot(v, uFrameRight),
-                            dot(v, uFrameUp),
-                            -dot(v, uFrameDir)
-                        );
-                    }
-                    void main() {
-                        vec3 patientPos = remapToPatient(aPosition);
-                        vec3 patientNormal = remapToPatient(aNormal);
-                        vec3 beamSpace = projectToBeam(patientPos);
-                        vec3 beamNormal = projectToBeam(patientNormal);
-                        beamSpace.y *= -1.0;
-                        beamNormal.y *= -1.0;
-                        vec3 viewPos = rotateX(beamSpace, uTilt);
-                        vec3 viewNormal = normalize(rotateX(beamNormal, uTilt));
-                        vColor = aColor;
-                        float lambert = max(dot(viewNormal, normalize(uLightDir)), 0.0);
-                        vLighting = 0.6 + 0.4 * lambert;
-                        vec2 scaled = vec2(viewPos.x / max(uAspect, 0.01), viewPos.y) * uScale;
-                        gl_Position = vec4(scaled, viewPos.z * 0.45 * uScale, 1.0);
-                    }
-                `;
-                const fsSource = `
-                    precision mediump float;
-                    varying vec3 vColor;
-                    varying float vLighting;
-                    void main() {
-                        gl_FragColor = vec4(vColor * vLighting, 1.0);
-                    }
-                `;
-                const vs = gl.createShader(gl.VERTEX_SHADER);
-                gl.shaderSource(vs, vsSource);
-                gl.compileShader(vs);
-                if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
-                    console.error('Orientation widget vertex shader error', gl.getShaderInfoLog(vs));
-                    return null;
-                }
-                const fs = gl.createShader(gl.FRAGMENT_SHADER);
-                gl.shaderSource(fs, fsSource);
-                gl.compileShader(fs);
-                if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-                    console.error('Orientation widget fragment shader error', gl.getShaderInfoLog(fs));
-                    return null;
-                }
-                const program = gl.createProgram();
-                gl.attachShader(program, vs);
-                gl.attachShader(program, fs);
-                gl.linkProgram(program);
-                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-                    console.error('Orientation widget program link error', gl.getProgramInfoLog(program));
-                    return null;
-                }
-                return program;
-            }
-
-            function buildOrientationFigureGeometry(gl) {
-                if (!gl) return null;
-                const mesh = createOrientationFigureMesh();
-                const positionBuffer = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mesh.positions), gl.STATIC_DRAW);
-                const normalBuffer = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mesh.normals), gl.STATIC_DRAW);
-                const colorBuffer = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mesh.colors), gl.STATIC_DRAW);
-                const indexBuffer = gl.createBuffer();
-                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(mesh.indices), gl.STATIC_DRAW);
-                return {
-                    position: positionBuffer,
-                    normal: normalBuffer,
-                    color: colorBuffer,
-                    index: indexBuffer,
-                    indexCount: mesh.indices.length
-                };
-            }
-
-            function createOrientationFigureMesh() {
-                const mesh = { positions: [], normals: [], colors: [], indices: [] };
-                const GREEN = [16 / 255, 185 / 255, 129 / 255];
-                const RED = [220 / 255, 38 / 255, 38 / 255];
-                const BLUE = [37 / 255, 99 / 255, 235 / 255];
-
-                function addSphere(center, radius, color, latSteps = 12, lonSteps = 16) {
-                    const baseIndex = mesh.positions.length / 3;
-                    for (let lat = 0; lat <= latSteps; lat++) {
-                        const v = lat / latSteps;
-                        const phi = v * Math.PI;
-                        const sinPhi = Math.sin(phi);
-                        const cosPhi = Math.cos(phi);
-                        for (let lon = 0; lon <= lonSteps; lon++) {
-                            const u = lon / lonSteps;
-                            const theta = u * Math.PI * 2;
-                            const sinTheta = Math.sin(theta);
-                            const cosTheta = Math.cos(theta);
-                            const nx = cosTheta * sinPhi;
-                            const ny = cosPhi;
-                            const nz = sinTheta * sinPhi;
-                            mesh.positions.push(
-                                center[0] + radius * nx,
-                                center[1] + radius * ny,
-                                center[2] + radius * nz
-                            );
-                            mesh.normals.push(nx, ny, nz);
-                            mesh.colors.push(color[0], color[1], color[2]);
-                        }
-                    }
-                    for (let lat = 0; lat < latSteps; lat++) {
-                        for (let lon = 0; lon < lonSteps; lon++) {
-                            const first = baseIndex + lat * (lonSteps + 1) + lon;
-                            const second = first + lonSteps + 1;
-                            mesh.indices.push(first, second, first + 1);
-                            mesh.indices.push(second, second + 1, first + 1);
-                        }
-                    }
-                }
-
-                // Patient axes follow RAS (+X right, +Y anterior, +Z superior)
-                // Torso / core
-                addSphere([0, 0, 0.1], 0.35, GREEN, 14, 20);
-                addSphere([0, 0, 0.55], 0.22, GREEN, 12, 18); // head
-                addSphere([0, 0, -0.25], 0.28, GREEN, 12, 18); // hips
-                // Arms
-                addSphere([0.42, 0, 0.15], 0.16, GREEN);  // patient-right elbow
-                addSphere([-0.42, 0, 0.15], 0.16, GREEN); // patient-left elbow
-                addSphere([-0.6, 0, 0.15], 0.12, RED);    // left hand (patient left)
-                addSphere([0.6, 0, 0.15], 0.12, GREEN);   // right hand
-                // Legs
-                addSphere([0.18, 0, -0.45], 0.16, GREEN);   // patient-right knee
-                addSphere([-0.18, 0, -0.45], 0.16, GREEN);  // patient-left knee
-                addSphere([-0.18, 0, -0.72], 0.12, BLUE);   // left foot
-                addSphere([0.18, 0, -0.72], 0.12, BLUE);    // right foot
-                // Nose (anterior)
-                addSphere([0, 0.25, 0.55], 0.09, RED, 10, 16);
-
-                return mesh;
-            }
-
-            function drawOrientationWidget(frame, fallbackAngle = 0) {
-                if (!orientationGl || !orientationWidgetProgram || !orientationFigureBuffers || !orientationWidgetCanvas) return;
-                const gl = orientationGl;
-                const widgetSize = Math.floor(Math.min(orientationWidgetCanvas.clientWidth || 140, orientationWidgetCanvas.clientHeight || 140));
-                if (widgetSize > 0 && (orientationWidgetCanvas.width !== widgetSize || orientationWidgetCanvas.height !== widgetSize)) {
-                    orientationWidgetCanvas.width = widgetSize;
-                    orientationWidgetCanvas.height = widgetSize;
-                }
-                if (!orientationWidgetCanvas.width || !orientationWidgetCanvas.height) return;
-                gl.viewport(0, 0, orientationWidgetCanvas.width, orientationWidgetCanvas.height);
-                gl.clearColor(0, 0, 0, 0);
-                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-                gl.enable(gl.DEPTH_TEST);
-                gl.enable(gl.CULL_FACE);
-                gl.disable(gl.BLEND);
-                gl.depthMask(true);
-                const isValidVec = vec => Array.isArray(vec) && vec.length >= 3 && vec.every(num => Number.isFinite(num));
-                const resolvedFrame = (() => {
-                    if (frame && isValidVec(frame.right) && isValidVec(frame.up) && isValidVec(frame.dir)) {
-                        return frame;
-                    }
-                    const fallbackFrame = applyBeamRoll180(computeBeamFrame(0, fallbackAngle || 0));
-                    if (fallbackFrame && isValidVec(fallbackFrame.right) && isValidVec(fallbackFrame.up) && isValidVec(fallbackFrame.dir)) {
-                        return fallbackFrame;
-                    }
-                    return {
-                        right: [-1, 0, 0],
-                        up: [0, 0, 1],
-                        dir: [0, 1, 0]
-                    };
-                })();
-                gl.useProgram(orientationWidgetProgram);
-                gl.uniform3fv(orientationWidgetUniforms.frameRight, new Float32Array(resolvedFrame.right));
-                gl.uniform3fv(orientationWidgetUniforms.frameUp, new Float32Array(resolvedFrame.up));
-                gl.uniform3fv(orientationWidgetUniforms.frameDir, new Float32Array(resolvedFrame.dir));
-                gl.uniform3fv(orientationWidgetUniforms.axisX, orientationAxisFloat32.x);
-                gl.uniform3fv(orientationWidgetUniforms.axisY, orientationAxisFloat32.y);
-                gl.uniform3fv(orientationWidgetUniforms.axisZ, orientationAxisFloat32.z);
-                gl.uniform1f(orientationWidgetUniforms.tilt, 0);
-                gl.uniform1f(orientationWidgetUniforms.scale, 0.85);
-                gl.uniform1f(orientationWidgetUniforms.aspect, orientationWidgetCanvas.width / orientationWidgetCanvas.height);
-                gl.uniform3fv(orientationWidgetUniforms.lightDir, new Float32Array([0, 0, 1]));
-
-                gl.bindBuffer(gl.ARRAY_BUFFER, orientationFigureBuffers.position);
-                gl.enableVertexAttribArray(orientationWidgetAttributes.position);
-                gl.vertexAttribPointer(orientationWidgetAttributes.position, 3, gl.FLOAT, false, 0, 0);
-
-                gl.bindBuffer(gl.ARRAY_BUFFER, orientationFigureBuffers.normal);
-                gl.enableVertexAttribArray(orientationWidgetAttributes.normal);
-                gl.vertexAttribPointer(orientationWidgetAttributes.normal, 3, gl.FLOAT, false, 0, 0);
-
-                gl.bindBuffer(gl.ARRAY_BUFFER, orientationFigureBuffers.color);
-                gl.enableVertexAttribArray(orientationWidgetAttributes.color);
-                gl.vertexAttribPointer(orientationWidgetAttributes.color, 3, gl.FLOAT, false, 0, 0);
-
-                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, orientationFigureBuffers.index);
-                gl.drawElements(gl.TRIANGLES, orientationFigureBuffers.indexCount, gl.UNSIGNED_SHORT, 0);
             }
 
             function setDefaultStructureVisibility(rois) {
@@ -4185,23 +4557,23 @@
                 });
             }
 
-            function drawStructuresOnBEV(ctx, beam, gantryAngle, collimatorAngle, scalePxPerMm, isoCenter = [0, 0, 0], cpObj = null) {
-                if (!ctx || !showStructures) return;
-                const rois = getRoisForBeam(beam);
-                if (!Array.isArray(rois) || rois.length === 0) return;
-                // Project contour vertices into the beam frame and plot as a translucent point cloud.
-                const couchAngle = (cpObj && Number.isFinite(cpObj.couchAngle)) ? cpObj.couchAngle : (beam?.patientSupportAngle || 0);
-                const frame = applyBeamRoll180(computeBeamFrame(gantryAngle, couchAngle));
-                const isoX = isoCenter?.[0] || 0;
-                const isoY = isoCenter?.[1] || 0;
-                const isoZ = isoCenter?.[2] || 0;
+	            function drawStructuresOnBEV(ctx, beam, gantryAngle, collimatorAngle, scalePxPerMm, isoCenter = [0, 0, 0], cpObj = null, frameOverride = null) {
+	                if (!ctx || !showStructures) return;
+	                const rois = getRoisForBeam(beam);
+	                if (!Array.isArray(rois) || rois.length === 0) return;
+	                // Project contour vertices into the beam frame and plot as a translucent point cloud.
+	                const couchAngle = (cpObj && Number.isFinite(cpObj.couchAngle)) ? cpObj.couchAngle : (beam?.patientSupportAngle || 0);
+		                const frame = frameOverride || computeBeamFrame(gantryAngle, couchAngle);
+	                const isoX = isoCenter?.[0] || 0;
+	                const isoY = isoCenter?.[1] || 0;
+	                const isoZ = isoCenter?.[2] || 0;
                 const manualOffsetPx = {
                     x: (mlcRenderXOffsetMm || 0) * scalePxPerMm,
                     y: (mlcRenderYOffsetMm || 0) * scalePxPerMm
                 };
                 const pointAlpha = getStructurePointAlpha();
-                function drawGaussianDot(px, py, color, depthMm, pxPerMmProjected) {
-                    const depthGrad = getDepthGradient(depthMm);
+	                function drawGaussianDot(px, py, color, depthDistalMm, pxPerMmProjected) {
+	                    const depthGrad = getDepthGradient(depthDistalMm);
                     const luminanceBoost = getStructureLuminanceBoost();
                     const sigmaFactor = Math.max(0.01, structureSigmaScale); // slider drives size directly
                     const spacingX = Math.max(0.1, structureVoxelSpacingMm.x || 1);
@@ -4254,23 +4626,26 @@
                         pts.forEach((pt, idx) => {
                             if (!Array.isArray(pt) || pt.length < 3) return;
                             if (decimateXY && (idx % 2 === 1)) return; // skip every other point for thick slices
-                            const ras = lpsToRas(pt);
-                            const dx = (ras[0] || 0) - isoX;
-                            const dy = (ras[1] || 0) - isoY;
-                            const dz = (ras[2] || 0) - isoZ;
+	                            // LPS pipeline: contours and isocenter are in DICOM patient coordinates (LPS)
+	                            const dx = (pt[0] || 0) - isoX;
+	                            const dy = (pt[1] || 0) - isoY;
+	                            const dz = (pt[2] || 0) - isoZ;
                             // Beam-frame projection: X along beamRight, Y along beamUp.
                             const px_mm = dx * frame.right[0] + dy * frame.right[1] + dz * frame.right[2];
                             const py_mm = dx * frame.up[0] + dy * frame.up[1] + dz * frame.up[2];
-                            const depthMm = dx * frame.dir[0] + dy * frame.dir[1] + dz * frame.dir[2];
-                            const denom = Math.max(1e-3, WEBGL_SAD_MM - depthMm);
-                            const persp = WEBGL_SAD_MM / denom;
-                            const pxScale = persp * scalePxPerMm;
-                            const px = px_mm * pxScale + manualOffsetPx.x;
-                            const py = py_mm * pxScale + manualOffsetPx.y;
-                            drawGaussianDot(px, py, color, depthMm, pxScale);
-                        });
-                    });
-                });
+	                            // Frame.dir is iso->source (depth-to-source). For structure shading we want distal>0 (along beam travel),
+	                            // which is the opposite direction.
+	                            const depthToSourceMm = dx * frame.dir[0] + dy * frame.dir[1] + dz * frame.dir[2];
+	                            const depthDistalMm = -depthToSourceMm;
+	                            const denom = Math.max(1e-3, WEBGL_SAD_MM - depthToSourceMm);
+	                            const persp = WEBGL_SAD_MM / denom;
+	                            const pxScale = persp * scalePxPerMm;
+	                            const px = px_mm * pxScale + manualOffsetPx.x;
+	                            const py = py_mm * pxScale + manualOffsetPx.y;
+	                            drawGaussianDot(px, py, color, depthDistalMm, pxScale);
+	                        });
+	                    });
+	                });
                 if (useCakeMode) {
                     const sliceThicknessPx = Math.max(1, (structureVoxelSpacingMm.z || 1) * scalePxPerMm);
                     sliceBuckets.forEach(bucket => {
@@ -4280,8 +4655,8 @@
                             y: p.py + manualOffsetPx.y
                         })));
                         if (!hull || hull.length < 3) return;
-                        const avgDepth = bucket.pts.reduce((s, p) => s + (p.depth || 0), 0) / bucket.pts.length;
-                        const depthGrad = getDepthGradient(avgDepth);
+	                        const avgDepth = bucket.pts.reduce((s, p) => s + (p.depth || 0), 0) / bucket.pts.length;
+	                        const depthGrad = getDepthGradient(avgDepth);
                         const brighten = depthGrad.brightness;
                         const colorMatch = bucket.color.match(/rgba?\(([\d.\s,]+)\)/);
                         const fillColor = colorMatch ? (() => {
@@ -4327,6 +4702,7 @@
                 const vsSource = `
                     precision highp float;
                     attribute vec3 aPosition;
+                    attribute vec3 aNormal;
                     attribute vec4 aColor;
                     uniform mat4 uMVP;
                     uniform vec3 uIsoCenter;
@@ -4338,6 +4714,7 @@
                     uniform vec2 uAniso;
                     varying vec4 vColor;
                     varying float vDepth;
+                    varying float vRim;
                     void main() {
                         vec3 rel = aPosition - uIsoCenter;
                         float bx = dot(rel, uBeamRight);
@@ -4345,6 +4722,15 @@
                         float bz = dot(rel, uBeamDir);
                         vColor = aColor;
                         vDepth = bz;
+                        float rim = 1.0;
+                        float nlen = length(aNormal);
+                        if (nlen > 1e-6) {
+                            vec3 n = aNormal / nlen;
+                            vec3 v = normalize(uBeamDir);
+                            float cosNV = abs(dot(n, v));
+                            rim = pow(clamp(1.0 - cosNV, 0.0, 1.0), 1.5);
+                        }
+                        vRim = rim;
                         float denom = max(1e-3, uSAD - bz);
                         float persp = uSAD / denom;
                         vec2 proj = vec2(bx, by) * persp;
@@ -4357,6 +4743,7 @@
                     precision highp float;
                     varying vec4 vColor;
                     varying float vDepth;
+                    varying float vRim;
                     uniform float uPointAlpha;
                     uniform float uDepthFade;
                     uniform float uSAD;
@@ -4379,6 +4766,9 @@
                         float brightness = mix(1.05, 0.35, distalNorm);    // distal much darker, slight boost proximal
                         brightness = mix(brightness, 1.0, isoFocus);      // brightest near iso plane
                         float alpha = uPointAlpha * vColor.a * depthAtten * gauss * distalAlpha * (0.6 + 0.4 * isoFocus);
+                        float rimAlpha = 0.25 + 0.75 * vRim;              // denser when tangent to the beam direction
+                        alpha *= rimAlpha;
+                        brightness *= (0.9 + 0.6 * vRim);                 // subtle edge-lit boost
                         float distalCm = max(0.0, depthForward) / 10.0;          // distance distal from iso in cm
                         float distalFade = clamp(1.0 - 0.05 * distalCm, 0.0, 1.0);
                         alpha *= distalFade;
@@ -4411,6 +4801,7 @@
                 gl.useProgram(glProgram);
                 glAttributes = {
                     position: gl.getAttribLocation(glProgram, 'aPosition'),
+                    normal: gl.getAttribLocation(glProgram, 'aNormal'),
                     color: gl.getAttribLocation(glProgram, 'aColor'),
                 };
                 glUniforms = {
@@ -4431,28 +4822,32 @@
                 };
             }
 
-            function updateWebglSize() {
+            function updateWebglSize(renderScale = 1.0) {
                 if (!gl || !bevWebglCanvas || !bevCanvas) return;
-                const size = bevCanvas.width;
-                if (bevWebglCanvas.width !== size || bevWebglCanvas.height !== size) {
-                    bevWebglCanvas.width = size;
-                    bevWebglCanvas.height = size;
-                    bevWebglCanvas.style.width = `${size}px`;
-                    bevWebglCanvas.style.height = `${size}px`;
+                const cssSize = bevCanvas.width;
+                const scale = Math.max(0.25, Math.min(1.0, Number(renderScale) || 1.0));
+                const bufferSize = Math.max(1, Math.round(cssSize * scale));
+                if (bevWebglCanvas.width !== bufferSize || bevWebglCanvas.height !== bufferSize) {
+                    bevWebglCanvas.width = bufferSize;
+                    bevWebglCanvas.height = bufferSize;
+                    // Keep CSS size aligned with the 2D BEV canvas; only the backing store is downscaled.
+                    bevWebglCanvas.style.width = `${cssSize}px`;
+                    bevWebglCanvas.style.height = `${cssSize}px`;
                     bevWebglCanvas.style.top = '0px';
                     bevWebglCanvas.style.left = '0px';
                 }
-                gl.viewport(0, 0, size, size);
+                gl.viewport(0, 0, bufferSize, bufferSize);
             }
 
-            function applyManualOverlayOffset() {
-                if (!bevWebglCanvas || !bevCanvas) return;
-                const size = bevCanvas.width || 0;
-                const pxPerMm = size ? (size / WEBGL_FIELD_SPAN_MM) : 0;
-                const xPx = mlcRenderXOffsetMm * pxPerMm;
-                const yPx = mlcRenderYOffsetMm * pxPerMm;
-                bevWebglCanvas.style.transform = `translate(${xPx}px, ${yPx}px)`;
-            }
+	            function applyManualOverlayOffset() {
+	                if (!bevWebglCanvas || !bevCanvas) return;
+	                const size = bevCanvas.width || 0;
+	                const pxPerMm = size ? (size / WEBGL_FIELD_SPAN_MM) : 0;
+	                const xPx = mlcRenderXOffsetMm * pxPerMm;
+	                // BEV math uses +Y up; CSS translate uses +Y down.
+	                const yPx = -mlcRenderYOffsetMm * pxPerMm;
+	                bevWebglCanvas.style.transform = `translate(${xPx}px, ${yPx}px)`;
+	            }
 
             function normalizeVec(v) {
                 const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) || 0;
@@ -4460,41 +4855,58 @@
                 return [v[0] / len, v[1] / len, v[2] / len];
             }
 
-            function rotateAroundAxis(v, axis, rad) {
-                const k = normalizeVec(axis);
-                const c = Math.cos(rad);
-                const s = Math.sin(rad);
-                const dot = v[0] * k[0] + v[1] * k[1] + v[2] * k[2];
-                return [
-                    v[0] * c + s * (k[1] * v[2] - k[2] * v[1]) + (1 - c) * dot * k[0],
-                    v[1] * c + s * (k[2] * v[0] - k[0] * v[2]) + (1 - c) * dot * k[1],
-                    v[2] * c + s * (k[0] * v[1] - k[1] * v[0]) + (1 - c) * dot * k[2]
-                ];
-            }
+	            function rotateAroundAxis(v, axis, rad) {
+	                const k = normalizeVec(axis);
+	                const c = Math.cos(rad);
+	                const s = Math.sin(rad);
+	                const dot = v[0] * k[0] + v[1] * k[1] + v[2] * k[2];
+	                return [
+	                    v[0] * c + s * (k[1] * v[2] - k[2] * v[1]) + (1 - c) * dot * k[0],
+	                    v[1] * c + s * (k[2] * v[0] - k[0] * v[2]) + (1 - c) * dot * k[1],
+	                    v[2] * c + s * (k[0] * v[1] - k[1] * v[0]) + (1 - c) * dot * k[2]
+	                ];
+	            }
 
-            function computeBeamFrame(gantryDeg = 0, couchDeg = 0) {
-                // IEC/DICOM: gantry about patient Z; couch (patient support) rotates patient about AP (Y) axis.
-                // To express beam axes in patient frame, rotate gantry frame about Y by -couch (undo patient rotation).
-                const g = -((gantryDeg || 0) * Math.PI) / 180; // negate so gantry increases rotate CCW in BEV
-                const couch = ((couchDeg || 0) * Math.PI) / 180;
-                const rotY = (v, ang) => {
-                    const x = v[0] * Math.cos(ang) + v[2] * Math.sin(ang);
-                    const y = v[1];
-                    const z = -v[0] * Math.sin(ang) + v[2] * Math.cos(ang);
-                    return [x, y, z];
-                };
-                // Base: gantry 0 beams from anterior to posterior (LPS +Y -> AP), so set dir along -cos term to survive LPS->RAS flip.
-                const baseDirLps = [Math.sin(g), -Math.cos(g), 0];        // source -> iso (A->P at g=0)
-                const baseRightLps = [Math.cos(g), Math.sin(g), 0];       // beam right (up x dir)
-                const upLps = [0, 0, 1];                                 // superior
-                const dirLps = rotY(baseDirLps, -couch);
-                const rightLps = rotY(baseRightLps, -couch);
-                const upRot = rotY(upLps, -couch);
-                const dir = normalizeVec(lpsToRas(dirLps));
-                const right = normalizeVec(lpsToRas(rightLps));
-                const up = normalizeVec(lpsToRas(upRot));
-                return { dir, right, up };
-            }
+	            function computeBeamFrame(gantryDeg = 0, couchDeg = 0) {
+	                // LPS pipeline (DICOM patient coordinates):
+	                // - RS contour points are stored in LPS
+	                // - RTPLAN IsocenterPosition is in LPS
+	                // Keep the beam frame in LPS as well. This avoids implicit L/R flips caused by converting some
+	                // inputs to RAS but not others.
+	                //
+	                // IEC 61217/IEC 62707-style mapping in patient LPS:
+	                // - Gantry rotates about patient +Z (superior axis).
+	                // - PatientSupportAngle (couch) is modeled here as a rotation of the patient about the AP axis (patient +Y in LPS).
+	                //   This is what creates the expected non-coplanar BEV tilt when couch kicks are present in the plan.
+	                // In patient coordinates, apply a couch rotation to the beam frame. Note: this sign is chosen to
+	                // match Eclipse/IEC display for PatientSupportAngle in the BEV view.
+	                //
+	                // For couch=0, define iso->source direction (depth-to-source) as:
+	                //   G=0   : -Y (anterior)   [source at anterior]
+	                //   G=90  : +X (left)       [source at left]
+	                //   G=180 : +Y (posterior)  [source at posterior]
+	                //   G=270 : -X (right)      [source at right]
+	                // i.e. dir = [sin(G), -cos(G), 0] in LPS.
+	                const g = ((gantryDeg || 0) * Math.PI) / 180;
+	                const couch = ((couchDeg || 0) * Math.PI) / 180;
+	                const rotY = (v, ang) => {
+	                    const c = Math.cos(ang);
+	                    const s = Math.sin(ang);
+	                    return [
+	                        v[0] * c + v[2] * s,
+	                        v[1],
+	                        -v[0] * s + v[2] * c
+	                    ];
+	                };
+	                // Base frame in LPS (x=Left, y=Posterior, z=Superior), couch=0.
+	                const baseDirLps = [Math.sin(g), -Math.cos(g), 0];        // iso -> source
+	                const baseRightLps = [Math.cos(g), Math.sin(g), 0];       // beam +X so that cross(right, up) = dir
+	                const upLps = [0, 0, 1];                                  // superior
+	                const dir = normalizeVec(rotY(baseDirLps, couch));
+	                const right = normalizeVec(rotY(baseRightLps, couch));
+	                const up = normalizeVec(rotY(upLps, couch));
+	                return { dir, right, up };
+	            }
 
             function applyBeamRoll180(frame) {
                 return {
@@ -4531,31 +4943,65 @@
                     const color = getRoiColor(roi, roiIdx);
                     const contours = roi.contours || [];
                     const roiFoR = roi.frameOfReferenceUID || rtStructData.frameOfReferenceUID || '';
+                    const startIdx = idx;
+                    const rgba = colorToRgba(color, 1);
+                    rgba[3] = getRoiPointAlphaFactor(roi);
+                    const computeRimNormals = isBodyLikeRoi(roi);
                     contours.forEach(contour => {
                         const processedPoints = preprocessContourPoints(contour?.points, roi);
                         if (!Array.isArray(processedPoints) || processedPoints.length === 0) return;
-                        const startIdx = idx;
-                        const rgba = colorToRgba(color, 1);
-                        rgba[3] = getRoiPointAlphaFactor(roi);
-                        processedPoints.forEach(pt => {
-                            const ras = lpsToRas(pt);
-                            const x = ras[0];
-                            const y = ras[1];
-                            const z = ras[2];
-                            // Normal is unused for point sprites; keep zeroed to match stride.
-                            verts.push(x, y, z, 0, 0, 0, rgba[0], rgba[1], rgba[2], rgba[3]);
+                        const ptsLps = processedPoints;
+                        const planeNormal = computeRimNormals ? computeContourNormal(ptsLps) : null;
+                        const useNormals = computeRimNormals && planeNormal;
+                        const n = ptsLps.length;
+                        for (let i = 0; i < n; i++) {
+                            const p = ptsLps[i];
+                            const x = p[0];
+                            const y = p[1];
+                            const z = p[2];
+
+                            let nx = 0, ny = 0, nz = 0;
+                            if (useNormals) {
+                                const prev = ptsLps[(i - 1 + n) % n];
+                                const next = ptsLps[(i + 1) % n];
+                                let tx = next[0] - prev[0];
+                                let ty = next[1] - prev[1];
+                                let tz = next[2] - prev[2];
+                                let tlen = Math.sqrt(tx * tx + ty * ty + tz * tz);
+                                if (tlen < 1e-6) {
+                                    tx = next[0] - x;
+                                    ty = next[1] - y;
+                                    tz = next[2] - z;
+                                    tlen = Math.sqrt(tx * tx + ty * ty + tz * tz);
+                                }
+                                if (tlen > 1e-6) {
+                                    tx /= tlen; ty /= tlen; tz /= tlen;
+                                    // In-plane normal: planeNormal × tangent (direction doesn't matter; shader uses abs(dot)).
+                                    nx = planeNormal[1] * tz - planeNormal[2] * ty;
+                                    ny = planeNormal[2] * tx - planeNormal[0] * tz;
+                                    nz = planeNormal[0] * ty - planeNormal[1] * tx;
+                                    const nlen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+                                    if (nlen > 1e-6) {
+                                        nx /= nlen; ny /= nlen; nz /= nlen;
+                                    } else {
+                                        nx = 0; ny = 0; nz = 0;
+                                    }
+                                }
+                            }
+
+                            verts.push(x, y, z, nx, ny, nz, rgba[0], rgba[1], rgba[2], rgba[3]);
                             idx += 1;
-                        });
-                        const count = idx - startIdx;
-                        if (count > 0) {
-                            glDrawBatches.push({
-                                roiNumber: roi.roiNumber,
-                                frameOfReferenceUID: roiFoR,
-                                offset: startIdx,
-                                count
-                            });
                         }
                     });
+                    const count = idx - startIdx;
+                    if (count > 0) {
+                        glDrawBatches.push({
+                            roiNumber: roi.roiNumber,
+                            frameOfReferenceUID: roiFoR,
+                            offset: startIdx,
+                            count
+                        });
+                    }
                 });
 
                 glRimVertices = new Float32Array(verts);
@@ -4572,17 +5018,18 @@
                 bevRenderMode.style.background = color || 'rgba(15, 23, 42, 0.75)';
             }
 
-            function drawStructuresWebgl(gantryAngle, collimatorAngle, beam, isoCenter = [0, 0, 0], cpObj = null) {
-                if (!gl || !glProgram || !bevWebglCanvas || !glDrawBatches.length || !showStructures) {
-                    if (bevWebglCanvas) bevWebglCanvas.style.display = 'none';
-                    setBevRenderModeLabel('Render: 2D', 'rgba(180, 83, 9, 0.8)');
-                    return false;
-                }
-                const couchAngle = (cpObj && Number.isFinite(cpObj.couchAngle)) ? cpObj.couchAngle : (beam?.patientSupportAngle || 0);
-                const frame = applyBeamRoll180(computeBeamFrame(gantryAngle, couchAngle));
-                const beamFoRSet = getBeamFrameOfReferenceSet(beam);
-                const enforceFoR = beamFoRSet && beamFoRSet.size > 0;
-                updateWebglSize();
+	            function drawStructuresWebgl(gantryAngle, collimatorAngle, beam, isoCenter = [0, 0, 0], cpObj = null, frameOverride = null) {
+	                if (!gl || !glProgram || !bevWebglCanvas || !glDrawBatches.length || !showStructures) {
+	                    if (bevWebglCanvas) bevWebglCanvas.style.display = 'none';
+	                    setBevRenderModeLabel('Render: 2D', 'rgba(180, 83, 9, 0.8)');
+	                    return false;
+	                }
+	                const couchAngle = (cpObj && Number.isFinite(cpObj.couchAngle)) ? cpObj.couchAngle : (beam?.patientSupportAngle || 0);
+		                const frame = frameOverride || computeBeamFrame(gantryAngle, couchAngle);
+	                const beamFoRSet = getBeamFrameOfReferenceSet(beam);
+	                const enforceFoR = beamFoRSet && beamFoRSet.size > 0;
+                const renderScale = getWebglRenderScale(glRimVertexCount);
+                updateWebglSize(renderScale);
                 applyManualOverlayOffset();
                 gl.clearColor(0, 0, 0, 0);
                 gl.clear(gl.COLOR_BUFFER_BIT);
@@ -4591,20 +5038,23 @@
                 const stride = 10 * 4;
                 gl.enableVertexAttribArray(glAttributes.position);
                 gl.vertexAttribPointer(glAttributes.position, 3, gl.FLOAT, false, stride, 0);
+                gl.enableVertexAttribArray(glAttributes.normal);
+                gl.vertexAttribPointer(glAttributes.normal, 3, gl.FLOAT, false, stride, 3 * 4);
                 gl.enableVertexAttribArray(glAttributes.color);
                 gl.vertexAttribPointer(glAttributes.color, 4, gl.FLOAT, false, stride, 6 * 4);
 
-                const s = (2 / WEBGL_FIELD_SPAN_MM);
-                const mvp = new Float32Array([
-                    s, 0, 0, 0,
-                    0, -s, 0, 0, // flip Y to match 2D canvas orientation
-                    0, 0, 1, 0,
-                    0, 0, 0, 1
-                ]);
+	                const s = (2 / WEBGL_FIELD_SPAN_MM);
+	                const mvp = new Float32Array([
+	                    s, 0, 0, 0,
+	                    0, s, 0, 0, // 2D BEV drawing space is already Y-up
+	                    0, 0, 1, 0,
+	                    0, 0, 0, 1
+	                ]);
                 gl.uniformMatrix4fv(glUniforms.mvp, false, mvp);
                 gl.uniform1f(glUniforms.depthFade, WEBGL_DEPTH_FADE);
                 gl.uniform1f(glUniforms.sad, WEBGL_SAD_MM);
-                const pxPerMm = bevCanvas ? bevCanvas.width / WEBGL_FIELD_SPAN_MM : 1;
+                // Use WebGL backing-store size so point size remains stable when downscaling the buffer.
+                const pxPerMm = bevWebglCanvas ? bevWebglCanvas.width / WEBGL_FIELD_SPAN_MM : 1;
                 const sigmaFactor = Math.max(0.01, structureSigmaScale); // slider drives size directly
                 const spacingX = Math.max(0.1, structureVoxelSpacingMm.x || 1);
                 const spacingY = Math.max(0.1, structureVoxelSpacingMm.y || spacingX);
@@ -4637,7 +5087,10 @@
                 });
 
                 bevWebglCanvas.style.display = anyDrawn ? 'block' : 'none';
-                setBevRenderModeLabel(anyDrawn ? 'Structures: WebGL' : 'Structures: 2D', anyDrawn ? 'rgba(22, 101, 52, 0.8)' : 'rgba(180, 83, 9, 0.8)');
+                const label = anyDrawn
+                    ? (renderScale < 0.999 ? `Structures: WebGL (${Math.round(renderScale * 100)}%)` : 'Structures: WebGL')
+                    : 'Structures: 2D';
+                setBevRenderModeLabel(label, anyDrawn ? 'rgba(22, 101, 52, 0.8)' : 'rgba(180, 83, 9, 0.8)');
                 return anyDrawn;
             }
 
@@ -4684,9 +5137,10 @@
                     (roi.contours || []).forEach(contour => {
                         const pts = contour?.points || [];
                         for (let i = 0; i < pts.length; i++) {
-                            const a = lpsToRas(pts[i]);
+                            const a = pts[i];
+                            const b = pts[(i + 1) % pts.length];
+                            if (!Array.isArray(a) || a.length < 3 || !Array.isArray(b) || b.length < 3) continue;
                             zVals.push(a[2]);
-                            const b = lpsToRas(pts[(i + 1) % pts.length]);
                             const dx = a[0] - b[0];
                             const dy = a[1] - b[1];
                             const dist = Math.hypot(dx, dy);
@@ -4775,8 +5229,16 @@
 
                 data.forEach((pd_item, idx) => {
                     const mlcPos_i_effective = getEffectiveMLCPositionsForCP(pd_item.cp, beam);
-                    pd_item.sasValue = mlcPos_i_effective ? 1 - (calculateApertureArea(mlcPos_i_effective, beam) / A_max_plan) : 0;
+                    const area = mlcPos_i_effective ? calculateApertureArea(mlcPos_i_effective, beam) : 0;
+                    pd_item.sasValue = mlcPos_i_effective ? 1 - (area / A_max_plan) : 0;
                     pd_item.aavValue = mlcPos_i_effective ? calculateAAVAtCP(mlcPos_i_effective, allEffectiveCPsMlcDataForBeam) : 0;
+                    pd_item.avgLeafGap = mlcPos_i_effective ? calculateAverageLeafGap(mlcPos_i_effective, beam) : 0;
+                    const { leafEndPerimeter, leafSidePerimeter } = mlcPos_i_effective ? calculateApertureEdgePerimeters(mlcPos_i_effective, beam) : { leafEndPerimeter: 0, leafSidePerimeter: 0 };
+                    pd_item.leafEndPerimeter = leafEndPerimeter;
+                    pd_item.leafSidePerimeter = leafSidePerimeter;
+                    pd_item.edgeComplexity = area > 1e-6
+                        ? ((EDGE_COMPLEXITY_C2 * leafSidePerimeter) / area) // Younge et al: leaf-side perimeter only (exclude leaf ends)
+                        : 0;
                     pd_item.modulationIndex = calculateModulationIndex(beam, idx, K_3_PERCENT);
                     pd_item.cpDensity = calculateCpDensity(controlPoints, idx, DENSITY_WINDOW_DEGREES);
                     pd_item.mcsValue_cp = calculateLocalMCSvForCP(beam, data, idx, K_3_PERCENT, allEffectiveCPsMlcDataForBeam, COLLIMATOR_WEIGHTING_FACTOR);
@@ -4784,7 +5246,7 @@
 
                 const totalMuWeight = numControlPoints > 0 ? controlPoints[numControlPoints - 1].cumulativeMetersetWeight : 0;
                 if (totalMuWeight > 0) {
-                    let sasSum = 0, aavSum = 0;
+                    let sasSum = 0, aavSum = 0, gapSum = 0, edgeCxSum = 0;
                     for (let i = 0; i < numControlPoints - 1; i++) {
                         const muWtSegment = controlPoints[i + 1].cumulativeMetersetWeight - controlPoints[i].cumulativeMetersetWeight;
                         if (muWtSegment > 0) {
@@ -4794,13 +5256,23 @@
                             if (data[i] && data[i].aavValue !== undefined) {
                                 aavSum += data[i].aavValue * muWtSegment;
                             }
+                            if (data[i] && data[i].avgLeafGap !== undefined) {
+                                gapSum += data[i].avgLeafGap * muWtSegment;
+                            }
+                            if (data[i] && data[i].edgeComplexity !== undefined) {
+                                edgeCxSum += data[i].edgeComplexity * muWtSegment;
+                            }
                         }
                     }
                     beam.sasScore = sasSum / totalMuWeight;
                     beam.aavScore = aavSum / totalMuWeight;
+                    beam.avgLeafGap = gapSum / totalMuWeight;
+                    beam.edgeComplexity = edgeCxSum / totalMuWeight;
                 } else {
                     beam.sasScore = 0;
                     beam.aavScore = 0;
+                    beam.avgLeafGap = 0;
+                    beam.edgeComplexity = 0;
                 }
 
                 data.forEach((pd_item, index) => {
@@ -4861,6 +5333,8 @@
                 maxCollimatorSpeedOverall = Math.max(0.01, ...data.map(d => d.collimatorSpeed));
                 maxDoseRateOverall = Math.max(0.01, ...data.map(d => d.doseRate));
                 maxCpDensityOverall = Math.max(0.01, ...data.map(d => d.cpDensity));
+                maxAvgLeafGapOverall = Math.max(0.01, ...data.map(d => d.avgLeafGap || 0));
+                maxEdgeComplexityOverall = Math.max(0.01, ...data.map(d => d.edgeComplexity || 0));
                 maxModulationIndexOverall = Math.max(0.01, ...data.map(d => d.modulationIndex));
                 maxLocalMItFactorOverall = Math.max(0.01, ...data.map(d => d.localMItFactor));
                 window.maxSasOverall = Math.max(0.01, ...data.map(d => d.sasValue));
@@ -5402,24 +5876,569 @@
                 return { x: sumX / sumW, y: sumY / sumW };
             }
 
-            function computeFirstRoiCentroidRAS(beam) {
-                const rois = getRoisForBeam(beam);
-                if (!Array.isArray(rois) || rois.length === 0) return null;
-                for (const roi of rois) {
-                    const contour = roi.contours?.[0];
-                    if (contour && Array.isArray(contour.points) && contour.points.length > 0) {
-                        let sx = 0, sy = 0, sz = 0, n = 0;
-                        contour.points.forEach(pt => {
-                            if (Array.isArray(pt) && pt.length >= 3) {
-                                const ras = lpsToRas(pt);
-                                sx += ras[0]; sy += ras[1]; sz += ras[2]; n++;
-                            }
-                        });
-                        if (n > 0) return [sx / n, sy / n, sz / n];
-                    }
-                }
-                return null;
-            }
+	            function computeFirstRoiCentroidLps(beam) {
+	                const rois = getRoisForBeam(beam);
+	                if (!Array.isArray(rois) || rois.length === 0) return null;
+	                for (const roi of rois) {
+	                    const contour = roi.contours?.[0];
+	                    if (contour && Array.isArray(contour.points) && contour.points.length > 0) {
+	                        let sx = 0, sy = 0, sz = 0, n = 0;
+	                        contour.points.forEach(pt => {
+	                            if (Array.isArray(pt) && pt.length >= 3) {
+	                                sx += pt[0]; sy += pt[1]; sz += pt[2]; n++;
+	                            }
+	                        });
+	                        if (n > 0) return [sx / n, sy / n, sz / n];
+	                    }
+	                }
+	                return null;
+	            }
+
+	            function computePreferredRoiCentroidLps(beam) {
+	                const rois = getRoisForBeam(beam);
+	                if (!Array.isArray(rois) || rois.length === 0) return null;
+	                const isTargetLike = (roi) => {
+	                    const name = (roi?.name || '').toString().toUpperCase();
+	                    const type = (roi?.type || '').toString().toUpperCase();
+	                    return type.includes('TARGET') || ['PTV', 'GTV', 'CTV', 'ITV', 'TARGET'].some(tok => name.includes(tok));
+	                };
+	                const isExternalLike = (roi) => {
+	                    const name = (roi?.name || '').toString().toUpperCase();
+	                    const type = (roi?.type || '').toString().toUpperCase();
+	                    return type.includes('EXTERNAL') || ['EXTERNAL', 'BODY', 'SKIN'].some(tok => name.includes(tok));
+	                };
+	                const ordered = [
+	                    ...rois.filter(isTargetLike),
+	                    ...rois.filter(r => !isTargetLike(r) && !isExternalLike(r)),
+	                    ...rois.filter(isExternalLike)
+	                ];
+	                for (const roi of ordered) {
+	                    const contour = roi.contours?.[0];
+	                    if (contour && Array.isArray(contour.points) && contour.points.length > 0) {
+	                        let sx = 0, sy = 0, sz = 0, n = 0;
+	                        contour.points.forEach(pt => {
+	                            if (Array.isArray(pt) && pt.length >= 3) {
+	                                sx += pt[0]; sy += pt[1]; sz += pt[2]; n++;
+	                            }
+	                        });
+	                        if (n > 0) return [sx / n, sy / n, sz / n];
+	                    }
+	                }
+	                return null;
+	            }
+
+	            function computeBodyBboxLps(beam) {
+	                const rois = getRoisForBeam(beam);
+	                if (!Array.isArray(rois) || rois.length === 0) return null;
+	                const body = rois.find(r => isBodyLikeRoi(r));
+	                if (!body || !Array.isArray(body.contours) || body.contours.length === 0) return null;
+	                let minX = Infinity, minY = Infinity, minZ = Infinity;
+	                let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+	                let count = 0;
+	                for (const contour of body.contours) {
+	                    const pts = contour?.points || [];
+	                    for (let i = 0; i < pts.length; i++) {
+	                        const p = pts[i];
+	                        if (!Array.isArray(p) || p.length < 3) continue;
+	                        const x = p[0], y = p[1], z = p[2];
+	                        if (![x, y, z].every(v => typeof v === 'number' && isFinite(v))) continue;
+	                        if (x < minX) minX = x; if (x > maxX) maxX = x;
+	                        if (y < minY) minY = y; if (y > maxY) maxY = y;
+	                        if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+	                        count += 1;
+	                    }
+	                    if (count > 8000) break; // avoid full scans on huge structs
+	                }
+	                if (count < 10) return null;
+	                return { minX, minY, minZ, maxX, maxY, maxZ };
+	            }
+
+	            function isPointInsideBboxRAS(p, bbox, marginMm = 0) {
+	                if (!p || !bbox) return false;
+	                const m = Number(marginMm) || 0;
+	                return (
+	                    p[0] >= bbox.minX - m && p[0] <= bbox.maxX + m &&
+	                    p[1] >= bbox.minY - m && p[1] <= bbox.maxY + m &&
+	                    p[2] >= bbox.minZ - m && p[2] <= bbox.maxZ + m
+	                );
+	            }
+
+	            function logBevAlignmentDiagnosticsOnce(beam, isoCenterLps) {
+	                if (!beam || typeof beam !== 'object') return;
+	                const key = `${rtStructRevision}|${beam.beamNumber || ''}|${beam.beamName || ''}`;
+	                if (beam.__bevAlignDiagKey === key) return;
+	                beam.__bevAlignDiagKey = key;
+	                try {
+	                    const isoRaw = getBeamIsocenter(beam);
+	                    const centroid = computePreferredRoiCentroidLps(beam);
+	                    const bbox = computeBodyBboxLps(beam);
+	                    const inBody = bbox ? isPointInsideBboxRAS(isoCenterLps, bbox, 10) : null;
+	                    const planFoR = rtPlanData?.frameOfReferenceUID || '';
+	                    const beamFoR = beam?.frameOfReferenceUID || '';
+	                    const structFoR = rtStructData?.frameOfReferenceUID || '';
+	                    const structFoRs = rtStructData?.frameOfReferenceUIDs || [];
+	                    console.log('BEV alignment diagnostics', {
+	                        beamNumber: beam.beamNumber,
+	                        beamName: beam.beamName,
+	                        isoRaw,
+	                        isoCenterLps,
+	                        isoInsideBody10mm: inBody,
+	                        targetCentroidLps: centroid,
+	                        bodyBboxLps: bbox,
+	                        planFoR,
+	                        beamFoR,
+	                        structFoR,
+	                        structFoRs
+	                    });
+	                } catch (e) {
+	                    console.warn('BEV alignment diagnostics failed', e);
+	                }
+	            }
+
+	            function dist3(a, b) {
+	                const dx = (a[0] - b[0]);
+	                const dy = (a[1] - b[1]);
+	                const dz = (a[2] - b[2]);
+	                return Math.sqrt(dx * dx + dy * dy + dz * dz);
+	            }
+
+				            function formatVecMm(vec) {
+				                if (!Array.isArray(vec) || vec.length < 3) return '[?, ?, ?]';
+				                const f = (v) => (typeof v === 'number' && isFinite(v)) ? v.toFixed(2) : '?';
+				                return `[${f(vec[0])}, ${f(vec[1])}, ${f(vec[2])}] mm`;
+				            }
+
+				            function normalizeAngleDeg(deg) {
+				                const x = Number(deg);
+				                if (!isFinite(x)) return null;
+				                return ((x % 360) + 360) % 360;
+				            }
+
+				            function formatAngleDeg(deg, decimals = 1) {
+				                const x = normalizeAngleDeg(deg);
+				                if (x == null) return '?';
+				                return `${x.toFixed(decimals)}°`;
+				            }
+
+				            function computeAngleStats(valuesDeg) {
+				                const vals = (valuesDeg || []).map(normalizeAngleDeg).filter(v => v != null);
+				                if (!vals.length) return null;
+				                const min = Math.min(...vals);
+				                const max = Math.max(...vals);
+				                const start = vals[0];
+				                const stop = vals[vals.length - 1];
+				                const uniqueRounded = new Set(vals.map(v => Math.round(v * 10) / 10));
+				                return { min, max, start, stop, uniqueCount: uniqueRounded.size };
+				            }
+
+				            function computeArcSpanDeg(startDeg, stopDeg, direction) {
+				                const start = normalizeAngleDeg(startDeg);
+				                const stop = normalizeAngleDeg(stopDeg);
+				                if (start == null || stop == null) return null;
+				                const dir = (direction || '').toString().toUpperCase();
+				                if (dir === 'CCW') return (stop - start + 360) % 360;
+				                if (dir === 'CW') return (start - stop + 360) % 360;
+				                return null;
+				            }
+
+				            function getBeamArcSummaryText(beam) {
+				                const cps = beam?.controlPoints || [];
+				                const gantryAngles = cps.map(cp => cp?.gantryAngle).filter(v => typeof v === 'number' && isFinite(v));
+				                const colAngles = cps.map(cp => cp?.collimatorAngle).filter(v => typeof v === 'number' && isFinite(v));
+				                const couchAngles = cps.map(cp => cp?.couchAngle).filter(v => typeof v === 'number' && isFinite(v));
+				                const gantry = computeAngleStats(gantryAngles);
+				                if (!gantry) return 'Gantry: (missing)';
+				                const dir = getBeamGantryRotationDirection(beam);
+				                const span = computeArcSpanDeg(gantry.start, gantry.stop, dir);
+				                const naiveDelta = Math.abs((normalizeAngleDeg(gantry.stop) ?? 0) - (normalizeAngleDeg(gantry.start) ?? 0));
+				                const wraps = (span != null) ? (span < naiveDelta - 1e-6) : false;
+				                const gantryText = (gantry.uniqueCount <= 1)
+				                    ? `Gantry: ${formatAngleDeg(gantry.start)} (static)`
+				                    : `Gantry: ${formatAngleDeg(gantry.start)} → ${formatAngleDeg(gantry.stop)}${dir ? ` (${dir})` : ''}${span != null ? `, span ${span.toFixed(1)}°${wraps ? ' (wraps 360°)' : ''}` : ''}`;
+
+				                const col = computeAngleStats(colAngles);
+				                const colText = col
+				                    ? (col.uniqueCount <= 1 ? `Collimator: ${formatAngleDeg(col.start)}`
+				                        : `Collimator: ${formatAngleDeg(col.start)} → ${formatAngleDeg(col.stop)}`)
+				                    : 'Collimator: (missing)';
+
+				                const couch = computeAngleStats(couchAngles);
+				                const couchText = couch
+				                    ? (couch.uniqueCount <= 1 ? `Couch: ${formatAngleDeg(couch.start)}`
+				                        : `Couch: ${formatAngleDeg(couch.start)} → ${formatAngleDeg(couch.stop)}`)
+				                    : 'Couch: (missing)';
+
+				                return `${gantryText} · ${colText} · ${couchText}`;
+				            }
+
+		            function isTargetLikeRoi(roi) {
+		                const name = (roi?.name || '').toString().toUpperCase();
+		                const type = (roi?.type || '').toString().toUpperCase();
+		                return type.includes('TARGET') || ['PTV', 'GTV', 'CTV', 'ITV', 'TARGET'].some(tok => name.includes(tok));
+		            }
+
+		            function getIsoQaRoisForBeam(beam) {
+		                const rois = getRoisForBeam(beam, { allowFallback: true });
+		                const external = rois.find(r => isBodyLikeRoi(r)) || null;
+		                const targets = rois.filter(r => isTargetLikeRoi(r));
+		                return { external, targets };
+		            }
+
+			            function getIsoQaViewConfig(viewName) {
+			                const v = (viewName || '').toString().toLowerCase();
+			                if (v === 'sagittal') {
+			                    // LPS: +Y is Posterior, -Y is Anterior
+			                    return { name: 'Sagittal', u: 'y', v: 'z', uSign: 1, vSign: 1, uNeg: 'A', uPos: 'P', vNeg: 'I', vPos: 'S' };
+			                }
+			                if (v === 'coronal') {
+			                    // LPS: +X is Left, -X is Right
+			                    return { name: 'Coronal', u: 'x', v: 'z', uSign: 1, vSign: 1, uNeg: 'R', uPos: 'L', vNeg: 'I', vPos: 'S' };
+			                }
+			                // Axial display convention: Anterior at top (common DICOM viewer convention).
+			                // In LPS, Anterior is -Y, so we flip Y for display while keeping L/R the same.
+			                return { name: 'Axial', u: 'x', v: 'y', uSign: 1, vSign: -1, uNeg: 'R', uPos: 'L', vNeg: 'P', vPos: 'A' };
+			            }
+
+			            function roiToPolylinesRelative2D(roi, isoCenterLps, viewName, options = {}) {
+			                const { maxContours = 80, pointStep = 2 } = options;
+			                if (!roi || !Array.isArray(roi.contours) || roi.contours.length === 0) return [];
+			                const cfg = getIsoQaViewConfig(viewName);
+			                const uSign = (typeof cfg.uSign === 'number' && isFinite(cfg.uSign)) ? cfg.uSign : 1;
+			                const vSign = (typeof cfg.vSign === 'number' && isFinite(cfg.vSign)) ? cfg.vSign : 1;
+			                const contours = roi.contours || [];
+			                const contourStep = Math.max(1, Math.ceil(contours.length / maxContours));
+			                const polylines = [];
+			                for (let ci = 0; ci < contours.length; ci += contourStep) {
+			                    const rawPts = contours[ci]?.points || [];
+			                    const pts = preprocessContourPoints(rawPts, roi);
+			                    if (!Array.isArray(pts) || pts.length < 3) continue;
+			                    const line = [];
+			                    for (let i = 0; i < pts.length; i += Math.max(1, pointStep)) {
+			                        const rel = [
+			                            (pts[i][0] || 0) - (isoCenterLps[0] || 0),
+			                            (pts[i][1] || 0) - (isoCenterLps[1] || 0),
+			                            (pts[i][2] || 0) - (isoCenterLps[2] || 0),
+			                        ];
+			                        const uRaw = cfg.u === 'x' ? rel[0] : (cfg.u === 'y' ? rel[1] : rel[2]);
+			                        const vRaw = cfg.v === 'x' ? rel[0] : (cfg.v === 'y' ? rel[1] : rel[2]);
+			                        const u = uRaw * uSign;
+			                        const v = vRaw * vSign;
+			                        if (!isFinite(u) || !isFinite(v)) continue;
+			                        line.push({ u, v });
+			                    }
+			                    if (line.length >= 3) polylines.push(line);
+			                }
+			                return polylines;
+			            }
+
+		            function computePolylinesBounds(polylines) {
+		                let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
+		                for (const line of polylines || []) {
+		                    for (const p of line || []) {
+		                        if (!p) continue;
+		                        const u = p.u, v = p.v;
+		                        if (!isFinite(u) || !isFinite(v)) continue;
+		                        if (u < minU) minU = u;
+		                        if (u > maxU) maxU = u;
+		                        if (v < minV) minV = v;
+		                        if (v > maxV) maxV = v;
+		                    }
+		                }
+		                if (!isFinite(minU) || !isFinite(maxU) || !isFinite(minV) || !isFinite(maxV)) {
+		                    return { minU: -200, maxU: 200, minV: -200, maxV: 200 };
+		                }
+		                return { minU, maxU, minV, maxV };
+		            }
+
+		            function symmetricSquareBounds(bounds, padFraction = 0.08) {
+		                const minU = bounds.minU, maxU = bounds.maxU, minV = bounds.minV, maxV = bounds.maxV;
+		                const spanU = Math.max(Math.abs(minU), Math.abs(maxU));
+		                const spanV = Math.max(Math.abs(minV), Math.abs(maxV));
+		                const half = Math.max(spanU, spanV, 40);
+		                const padded = half * (1 + Math.max(0, padFraction));
+		                return { minU: -padded, maxU: padded, minV: -padded, maxV: padded };
+		            }
+
+		            function pickGridStepMm(halfSpanMm) {
+		                const span = Math.max(1, Number(halfSpanMm) || 0);
+		                const targetLines = 6;
+		                const raw = (2 * span) / targetLines;
+		                const steps = [10, 20, 25, 50, 100, 150, 200, 250, 300];
+		                let best = steps[0];
+		                for (const s of steps) {
+		                    if (s >= raw) { best = s; break; }
+		                    best = s;
+		                }
+		                return best;
+		            }
+
+		            function drawIsoQaView(canvasEl, viewName, externalPolys, targetPolysByRoi, options = {}) {
+		                if (!canvasEl) return;
+		                const ctx = canvasEl.getContext('2d');
+		                if (!ctx) return;
+
+		                const allPolys = [...(externalPolys || [])];
+		                for (const t of targetPolysByRoi || []) allPolys.push(...(t.polylines || []));
+		                const baseBounds = computePolylinesBounds(allPolys);
+		                const bounds = symmetricSquareBounds(baseBounds, 0.08);
+
+		                const w = canvasEl.width;
+		                const h = canvasEl.height;
+		                const pad = 28;
+		                const spanU = bounds.maxU - bounds.minU;
+		                const spanV = bounds.maxV - bounds.minV;
+		                const scale = Math.max(1e-6, Math.min((w - 2 * pad) / spanU, (h - 2 * pad) / spanV));
+		                const toX = (u) => (u - bounds.minU) * scale + pad;
+		                const toY = (v) => h - ((v - bounds.minV) * scale + pad);
+
+		                ctx.clearRect(0, 0, w, h);
+		                ctx.fillStyle = '#ffffff';
+		                ctx.fillRect(0, 0, w, h);
+
+		                const cfg = getIsoQaViewConfig(viewName);
+		                const halfSpan = Math.max(Math.abs(bounds.minU), Math.abs(bounds.maxU), Math.abs(bounds.minV), Math.abs(bounds.maxV));
+		                const stepMm = pickGridStepMm(halfSpan);
+
+		                // Grid
+		                ctx.save();
+		                ctx.lineWidth = 1;
+		                ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+		                for (let mm = -Math.ceil(halfSpan / stepMm) * stepMm; mm <= halfSpan; mm += stepMm) {
+		                    const x = toX(mm);
+		                    ctx.beginPath();
+		                    ctx.moveTo(x, pad);
+		                    ctx.lineTo(x, h - pad);
+		                    ctx.stroke();
+		                    const y = toY(mm);
+		                    ctx.beginPath();
+		                    ctx.moveTo(pad, y);
+		                    ctx.lineTo(w - pad, y);
+		                    ctx.stroke();
+		                }
+		                // Axes
+		                ctx.strokeStyle = 'rgba(30, 41, 59, 0.55)';
+		                ctx.lineWidth = 1.5;
+		                ctx.beginPath();
+		                ctx.moveTo(toX(0), pad);
+		                ctx.lineTo(toX(0), h - pad);
+		                ctx.stroke();
+		                ctx.beginPath();
+		                ctx.moveTo(pad, toY(0));
+		                ctx.lineTo(w - pad, toY(0));
+		                ctx.stroke();
+		                ctx.restore();
+
+		                const strokePolyline = (poly, style, width) => {
+		                    if (!poly || poly.length < 2) return;
+		                    ctx.save();
+		                    ctx.strokeStyle = style;
+		                    ctx.lineWidth = width;
+		                    ctx.lineJoin = 'round';
+		                    ctx.lineCap = 'round';
+		                    ctx.beginPath();
+		                    ctx.moveTo(toX(poly[0].u), toY(poly[0].v));
+		                    for (let i = 1; i < poly.length; i++) {
+		                        ctx.lineTo(toX(poly[i].u), toY(poly[i].v));
+		                    }
+		                    ctx.closePath();
+		                    ctx.stroke();
+		                    ctx.restore();
+		                };
+
+		                // External
+		                (externalPolys || []).forEach(poly => strokePolyline(poly, 'rgba(100, 116, 139, 0.85)', 1));
+
+			                // Targets
+			                (targetPolysByRoi || []).forEach(t => {
+			                    const col = t.color || 'rgba(16, 185, 129, 0.9)';
+			                    (t.polylines || []).forEach(poly => strokePolyline(poly, col, 1.4));
+			                });
+
+			                // Beam arc overlay (axial only): plot gantry trajectory around isocenter.
+			                // Shows where the source is around the patient (iso -> source = -beamDir).
+			                if ((viewName || '').toString().toLowerCase() === 'axial' && options?.beam) {
+			                    const beam = options.beam;
+			                    const cps = beam?.controlPoints || [];
+			                    const gantryAngles = Array.isArray(cps)
+			                        ? cps.map(cp => cp?.gantryAngle).filter(v => typeof v === 'number' && isFinite(v))
+			                        : [];
+			                    const unique = new Set(gantryAngles.map(v => Math.round((((v % 360) + 360) % 360) * 10) / 10));
+			                    if (unique.size > 1) {
+			                        const axisIndex = (ax) => (ax === 'x' ? 0 : (ax === 'y' ? 1 : 2));
+			                        const ui = axisIndex(cfg.u);
+			                        const vi = axisIndex(cfg.v);
+			                        const uSign = (typeof cfg.uSign === 'number' && isFinite(cfg.uSign)) ? cfg.uSign : 1;
+			                        const vSign = (typeof cfg.vSign === 'number' && isFinite(cfg.vSign)) ? cfg.vSign : 1;
+			                        const radiusMm = Math.max(40, halfSpan * 0.86);
+			                        const step = Math.max(1, Math.ceil(cps.length / 120));
+			                        const arcPts = [];
+				                        for (let i = 0; i < cps.length; i += step) {
+				                            const cp = cps[i] || {};
+					                            const gantry = (typeof cp.gantryAngle === 'number' && isFinite(cp.gantryAngle)) ? cp.gantryAngle : 0;
+					                            const couch = (typeof cp.couchAngle === 'number' && isFinite(cp.couchAngle))
+					                                ? cp.couchAngle
+					                                : (typeof beam?.patientSupportAngle === 'number' && isFinite(beam.patientSupportAngle) ? beam.patientSupportAngle : 0);
+					                            // Reuse the same BEV frame math as the main renderer so non-coplanar couch kicks tilt correctly.
+					                            const src = computeBeamFrame(gantry, couch)?.dir || [0, -1, 0];
+					                            const u = (src[ui] || 0) * radiusMm * uSign;
+					                            const v = (src[vi] || 0) * radiusMm * vSign;
+					                            arcPts.push({ x: toX(u), y: toY(v) });
+					                        }
+			                        if (arcPts.length >= 2) {
+			                            ctx.save();
+			                            ctx.strokeStyle = 'rgba(14, 165, 233, 0.9)';
+			                            ctx.lineWidth = 2;
+			                            ctx.setLineDash([6, 4]);
+			                            ctx.beginPath();
+			                            ctx.moveTo(arcPts[0].x, arcPts[0].y);
+			                            for (let i = 1; i < arcPts.length; i++) ctx.lineTo(arcPts[i].x, arcPts[i].y);
+			                            ctx.stroke();
+			                            ctx.setLineDash([]);
+
+			                            const drawMarker = (p, fill, label) => {
+			                                ctx.save();
+			                                ctx.fillStyle = fill;
+			                                ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+			                                ctx.lineWidth = 1;
+			                                ctx.beginPath();
+			                                ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+			                                ctx.fill();
+			                                ctx.stroke();
+			                                ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+			                                ctx.font = 'bold 11px Arial';
+			                                ctx.textAlign = 'left';
+			                                ctx.textBaseline = 'middle';
+			                                ctx.fillText(label, p.x + 8, p.y);
+			                                ctx.restore();
+			                            };
+			                            drawMarker(arcPts[0], 'rgba(34, 197, 94, 0.95)', 'Start');
+			                            drawMarker(arcPts[arcPts.length - 1], 'rgba(249, 115, 22, 0.95)', 'Stop');
+
+			                            // Direction arrow (toward stop)
+			                            const a = arcPts[arcPts.length - 2];
+			                            const b = arcPts[arcPts.length - 1];
+			                            const dx = b.x - a.x;
+			                            const dy = b.y - a.y;
+			                            const len = Math.hypot(dx, dy);
+			                            if (isFinite(len) && len > 6) {
+			                                const ux = dx / len;
+			                                const uy = dy / len;
+			                                const tipX = b.x;
+			                                const tipY = b.y;
+			                                const backX = tipX - ux * 10;
+			                                const backY = tipY - uy * 10;
+			                                const nx = -uy;
+			                                const ny = ux;
+			                                ctx.fillStyle = 'rgba(14, 165, 233, 0.95)';
+			                                ctx.beginPath();
+			                                ctx.moveTo(tipX, tipY);
+			                                ctx.lineTo(backX + nx * 5, backY + ny * 5);
+			                                ctx.lineTo(backX - nx * 5, backY - ny * 5);
+			                                ctx.closePath();
+			                                ctx.fill();
+			                            }
+			                            ctx.restore();
+			                        }
+			                    }
+			                }
+
+			                // Isocenter crosshair at (0,0)
+			                const cx = toX(0), cy = toY(0);
+			                ctx.save();
+			                ctx.strokeStyle = 'rgba(220, 38, 38, 0.95)';
+		                ctx.lineWidth = 2;
+		                ctx.beginPath();
+		                ctx.moveTo(cx - 10, cy);
+		                ctx.lineTo(cx + 10, cy);
+		                ctx.moveTo(cx, cy - 10);
+		                ctx.lineTo(cx, cy + 10);
+		                ctx.stroke();
+		                ctx.fillStyle = 'rgba(220, 38, 38, 0.95)';
+		                ctx.beginPath();
+		                ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+		                ctx.fill();
+		                ctx.restore();
+
+		                // Orientation labels
+		                ctx.save();
+		                ctx.fillStyle = '#0f172a';
+		                ctx.font = 'bold 12px Arial';
+		                ctx.textAlign = 'center';
+		                ctx.textBaseline = 'middle';
+		                ctx.fillText(cfg.uNeg, pad + 10, cy);
+		                ctx.fillText(cfg.uPos, w - pad - 10, cy);
+		                ctx.fillText(cfg.vPos, cx, pad + 10);
+		                ctx.fillText(cfg.vNeg, cx, h - pad - 10);
+		                ctx.restore();
+		            }
+
+		            function renderIsoQaModal() {
+		                if (!isoQaModal || !isoQaInfo || !isoQaAxial || !isoQaSagittal || !isoQaCoronal) return;
+		                if (!rtPlanData || !rtPlanData.beams || !rtPlanData.beams[selectedBeamIndex]) {
+		                    showMessageModal("Isocenter QA", "Load a plan and select a beam first.");
+		                    return;
+		                }
+		                const beam = rtPlanData.beams[selectedBeamIndex];
+		                if (!rtStructData || !rtStructData.rois || rtStructData.rois.length === 0) {
+		                    showMessageModal("Isocenter QA", "Load an RTSTRUCT (structures) to view the isocenter relative to contours.");
+		                    return;
+		                }
+
+			                const isoCenter = getBeamIsocenter(beam);
+			                const { external, targets } = getIsoQaRoisForBeam(beam);
+
+			                const planFoR = rtPlanData?.frameOfReferenceUID || '';
+			                const structFoR = rtStructData?.frameOfReferenceUID || '';
+			                const foRMismatch = !!(planFoR && structFoR && planFoR !== structFoR);
+			                const foRWarn = foRMismatch ? ' (FoR mismatch)' : '';
+
+			                const bodyBbox = computeBodyBboxLps(beam);
+			                const bodyMidX = bodyBbox ? ((bodyBbox.minX + bodyBbox.maxX) / 2) : null;
+			                const isoSideText = (bodyBbox && isFinite(bodyMidX))
+			                    ? ((isoCenter[0] < bodyMidX) ? 'patient-right of BODY midline' : 'patient-left of BODY midline')
+			                    : null;
+			                const targetCentroid = computePreferredRoiCentroidLps(beam);
+			                const targetRel = (targetCentroid && Array.isArray(isoCenter) && isoCenter.length === 3)
+			                    ? [targetCentroid[0] - isoCenter[0], targetCentroid[1] - isoCenter[1], targetCentroid[2] - isoCenter[2]]
+			                    : null;
+			                const arcSummaryText = getBeamArcSummaryText(beam);
+
+		                if (isoQaSubtitle) {
+		                    isoQaSubtitle.textContent = `${beam.beamName || 'Beam'} (Beam ${beam.beamNumber || (selectedBeamIndex + 1)})${foRWarn}`;
+		                }
+
+			                const targetNames = (targets || []).slice(0, 6).map(r => r?.name).filter(Boolean);
+			                isoQaInfo.innerHTML = `
+			                    <div><strong>IsocenterPosition (from plan CPs):</strong> ${formatVecMm(isoCenter)} <span style="color:#64748b;">(LPS)</span></div>
+			                    <div><strong>Beam arc:</strong> ${arcSummaryText}</div>
+			                    <div><strong>FrameOfReferenceUID:</strong> Plan ${planFoR ? planFoR : '(missing)'} &nbsp; | &nbsp; Struct ${structFoR ? structFoR : '(missing)'} ${foRMismatch ? '<span style="color:#b45309;">(mismatch)</span>' : ''}</div>
+			                    <div><strong>External:</strong> ${external?.name || 'N/A'} &nbsp; <strong>Targets:</strong> ${targetNames.length ? targetNames.join(', ') : 'N/A'}</div>
+			                    ${bodyBbox ? `<div><strong>BODY X range:</strong> [${bodyBbox.minX.toFixed(1)}, ${bodyBbox.maxX.toFixed(1)}] mm <span style="color:#64748b;">(+X = Left)</span> ${isoSideText ? `&nbsp; <span style="color:#64748b;">→</span> ${isoSideText}` : ''}</div>` : ''}
+			                    ${targetRel ? `<div><strong>Target centroid (relative to iso):</strong> ${formatVecMm(targetRel)} <span style="color:#64748b;">(LPS mm)</span></div>` : ''}
+			                    <div style="color:#64748b; margin-top:6px;">All contours are plotted in mm relative to isocenter (0,0) in each view.</div>
+			                `;
+
+		                const externalAx = external ? roiToPolylinesRelative2D(external, isoCenter, 'axial', { maxContours: 70, pointStep: 2 }) : [];
+		                const externalSag = external ? roiToPolylinesRelative2D(external, isoCenter, 'sagittal', { maxContours: 70, pointStep: 2 }) : [];
+		                const externalCor = external ? roiToPolylinesRelative2D(external, isoCenter, 'coronal', { maxContours: 70, pointStep: 2 }) : [];
+
+		                const targetPolysAx = [];
+		                const targetPolysSag = [];
+		                const targetPolysCor = [];
+		                (targets || []).slice(0, 8).forEach((roi, idx) => {
+		                    const col = withAlpha(getRoiColor(roi, idx), 0.95);
+		                    const polAx = roiToPolylinesRelative2D(roi, isoCenter, 'axial', { maxContours: 110, pointStep: 1 });
+		                    const polSag = roiToPolylinesRelative2D(roi, isoCenter, 'sagittal', { maxContours: 110, pointStep: 1 });
+		                    const polCor = roiToPolylinesRelative2D(roi, isoCenter, 'coronal', { maxContours: 110, pointStep: 1 });
+		                    targetPolysAx.push({ name: roi?.name, color: col, polylines: polAx });
+		                    targetPolysSag.push({ name: roi?.name, color: col, polylines: polSag });
+		                    targetPolysCor.push({ name: roi?.name, color: col, polylines: polCor });
+		                });
+
+			                drawIsoQaView(isoQaAxial, 'axial', externalAx, targetPolysAx, { beam });
+			                drawIsoQaView(isoQaSagittal, 'sagittal', externalSag, targetPolysSag, { beam });
+			                drawIsoQaView(isoQaCoronal, 'coronal', externalCor, targetPolysCor, { beam });
+			            }
 
             function computeDepthBoundsPerBatch(frame) {
                 const bounds = new Map(); // roiNumber -> {min,max}
@@ -5445,81 +6464,76 @@
                 return bounds;
             }
 
-            // --- UPDATED BEV DRAWING FUNCTION ---
-            function drawBEV(collimatorAngle, gantryAngle, beamData, blendFactor, cpObject) {
-                if (!bevCtx || !beamData || !cpObject) return;
+	            // --- UPDATED BEV DRAWING FUNCTION ---
+	            function drawBEV(collimatorAngle, gantryAngle, beamData, blendFactor, cpObject) {
+	                if (!bevCtx || !beamData || !cpObject) return;
 
-                resizeBevCanvas();
-                const isoCenter = lpsToRas(getBeamIsocenter(beamData));
-                const couchAngle = (cpObject && Number.isFinite(cpObject.couchAngle)) ? cpObject.couchAngle : (beamData.patientSupportAngle || 0);
-                // Unified frame for RS and MLC to avoid CP desync
-                const frameForAll = computeBeamFrame(cpObject.gantryAngle || gantryAngle, couchAngle || 0);
-                dbgLogFrame(`CP ${cpObject.controlPointIndex || 0}`, frameForAll);
+	                resizeBevCanvas();
+	                const isoCenter = getBeamIsocenter(beamData);
+	                logBevAlignmentDiagnosticsOnce(beamData, isoCenter);
+	                const couchAngle = (cpObject && Number.isFinite(cpObject.couchAngle)) ? cpObject.couchAngle : (beamData.patientSupportAngle || 0);
+	                const collimatorRad = (typeof collimatorAngle === 'number' && !isNaN(collimatorAngle)) ? (collimatorAngle * Math.PI) / 180 : 0;
+	                // Structures/labels live in gantry+couch frame. Collimator rotates the MLC/jaw overlay only.
+		                const bevFrame = computeBeamFrame(cpObject.gantryAngle || gantryAngle, couchAngle || 0);
 
-                const useWebglStructures = !!(gl && glProgram && showStructures);
-                let webglDrawn = false;
-                if (useWebglStructures) {
-                    webglDrawn = drawStructuresWebgl(gantryAngle, collimatorAngle, beamData, isoCenter, { ...cpObject, couchAngle }, frameForAll);
-                } else if (bevWebglCanvas) {
-                    bevWebglCanvas.style.display = 'none';
-                    setBevRenderModeLabel('Structures: 2D', 'rgba(180, 83, 9, 0.8)');
-                }
+	                const useWebglStructures = !!(gl && glProgram && showStructures);
+	                let webglDrawn = false;
+	                if (useWebglStructures) {
+	                    webglDrawn = drawStructuresWebgl(gantryAngle, collimatorAngle, beamData, isoCenter, { ...cpObject, couchAngle }, bevFrame);
+	                } else if (bevWebglCanvas) {
+	                    bevWebglCanvas.style.display = 'none';
+	                    setBevRenderModeLabel('Structures: 2D', 'rgba(180, 83, 9, 0.8)');
+	                }
                 const cpMlcData = cpObject.mlcPositionData;
                 const effectiveMlcPositions = getEffectiveMLCPositionsForCP(cpObject, beamData);
                 const apertureBoundaries = effectiveMlcPositions ? computeVirtualBoundaries(beamData) : null;
                 const canvasSize = bevCanvas.width;
                 const center = canvasSize / 2;
-                const VISUAL_FIELD_MM = WEBGL_FIELD_SPAN_MM;
-                const globalScale = canvasSize / VISUAL_FIELD_MM;
-                const collimatorRad = (typeof collimatorAngle === 'number' && !isNaN(collimatorAngle)) ? (collimatorAngle * Math.PI) / 180 : 0;
+	                const VISUAL_FIELD_MM = WEBGL_FIELD_SPAN_MM;
+	                const globalScale = canvasSize / VISUAL_FIELD_MM;
 
-                bevCtx.clearRect(0, 0, canvasSize, canvasSize);
-                bevCtx.save();
-                bevCtx.translate(center, center);
-                bevCtx.scale(1, -1);
-                bevCtx.rotate(Math.PI); // rotate BEV by 180° so MLC + RS share same roll
-                bevCtx.scale(1, -1); // mirror BEV vertically (upside down)
-                bevCtx.scale(-1, 1); // mirror BEV left/right
+		                bevCtx.clearRect(0, 0, canvasSize, canvasSize);
+		                bevCtx.save();
+		                bevCtx.translate(center, center);
+		                // BEV drawing space: +X to the right, +Y up (convert canvas to Y-up once).
+		                bevCtx.scale(1, -1);
 
-                // Draw structures in gantry frame (do NOT rotate with collimator)
-                if (!webglDrawn) {
-                    drawStructuresOnBEV(bevCtx, beamData, gantryAngle, collimatorAngle, globalScale, isoCenter, cpObject);
-                }
+	                // Draw structures in gantry frame (do NOT rotate with collimator)
+	                if (!webglDrawn) {
+	                    drawStructuresOnBEV(bevCtx, beamData, gantryAngle, collimatorAngle, globalScale, isoCenter, cpObject, bevFrame);
+	                }
 
-                // Debug overlay: target centroid vs MLC aperture centroid
-                const debugFrame = applyBeamRoll180(computeBeamFrame(cpObject.gantryAngle || gantryAngle, couchAngle || 0));
-                if (DEBUG_BEAM_OVERLAY) {
-                    const targetCentroid = computeFirstRoiCentroidRAS(beamData);
-                    if (targetCentroid) {
-                        const proj = projectPointToBev(debugFrame, isoCenter, targetCentroid, globalScale);
-                        bevCtx.save();
-                        bevCtx.fillStyle = 'rgba(220, 38, 38, 0.9)';
-                        bevCtx.beginPath();
-                        bevCtx.arc(proj.px, proj.py, 5, 0, Math.PI * 2);
+	                // Debug overlay: target centroid vs MLC aperture centroid
+	                if (DEBUG_BEAM_OVERLAY) {
+	                    const targetCentroid = computePreferredRoiCentroidLps(beamData);
+	                    if (targetCentroid) {
+	                        const proj = projectPointToBev(bevFrame, isoCenter, targetCentroid, globalScale);
+	                        bevCtx.save();
+	                        bevCtx.fillStyle = 'rgba(220, 38, 38, 0.9)';
+	                        bevCtx.beginPath();
+	                        bevCtx.arc(proj.px, proj.py, 5, 0, Math.PI * 2);
                         bevCtx.fill();
                         bevCtx.restore();
                     }
                 }
 
-                // Patient orientation labels (anchors follow couch/gantry)
-                const orientationFrame = applyBeamRoll180(computeBeamFrame(cpObject.gantryAngle || gantryAngle, couchAngle || 0));
-                drawOrientationLabels(bevCtx, orientationFrame, globalScale, isoCenter);
+	                // Patient orientation labels (anchors follow couch/gantry)
+	                drawOrientationLabels(bevCtx, bevFrame, globalScale, isoCenter);
 
-                // Rotate for collimator-dependent hardware
-                bevCtx.save();
-                bevCtx.rotate(collimatorRad);
+	                // Rotate for collimator-dependent hardware
+	                bevCtx.save();
+	                bevCtx.rotate(collimatorRad);
 
-                if (DEBUG_BEAM_OVERLAY) {
-                    const apertureCentroid = computeApertureCentroidBeam(beamData, cpObject);
-                    if (apertureCentroid) {
-                        const aperturePointRAS = beamCoordsToRas(debugFrame, isoCenter, apertureCentroid.x, apertureCentroid.y, 0);
-                        const proj = projectPointToBev(debugFrame, isoCenter, aperturePointRAS, globalScale);
-                        bevCtx.fillStyle = 'rgba(37, 99, 235, 0.95)';
-                        bevCtx.beginPath();
-                        bevCtx.arc(proj.px, proj.py, 5, 0, Math.PI * 2);
-                        bevCtx.fill();
-                    }
-                }
+	                if (DEBUG_BEAM_OVERLAY) {
+	                    const apertureCentroid = computeApertureCentroidBeam(beamData, cpObject);
+	                    if (apertureCentroid) {
+	                        const proj = { px: apertureCentroid.x * globalScale, py: apertureCentroid.y * globalScale };
+	                        bevCtx.fillStyle = 'rgba(37, 99, 235, 0.95)';
+	                        bevCtx.beginPath();
+	                        bevCtx.arc(proj.px, proj.py, 5, 0, Math.PI * 2);
+	                        bevCtx.fill();
+	                    }
+	                }
 
                 const fieldHalfPx = (VISUAL_FIELD_MM / 2) * globalScale;
                 bevCtx.strokeStyle = '#16a34a';
@@ -5549,7 +6563,7 @@
                     bevCtx.lineTo(tickLengthPx, posPx);
                     bevCtx.stroke();
                 }
-                // Axis labels (swap x1/x2 and y1/y2)
+                // Axis labels (beam coordinates; typical convention: X1 at -X, X2 at +X, Y1 at -Y, Y2 at +Y)
                 const axisLabelColor = bevDarkBackground ? 'rgba(255, 255, 255, 0.8)' : '#16a34a';
                 bevCtx.save();
                 bevCtx.scale(1, -1); // undo canvas flip for text
@@ -5558,10 +6572,10 @@
                 bevCtx.textAlign = 'center';
                 bevCtx.textBaseline = 'middle';
                 const offset = fieldHalfPx + 12;
-                bevCtx.fillText('X2', offset, -4);         // left
-                bevCtx.fillText('X1', -offset, -4);        // right
-                bevCtx.fillText('Y2', -4, -offset);        // up
-                bevCtx.fillText('Y1', -4, offset + 4);     // down
+                bevCtx.fillText('X1', -offset, -4);
+                bevCtx.fillText('X2', offset, -4);
+                bevCtx.fillText('Y2', -4, -offset);
+                bevCtx.fillText('Y1', -4, offset + 4);
                 bevCtx.restore();
 
                 const mlcYOffsetPx = MLC_DRAW_BASE_Y_MM * globalScale;
@@ -5771,19 +6785,18 @@
                 bevCtx.textAlign = 'center';
                 bevCtx.textBaseline = 'middle';
                 const labelOffset = fieldHalfPx + 12;
-                bevCtx.fillText('X1', labelOffset, -4);
-                bevCtx.fillText('X2', -labelOffset, -4);
-                bevCtx.fillText('Y1', -4, -labelOffset);
-                bevCtx.fillText('Y2', -4, labelOffset + 4);
+	                bevCtx.fillText('X1', -labelOffset, -4);
+	                bevCtx.fillText('X2', labelOffset, -4);
+	                bevCtx.fillText('Y2', -4, -labelOffset);
+	                bevCtx.fillText('Y1', -4, labelOffset + 4);
                 bevCtx.restore();
 
-                bevCtx.restore(); // undo collimator rotation
-                bevCtx.restore();
-                drawOrientationWidget(orientationFrame, couchAngle || 0);
-                bevCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                bevCtx.font = 'bold 12px Arial';
-                bevCtx.textAlign = 'right';
-                bevCtx.textBaseline = 'top';
+	                bevCtx.restore(); // undo collimator rotation
+	                bevCtx.restore();
+	                bevCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+	                bevCtx.font = 'bold 12px Arial';
+	                bevCtx.textAlign = 'right';
+	                bevCtx.textBaseline = 'top';
                 const gaText = (typeof gantryAngle === 'number' && !isNaN(gantryAngle)) ? `G: ${gantryAngle.toFixed(1)}°` : 'G: N/A';
                 const couchText = (typeof couchAngle === 'number' && !isNaN(couchAngle)) ? `T: ${couchAngle.toFixed(1)}°` : 'T: N/A';
                 bevCtx.fillText(`${gaText} | ${couchText}`, canvasSize - 8, 5);
@@ -6000,6 +7013,8 @@
                     case 'doseRate': plotColor = COMPONENT_COLORS.doseRate; break;
                     case 'modulationIndex': plotColor = COMPONENT_COLORS.miSport; break;
                     case 'localMItFactor': plotColor = COMPONENT_COLORS.localMIt; break;
+                    case 'avgLeafGap': plotColor = COMPONENT_COLORS.leafGap; break;
+                    case 'edgeComplexity': plotColor = COMPONENT_COLORS.edgeComplexity; break;
                     case 'sasValue': plotColor = COMPONENT_COLORS.sas; break;
                     case 'aavValue': plotColor = COMPONENT_COLORS.aav; break;
                     case 'mcsValue_cp': plotColor = COMPONENT_COLORS.mcs; break;
@@ -6036,7 +7051,7 @@
                     ctx.closePath(); // Line back to the center to close the pie slice
 
                     // Apply the gradient fill for complexity metrics
-                    if (['sasValue', 'aavValue', 'mcsValue_cp', 'modulationIndex', 'localMItFactor', 'cpDensity'].includes(valueKey)) {
+                    if (['sasValue', 'aavValue', 'mcsValue_cp', 'modulationIndex', 'localMItFactor', 'cpDensity', 'edgeComplexity'].includes(valueKey)) {
                         const grad = ctx.createRadialGradient(center, center, plotMinRadius, center, center, outerPlottingRadius);
                         grad.addColorStop(0, plotColor + '00'); // Transparent at center
                         grad.addColorStop(1, plotColor + '44'); // Colored at edge
@@ -6097,6 +7112,8 @@
                 drawSingleRadialPlot(radialContexts.collimatorSpeed, processedData, 'collimatorSpeed', currentMaxCollimatorSpeed, currentCP, "Collimator Speed");
                 drawSingleRadialPlot(radialContexts.cpDensity, processedData, 'cpDensity', maxCpDensityOverall, currentCP, "CP Density");
                 drawSingleRadialPlot(radialContexts.doseRate, processedData, 'doseRate', primaryDoseRate, currentCP, "Dose Rate");
+                drawSingleRadialPlot(radialContexts.leafGap, processedData, 'avgLeafGap', maxAvgLeafGapOverall, currentCP, "Avg Leaf Gap");
+                drawSingleRadialPlot(radialContexts.edgeComplexity, processedData, 'edgeComplexity', maxEdgeComplexityOverall, currentCP, "Plan Complexity (Younge)", true);
                 drawSingleRadialPlot(radialContexts.mi, processedData, 'modulationIndex', maxModulationIndexOverall, currentCP, "MIsport", true);
                 drawSingleRadialPlot(radialContexts.localMIt, processedData, 'localMItFactor', maxLocalMItFactorOverall, currentCP, "Local MIt");
                 drawSingleRadialPlot(radialContexts.sas, processedData, 'sasValue', window.maxSasOverall || 1.0, currentCP, "SAS (Small Aperture)", true);
@@ -6345,6 +7362,8 @@
                     collimatorSpeed: COMPONENT_COLORS.collimator,
                     cpDensity: COMPONENT_COLORS.cpDensity,
                     doseRate: COMPONENT_COLORS.doseRate,
+                    avgLeafGap: COMPONENT_COLORS.leafGap,
+                    edgeComplexity: COMPONENT_COLORS.edgeComplexity,
                     modulationIndex: COMPONENT_COLORS.miSport,
                     localMItFactor: COMPONENT_COLORS.localMIt,
                     sasValue: COMPONENT_COLORS.sas,
@@ -6438,6 +7457,8 @@
                 const plotMeta = [
                     { key: 'mlcSpeed', ctx: radialContexts.mlcSpeed, valueKey: 'mlcSpeed', max: currentMaxMlcSpeedMMPS },
                     { key: 'doseRate', ctx: radialContexts.doseRate, valueKey: 'doseRate', max: rtPlanData?.primaryDoseRate || maxDoseRateOverall },
+                    { key: 'leafGap', ctx: radialContexts.leafGap, valueKey: 'avgLeafGap', max: maxAvgLeafGapOverall },
+                    { key: 'edgeComplexity', ctx: radialContexts.edgeComplexity, valueKey: 'edgeComplexity', max: maxEdgeComplexityOverall },
                     { key: 'mi', ctx: radialContexts.mi, valueKey: 'modulationIndex', max: maxModulationIndexOverall },
                     { key: 'localMIt', ctx: radialContexts.localMIt, valueKey: 'localMItFactor', max: maxLocalMItFactorOverall },
                     { key: 'sas', ctx: radialContexts.sas, valueKey: 'sasValue', max: window.maxSasOverall || 1 },
@@ -6487,6 +7508,8 @@
                     let mcsValue = beam.mcsValue !== undefined ? beam.mcsValue.toFixed(3) : "N/A";
                     let aavScore = beam.aavScore !== undefined ? beam.aavScore.toFixed(3) : "N/A";
                     let sasScore = beam.sasScore !== undefined ? beam.sasScore.toFixed(3) : "N/A";
+                    let avgGap = beam.avgLeafGap !== undefined ? beam.avgLeafGap.toFixed(2) : "N/A";
+                    let edgeCx = beam.edgeComplexity !== undefined ? beam.edgeComplexity.toFixed(4) : "N/A";
                     let transitionTimeHtml = '';
 
                     if (beam.interBeamTransitionTime && beam.interBeamTransitionTime > 0) {
@@ -6500,7 +7523,9 @@
                     Est. Time: ${beamTime.toFixed(2)} s, 
                     MCSv: ${mcsValue}, 
                     AAV: ${aavScore}, 
-                    SAS: ${sasScore}
+                    SAS: ${sasScore},
+                    Avg Gap: ${avgGap} mm,
+                    Plan Cx (Younge): ${edgeCx} 1/mm
                 </li>`;
 
                     return beamInfoHtml + transitionTimeHtml;
@@ -6655,8 +7680,9 @@
                 const elapsed = now - segmentStartTime;
                 const t = Math.min(elapsed / segmentDurationMs, 1);
 
-                const interpState = createInterpolatedState(segmentData, nextSegmentData, t);
-                updateInterpolatedDisplay(interpState, segmentData, nextSegmentData, t);
+	                const beamForInterp = rtPlanData?.beams?.[selectedBeamIndex] || null;
+	                const interpState = createInterpolatedState(segmentData, nextSegmentData, t, beamForInterp);
+	                updateInterpolatedDisplay(interpState, segmentData, nextSegmentData, t);
 
                 if (t >= 1.0) {
                     currentSegmentIndex++;
@@ -6719,9 +7745,9 @@ function animateAllBeams() {
             function lerp(start, end, t) { return start + (end - start) * t; }
             function lerpAngle(start, end, t) { return interpolateAngle(start, end, t); }
 
-            function createInterpolatedState(fromData, toData, t) {
-                const fromCP = fromData.cp || {};
-                const toCP = toData.cp || {};
+	            function createInterpolatedState(fromData, toData, t, beamData = null) {
+	                const fromCP = fromData.cp || {};
+	                const toCP = toData.cp || {};
 
                 const lerpArray = (a = [], b = [], tVal = t) => {
                     if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return tVal < 0.5 ? a : b;
@@ -6761,16 +7787,16 @@ function animateAllBeams() {
                     return fromAsym || toAsym || null;
                 };
 
-                const interpCP = {
-                    gantryAngle: lerpAngle(fromCP.gantryAngle || 0, toCP.gantryAngle || 0, t),
-                    collimatorAngle: lerpAngle(fromCP.collimatorAngle || 0, toCP.collimatorAngle || 0, t),
-                    couchAngle: lerpAngle(fromCP.couchAngle || 0, toCP.couchAngle || 0, t),
-                    mlcPositionData: lerpMlcLayers(fromCP.mlcPositionData, toCP.mlcPositionData, t),
-                    asymx: interpAsym(fromCP.asymx, toCP.asymx),
-                    asymy: interpAsym(fromCP.asymy, toCP.asymy),
-                    cumulativeMetersetWeight: lerp(fromCP.cumulativeMetersetWeight || 0, toCP.cumulativeMetersetWeight || 0, t),
-                    cumulativeSimTime: lerp(fromData.cumulativeSimTime || 0, toData.cumulativeSimTime || 0, t)
-                };
+	                const interpCP = {
+	                    gantryAngle: interpolateGantryAngle(fromCP.gantryAngle || 0, toCP.gantryAngle || 0, t, beamData),
+	                    collimatorAngle: interpolateAngle(fromCP.collimatorAngle || 0, toCP.collimatorAngle || 0, t),
+	                    couchAngle: interpolateAngle(fromCP.couchAngle || 0, toCP.couchAngle || 0, t),
+	                    mlcPositionData: lerpMlcLayers(fromCP.mlcPositionData, toCP.mlcPositionData, t),
+	                    asymx: interpAsym(fromCP.asymx, toCP.asymx),
+	                    asymy: interpAsym(fromCP.asymy, toCP.asymy),
+	                    cumulativeMetersetWeight: lerp(fromCP.cumulativeMetersetWeight || 0, toCP.cumulativeMetersetWeight || 0, t),
+	                    cumulativeSimTime: lerp(fromData.cumulativeSimTime || 0, toData.cumulativeSimTime || 0, t)
+	                };
                 return {
                     cp: interpCP,
                     gantrySpeed: lerp(fromData.gantrySpeed || 0, toData.gantrySpeed || 0, t),
@@ -6836,7 +7862,35 @@ function animateAllBeams() {
                 updateMiniHighlights();
             }
 
-            function interpolateAngle(start, end, factor) { let delta = end - start; if (delta > 180) delta -= 360; if (delta < -180) delta += 360; return (start + delta * factor + 360) % 360; }
+	            function interpolateAngle(start, end, factor) {
+	                let delta = end - start;
+	                if (delta > 180) delta -= 360;
+	                if (delta < -180) delta += 360;
+	                return (start + delta * factor + 360) % 360;
+	            }
+
+	            function interpolateAngleDirected(start, end, factor, direction) {
+	                const s = normalizeAngle360(start);
+	                const e = normalizeAngle360(end);
+	                if (s == null || e == null) return (Number(start) || 0);
+	                const dir = (direction || '').toString().toUpperCase();
+	                let delta = e - s;
+	                if (dir === 'CCW') {
+	                    delta = (e - s + 360) % 360; // [0,360)
+	                } else if (dir === 'CW') {
+	                    delta = -((s - e + 360) % 360); // (-360,0]
+	                } else {
+	                    if (delta > 180) delta -= 360;
+	                    if (delta < -180) delta += 360;
+	                }
+	                return (s + delta * factor + 3600) % 360;
+	            }
+
+	            function interpolateGantryAngle(start, end, factor, beamData) {
+	                const dir = getBeamGantryRotationDirection(beamData);
+	                if (dir === 'CW' || dir === 'CCW') return interpolateAngleDirected(start, end, factor, dir);
+	                return interpolateAngle(start, end, factor);
+	            }
 
             function animateTransition(fromIndex, toIndex, onComplete) {
                 const fromBeam = rtPlanData.beams[fromIndex];
@@ -7070,9 +8124,31 @@ function animateAllBeams() {
             });
 
 
+            function isEmbeddedComparatorMode() {
+                try {
+                    const params = new URLSearchParams(window.location.search || '');
+                    if (params.get('embedded') === '1') return true;
+                } catch (e) {
+                    // ignore
+                }
+                try {
+                    return window.self !== window.top;
+                } catch (e) {
+                    // If cross-origin blocks access to window.top, we must be embedded.
+                    return true;
+                }
+            }
+
+
             setAndApplyInitialSpeedLimits();
             clearAll();
-            checkAndLoadPlanFromEclipse();
+            // IMPORTANT: when this simulator is embedded inside RP_MultiPlan_Comparator.html,
+            // do NOT auto-load eclipse-launch-params.js. The comparator handles injection per-column.
+            if (!isEmbeddedComparatorMode()) {
+                checkAndLoadPlanFromEclipse();
+            } else {
+                console.log('DEBUG: Embedded mode detected; skipping eclipse-launch-params.js autoload.');
+            }
         });
     </script>
 </body>
