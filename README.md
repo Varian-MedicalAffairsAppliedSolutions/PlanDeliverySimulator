@@ -1,7 +1,7 @@
 # DICOM RT Plan Delivery Simulator - README
 
 <p align="center">
-  <img src="docs/images/simulator-screenshot-1.png" alt="Simulator screenshot" width="980" />
+  <img src="docs/images/simulator-screenshot-2.png" alt="Simulator screenshot" width="980" />
 </p>
 
 **Version:** 1.1.1  
@@ -33,7 +33,7 @@ The DICOM RT Plan Delivery Simulator is a web-based tool designed to visualize a
 
 ### Additional Screenshot
 <p>
-  <img src="docs/images/simulator-screenshot-2.png" alt="Simulator screenshot (additional view)" width="980" />
+  <img src="docs/images/simulator-screenshot-1.png" alt="Simulator screenshot (additional view)" width="980" />
 </p>
 
 * Load DICOM RT Plan files (`.dcm`).
