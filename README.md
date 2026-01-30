@@ -1,5 +1,9 @@
 # DICOM RT Plan Delivery Simulator - README
 
+<p align="center">
+  <img src="docs/images/simulator-screenshot-2.png" alt="Simulator screenshot" width="980" />
+</p>
+
 **Version:** 1.1.1  
 **Author:** Taoran Li, PhD  
 **Date:** Jan 29, 2026  
@@ -26,6 +30,11 @@
 
 ## 1. Overview
 The DICOM RT Plan Delivery Simulator is a web-based tool designed to visualize and analyze the delivery sequence of DICOM RT Plan files. It allows users to:
+
+### Additional Screenshot
+<p>
+  <img src="docs/images/simulator-screenshot-1.png" alt="Simulator screenshot (additional view)" width="980" />
+</p>
 
 * Load DICOM RT Plan files (`.dcm`).
 * Load and overlay RT Structure Sets (RTSTRUCT) in the BEV as an anisotropic Gaussian point cloud.
