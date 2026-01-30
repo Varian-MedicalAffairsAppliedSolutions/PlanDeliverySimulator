@@ -16,6 +16,7 @@
   </script>
   <style>
     :root {
+      /* Narrow columns like the original layout. */
       --column-width: 400px;
       --card-bg: #ffffff;
       --panel-bg: #f8fafc;
@@ -105,8 +106,8 @@
       gap: 18px;
       align-items: flex-start;
       padding: 0 20px 32px 20px;
-      overflow-x: auto;
-      overscroll-behavior-x: contain;
+      /* Let the browser page handle horizontal scrolling. */
+      overflow-x: visible;
     }
 
     .plan-column {
@@ -122,40 +123,106 @@
       gap: 14px;
     }
 
-    .plan-meta {
+    .column-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 0 0 8px 0;
+    }
+
+    .column-topbar h3 {
+      margin: 0;
+    }
+
+    .column-close {
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      color: #0f172a;
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      font-size: 18px;
+      line-height: 1;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .column-close:hover {
+      border-color: #94a3b8;
+      background: #f8fafc;
+    }
+
+    .column-close:active {
+      transform: translateY(1px);
+    }
+
+    .overall-plan-info {
       background: var(--panel-bg);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 12px;
     }
 
-    .plan-title {
-      margin: 0 0 10px 0;
-      font-size: 1.15rem;
+    .overall-plan-info h3 {
+      font-size: 1.05rem;
       color: var(--text);
     }
 
-    .plan-meta-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px 12px;
-    }
-
-    .plan-meta-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      font-size: 0.95rem;
+    .overall-plan-info p {
+      margin: 4px 0;
+      font-size: 0.92rem;
       color: #334155;
+      line-height: 1.35;
     }
 
-    .plan-meta-row span:last-child {
+    .overall-plan-info strong {
+      color: #0f172a;
+    }
+
+    .overall-plan-info [data-field] {
       font-weight: 700;
       color: #0f172a;
     }
 
     .plan-column iframe {
       overflow: hidden;
+    }
+
+    .column-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .column-actions button {
+      flex: 1 1 auto;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .column-actions button:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    .column-actions button.danger {
+      border-color: #fecaca;
+      background: #fff1f2;
+      color: #9f1239;
+    }
+
+    .column-actions button.danger:hover {
+      background: #ffe4e6;
     }
 
     .section-label {
@@ -280,15 +347,33 @@
     .global-footer strong {
       color: #0f172a;
     }
+
+    .disclaimer-footer {
+      background-color: #f8f9fa;
+      padding: 10px;
+      text-align: center;
+      font-size: 0.9em;
+      border-top: 1px solid #dee2e6;
+      margin: 0 20px 20px 20px;
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    .disclaimer-footer a {
+      color: #3498db;
+      text-decoration: none;
+    }
+
+    .disclaimer-footer a:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
   <div class="page-shell">
     <header class="page-header">
       <div>
-        <p class="eyebrow">Multi-plan prototype</p>
         <h1>Plan Delivery Comparator</h1>
-        <p class="lede">One 400 px column per plan. Reuses the full simulator pipeline in an embedded view; drop multiple RPs to spawn multiple full simulators side by side.</p>
       </div>
       <div class="header-actions">
         <button id="addPlanColumnBtn" class="primary">Add empty column</button>
@@ -298,14 +383,13 @@
 
     <section class="instructions-panel">
       <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-        <h2 style="margin:0;">Advanced Plan Delivery Simulator</h2>
         <button id="toggleGlobalNotesBtn" class="ghost" type="button">Show Instructions</button>
       </div>
       <div id="globalNotes" class="instructions-body">
         <p style="color:red; margin-top:0;">For Educational and Research Purpose Only. Not For Clinical Use.</p>
         <ul style="margin:0 0 6px 18px; padding:0; line-height:1.5;">
           <li><strong>Load</strong>: Drag/drop a DICOM RT Plan (.dcm) or exported JSON, or use Choose File.</li>
-          <li><strong>Limits</strong>: Set machine speed/accel limits globally, then click Apply &amp; Broadcast.</li>
+          <li><strong>Limits</strong>: Each column uses the plan's embedded machine limits.</li>
           <li><strong>Play</strong>: Select a beam or enable Simulate Full Plan, then Play/Pause. Beep per MU is optional.</li>
           <li><strong>Scrub</strong>: Use the CP bar + slider or hover radial plots/mini stamps to jump between CPs.</li>
           <li><strong>Views</strong>: BEV shows interpolated MLC/jaws; crosshair ticks are 1 cm. Radial/XY plots track the current CP.</li>
@@ -324,50 +408,32 @@
       </div>
     </section>
 
-    <section class="global-panel">
-      <h2>Machine Speed & Acceleration Limits (global)</h2>
-      <div class="global-grid">
-        <label>Max Gantry Speed (°/s)
-          <input id="globalMaxGantrySpeed" type="number" step="0.1" placeholder="e.g., 12">
-        </label>
-        <label>Max Gantry Accel/Decel (°/s²)
-          <input id="globalMaxGantryAccelDecel" type="number" step="0.1" placeholder="e.g., 12">
-        </label>
-        <label>Max MLC Speed (cm/s)
-          <input id="globalMaxMlcSpeed" type="number" step="0.1" placeholder="e.g., 5">
-        </label>
-        <label>Max MLC Accel/Decel (cm/s²)
-          <input id="globalMaxMlcAccelDecel" type="number" step="0.1" placeholder="e.g., 5">
-        </label>
-        <label>Max Coll Speed (°/s)
-          <input id="globalMaxCollSpeed" type="number" step="0.1" placeholder="e.g., 9">
-        </label>
-        <label>Max Collimator Accel/Decel (°/s²)
-          <input id="globalMaxCollAccelDecel" type="number" step="0.1" placeholder="e.g., 9">
-        </label>
-      </div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button id="applyGlobalSpeedsBtn" class="primary" type="button">Apply & Broadcast to All Columns</button>
-      </div>
-    </section>
-
     <div id="comparisonBoard" class="comparison-board" aria-live="polite"></div>
 
     <template id="planColumnTemplate">
       <div class="plan-column" data-plan-slot="">
-        <div class="plan-meta">
-          <div class="plan-title" data-field="planTitle">Plan</div>
-          <div class="plan-meta-grid">
-            <div class="plan-meta-row"><span>File</span><span data-field="fileName">—</span></div>
-            <div class="plan-meta-row"><span>Status</span><span data-field="statusLabel">Loading…</span></div>
-            <div class="plan-meta-row"><span>Patient</span><span data-field="patientName">—</span></div>
-            <div class="plan-meta-row"><span>Plan ID</span><span data-field="planId">—</span></div>
-            <div class="plan-meta-row"><span>Total Beams</span><span data-field="beams">—</span></div>
-            <div class="plan-meta-row"><span>Total MU</span><span data-field="totalMu">—</span></div>
-            <div class="plan-meta-row"><span>Primary Dose Rate</span><span data-field="primaryDose">—</span></div>
+        <div class="overall-plan-info">
+          <div class="column-topbar">
+            <h3>Overall Plan Information</h3>
+            <button type="button" class="column-close" data-action="closeColumn" aria-label="Close column" title="Close">×</button>
           </div>
+          <p><strong>Status:</strong> <span data-field="statusLabel">Loading…</span></p>
+          <p><strong>Plan:</strong> <span data-field="planTitle">(unnamed)</span></p>
+          <p><strong>Patient Name:</strong> <span data-field="planPatientName">N/A</span></p>
+          <p><strong>Patient ID:</strong> <span data-field="planPatientId">N/A</span></p>
+          <p><strong>Plan Label:</strong> <span data-field="planLabel">N/A</span></p>
+          <p><strong>Total Beams in Plan:</strong> <span data-field="planTotalBeams">N/A</span></p>
+          <p><strong>Total Plan MU:</strong> <span data-field="planTotalMu">N/A</span></p>
+          <p><strong>Primary Dose Rate (First Beam, CP0):</strong> <span data-field="planDoseRate">N/A</span> MU/min</p>
+          <p><strong>Est. Total Plan Time (All Beams):</strong> <span data-field="totalPlanSimTime">N/A</span> s</p>
         </div>
-        <iframe data-field="simFrame" title="Embedded Plan Delivery Simulator" style="width:100%; height:1800px; min-height:0; border:1px solid #e2e8f0; border-radius:12px; background:#fff; overflow:auto;" scrolling="auto"></iframe>
+        <iframe data-field="simFrame" title="Embedded Plan Delivery Simulator" style="width:100%; display:block; border:1px solid #e2e8f0; border-radius:12px; background:#fff;" scrolling="no"></iframe>
+
+        <div class="column-actions" aria-label="Column actions">
+          <button type="button" data-action="exportParsed">Export Parsed Data</button>
+          <button type="button" data-action="exportSimCsv">Export Sim Data</button>
+          <button type="button" class="danger" data-action="clearAll">Clear All</button>
+        </div>
       </div>
     </template>
 
@@ -378,6 +444,10 @@
       <p><strong>Date:</strong> Jan 29, 2026</p>
       <p><strong>Rights & Disclaimer:</strong> © 2025–2026 Taoran Li. All rights reserved. This software is provided "as is" for educational and research purposes only. It is not intended for clinical use, patient diagnosis, or treatment planning. The accuracy of simulations and any derived data is not guaranteed. The user assumes all responsibility for the use of this software.</p>
     </footer>
+
+    <div class="disclaimer-footer">
+      Bound by the terms of the <a href="gate/VarianLUSLA.html" target="_blank">VarianLUSLA</a>
+    </div>
   </div>
 
   <script>
@@ -389,38 +459,315 @@
       const clearBtn = document.getElementById('clearBoardBtn');
       const dropZone = document.getElementById('dropZone');
       const fileInput = document.getElementById('fileInput');
-      const applyGlobalSpeedsBtn = document.getElementById('applyGlobalSpeedsBtn');
-      const globalMaxGantrySpeed = document.getElementById('globalMaxGantrySpeed');
-      const globalMaxGantryAccelDecel = document.getElementById('globalMaxGantryAccelDecel');
-      const globalMaxMlcSpeed = document.getElementById('globalMaxMlcSpeed');
-      const globalMaxMlcAccelDecel = document.getElementById('globalMaxMlcAccelDecel');
-      const globalMaxCollSpeed = document.getElementById('globalMaxCollSpeed');
-      const globalMaxCollAccelDecel = document.getElementById('globalMaxCollAccelDecel');
       const toggleGlobalNotesBtn = document.getElementById('toggleGlobalNotesBtn');
       const globalNotes = document.getElementById('globalNotes');
       let slotCounter = 0;
-      let globalSpeeds = {};
       const sectionHeights = new Map();
       let lastMaxPlanInfoHeight = 0;
       const PLAN_INFO_CAP = 700;
-      const MIN_IFRAME_HEIGHT = 1400;
-      const MAX_IFRAME_HEIGHT = 8000;
+      // When serving from http://localhost, we can auto-size iframes to their content.
+      // This prevents per-iframe scrollbars and leaves only the browser page scrollbars.
+      const MIN_IFRAME_HEIGHT = 800;
+      const MAX_IFRAME_HEIGHT = 60000;
+
+      function canAccessIframe(iframe) {
+        if (!iframe) return false;
+        try {
+          return !!iframe.contentDocument && !!iframe.contentWindow;
+        } catch {
+          return false;
+        }
+      }
+
+      function withIframeDoc(iframe, fn) {
+        if (!canAccessIframe(iframe)) return null;
+        return fn({ doc: iframe.contentDocument, win: iframe.contentWindow });
+      }
+
+      function getIframeAvailableWidth(iframe) {
+        if (!iframe) return 0;
+        const rect = iframe.getBoundingClientRect();
+        return Math.max(0, rect.width || 0);
+      }
+
+      function measureIframeContentSize(iframe) {
+        return withIframeDoc(iframe, ({ doc }) => {
+          const body = doc.body;
+          const html = doc.documentElement;
+          const height = Math.max(
+            body?.scrollHeight || 0,
+            body?.offsetHeight || 0,
+            html?.scrollHeight || 0,
+            html?.offsetHeight || 0
+          );
+          const width = Math.max(
+            body?.scrollWidth || 0,
+            body?.offsetWidth || 0,
+            html?.scrollWidth || 0,
+            html?.offsetWidth || 0
+          );
+          return { width, height };
+        });
+      }
+
+      function applyScaleToFitColumn(iframe) {
+        if (!iframe) return { applied: false, scale: 1 };
+        const avail = getIframeAvailableWidth(iframe);
+        if (!avail) return { applied: false, scale: 1 };
+
+        const size = measureIframeContentSize(iframe);
+        const contentWidth = size?.width || 0;
+        if (!contentWidth) return { applied: false, scale: 1 };
+
+        // Keep a small gutter so we don't trigger a horizontal scrollbar.
+        const target = Math.max(100, avail - 8);
+        const scale = Math.max(0.2, Math.min(1, target / contentWidth));
+
+        const applied = !!withIframeDoc(iframe, ({ doc }) => {
+          const html = doc.documentElement;
+          const body = doc.body;
+          if (!html || !body) return false;
+
+          html.style.transformOrigin = 'top left';
+          html.style.transform = `scale(${scale})`;
+          html.style.overflowX = 'hidden';
+          body.style.overflowX = 'hidden';
+
+          // Helps some layouts compute correctly under transform.
+          html.style.width = `${contentWidth}px`;
+          return true;
+        });
+
+        return { applied, scale };
+      }
+
+      function resizeIframeToContent(iframe) {
+        if (!iframe) return false;
+
+        const { scale } = applyScaleToFitColumn(iframe);
+        const size = measureIframeContentSize(iframe);
+        const rawHeight = size?.height || 0;
+        if (!rawHeight || !Number.isFinite(rawHeight)) return false;
+
+        const scaledHeight = rawHeight * (scale || 1);
+        const nextHeight = Math.max(MIN_IFRAME_HEIGHT, Math.min(scaledHeight + 24, MAX_IFRAME_HEIGHT));
+        iframe.style.height = `${nextHeight}px`;
+        iframe.style.minHeight = '0px';
+        iframe.scrolling = 'no';
+        return true;
+      }
+
+      function startAutoSizingIframe(iframe) {
+        if (!iframe) return;
+        // Best-effort burst of resizes: simulator can inflate after async script loads.
+        let tries = 0;
+        const intervalId = setInterval(() => {
+          tries += 1;
+          resizeIframeToContent(iframe);
+          if (tries >= 20) {
+            clearInterval(intervalId);
+          }
+        }, 250);
+      }
+
+      function tryClickInIframe(iframe, elementId) {
+        return !!withIframeDoc(iframe, ({ doc }) => {
+          const el = doc.getElementById(elementId);
+          if (el && typeof el.click === 'function') {
+            el.click();
+            return true;
+          }
+          return false;
+        });
+      }
+
+      function tryLoadFilesViaInput(iframe, files) {
+        if (!files || !files.length) return false;
+        return !!withIframeDoc(iframe, ({ doc }) => {
+          const input = doc.getElementById('dicomFileInput');
+          if (!input) return false;
+          try {
+            const dt = new DataTransfer();
+            Array.from(files).forEach((f) => dt.items.add(f));
+            // Some browsers allow assignment; if not, this will throw.
+            input.files = dt.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          } catch {
+            return false;
+          }
+        });
+      }
+
+      function tryLoadJsonTextViaFileInput(iframe, jsonText, suggestedName) {
+        if (!jsonText || typeof jsonText !== 'string') return false;
+        return !!withIframeDoc(iframe, ({ doc }) => {
+          const input = doc.getElementById('dicomFileInput');
+          if (!input) return false;
+          try {
+            const blob = new Blob([jsonText], { type: 'application/json' });
+            const name = (suggestedName && String(suggestedName).trim()) ? String(suggestedName).trim() : 'eclipse-plan.json';
+            const file = new File([blob], name, { type: 'application/json' });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          } catch {
+            return false;
+          }
+        });
+      }
+
+      function tryLoadJsonTextsViaFileInput(iframe, items) {
+        if (!items || !Array.isArray(items) || items.length === 0) return false;
+        return !!withIframeDoc(iframe, ({ doc }) => {
+          const input = doc.getElementById('dicomFileInput');
+          if (!input) return false;
+          try {
+            const dt = new DataTransfer();
+            items
+              .filter(it => it && typeof it.jsonText === 'string' && it.jsonText.length > 2)
+              .forEach((it) => {
+                const blob = new Blob([it.jsonText], { type: 'application/json' });
+                const name = (it.suggestedName && String(it.suggestedName).trim()) ? String(it.suggestedName).trim() : 'eclipse-data.json';
+                const file = new File([blob], name, { type: 'application/json' });
+                dt.items.add(file);
+              });
+            if (!dt.files || dt.files.length === 0) return false;
+            input.files = dt.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          } catch {
+            return false;
+          }
+        });
+      }
+
+      function updateColumnFieldIfPresent(column, selector, value) {
+        if (!column) return;
+        if (value === null || value === undefined) return;
+        const text = String(value).trim();
+        if (!text || text === 'N/A' || text === '—') return;
+        const el = column.querySelector(selector);
+        if (el) el.textContent = text;
+      }
+
+      function syncPlanMetaFromIframeDom(column, iframe) {
+        if (!column || !iframe) return false;
+        return !!withIframeDoc(iframe, ({ doc }) => {
+          const getText = (id) => (doc.getElementById(id)?.textContent || '').trim();
+          updateColumnFieldIfPresent(column, '[data-field="planPatientName"]', getText('planPatientName'));
+          updateColumnFieldIfPresent(column, '[data-field="planPatientId"]', getText('planPatientID'));
+          updateColumnFieldIfPresent(column, '[data-field="planLabel"]', getText('planLabel'));
+          updateColumnFieldIfPresent(column, '[data-field="planTotalBeams"]', getText('planTotalBeams'));
+          updateColumnFieldIfPresent(column, '[data-field="planTotalMu"]', getText('planTotalMU'));
+          updateColumnFieldIfPresent(column, '[data-field="planDoseRate"]', getText('planDoseRate'));
+          updateColumnFieldIfPresent(column, '[data-field="totalPlanSimTime"]', getText('totalPlanSimTime'));
+          return true;
+        });
+      }
+
+      function tryIngestPlanWrapperIntoIframe(iframe, jsonText, eclipseContext) {
+        if (!jsonText || typeof jsonText !== 'string' || jsonText.length < 10) return false;
+        return !!withIframeDoc(iframe, ({ win }) => {
+          try {
+            const planWrapper = parseJsonTextLoose(jsonText);
+            if (eclipseContext) {
+              // Best-effort: the simulator reads this in some flows.
+              try { win.eclipseContextInfo = eclipseContext; } catch { /* ignore */ }
+            }
+            if (typeof win.ingestPlanWrapper === 'function') {
+              win.ingestPlanWrapper(planWrapper, {
+                suppressSuccessModal: true,
+                silent: true,
+              });
+              return true;
+            }
+          } catch {
+            // fall through
+          }
+          return false;
+        });
+      }
+
+      // Scroll-sync disabled: the comparator page is the single scroll container.
 
       function setPlanMeta(column, data) {
-        column.querySelector('[data-field="planTitle"]').textContent = data.title || `Plan ${data.slot}`;
-        column.querySelector('[data-field="fileName"]').textContent = data.fileName || '—';
-        column.querySelector('[data-field="patientName"]').textContent = data.patientName || '—';
-        column.querySelector('[data-field="planId"]').textContent = data.planId || '—';
-        column.querySelector('[data-field="beams"]').textContent = data.beams ?? '—';
-        column.querySelector('[data-field="totalMu"]').textContent = data.totalMu ?? '—';
-        column.querySelector('[data-field="primaryDose"]').textContent = data.primaryDose ?? '—';
-        column.querySelector('[data-field="statusLabel"]').textContent = data.status || 'Ready';
+        // Keep this function name for minimal churn; it now populates the Overall Plan panel.
+        const setText = (selector, value) => {
+          const el = column.querySelector(selector);
+          if (el) el.textContent = value;
+        };
+
+        setText('[data-field="planTitle"]', data.title || `Plan ${data.slot}`);
+        setText('[data-field="statusLabel"]', data.status || 'Ready');
+
+        setText('[data-field="planPatientName"]', data.patientName || 'N/A');
+        setText('[data-field="planPatientId"]', data.patientId || 'N/A');
+        setText('[data-field="planLabel"]', data.planLabel || data.planId || 'N/A');
+        setText('[data-field="planTotalBeams"]', data.beams ?? 'N/A');
+        setText('[data-field="planTotalMu"]', data.totalMu ?? 'N/A');
+        setText('[data-field="planDoseRate"]', data.primaryDose ?? 'N/A');
+        setText('[data-field="totalPlanSimTime"]', data.totalPlanSimTime ?? 'N/A');
+      }
+
+      function normalizePossiblyEscapedJsonText(text) {
+        if (typeof text !== 'string') return text;
+        // ESAPI launcher embeds JSON into a JS string literal, which can turn real newlines into the 2-char sequence "\\n".
+        // That sequence is not valid JSON whitespace, so we normalize it back to real newlines when it looks present.
+        if (text.indexOf('\\n') >= 0) {
+          return text.replace(/\\n/g, '\n');
+        }
+        return text;
+      }
+
+      function parseJsonTextLoose(text) {
+        if (typeof text !== 'string') return text;
+        try {
+          return JSON.parse(text);
+        } catch {
+          const normalized = normalizePossiblyEscapedJsonText(text);
+          if (normalized !== text) {
+            return JSON.parse(normalized);
+          }
+          throw new Error('JSON parse failed');
+        }
+      }
+
+      function applyPlanMetaFromIframeMessage(slot, payload = {}) {
+        if (!slot) return;
+        const column = board.querySelector(`[data-plan-slot="${slot}"]`);
+        if (!column) return;
+        setPlanMeta(column, {
+          slot,
+          title: payload.title,
+          patientName: payload.patientName,
+          patientId: payload.patientId,
+          planId: payload.planId,
+          planLabel: payload.planLabel,
+          beams: payload.beams,
+          totalMu: payload.totalMu,
+          primaryDose: payload.primaryDose,
+          totalPlanSimTime: payload.totalPlanSimTime,
+          status: payload.status || 'Loaded',
+        });
       }
 
       function addPlanColumn(label, file) {
         slotCounter += 1;
         const column = template.content.firstElementChild.cloneNode(true);
         column.dataset.planSlot = String(slotCounter);
+
+        const closeBtn = column.querySelector('[data-action="closeColumn"]');
+        if (closeBtn) {
+          closeBtn.addEventListener('click', () => {
+            const slot = column?.dataset?.planSlot;
+            if (slot) sectionHeights.delete(String(slot));
+            column.remove();
+          });
+        }
+
         setPlanMeta(column, {
           slot: slotCounter,
           title: label || `Plan ${slotCounter}`,
@@ -432,7 +779,7 @@
         if (iframe) {
           iframe.dataset.planSlot = String(slotCounter);
           iframe.scrolling = 'no';
-          iframe.src = `RP_Delivery_Simulator.html?skipGate=1&embedded=1&slot=${slotCounter}`;
+          iframe.src = `RP_Delivery_Simulator.html?embedded=1&slot=${slotCounter}`;
           iframe.addEventListener('load', () => {
             setPlanMeta(column, {
               slot: slotCounter,
@@ -441,13 +788,44 @@
               status: file ? 'Loading plan…' : 'Ready',
             });
             if (file && iframe.contentWindow) {
-              iframe.contentWindow.postMessage({ type: 'multiPlanLoadFiles', files: [file] }, '*');
+              const loaded = tryLoadFilesViaInput(iframe, [file]);
+              if (!loaded) {
+                iframe.contentWindow.postMessage({ type: 'multiPlanLoadFiles', files: [file] }, '*');
+              }
+              setTimeout(() => syncPlanMetaFromIframeDom(column, iframe), 250);
+              setTimeout(() => syncPlanMetaFromIframeDom(column, iframe), 900);
             }
-            if (iframe.contentWindow && Object.keys(globalSpeeds).length > 0) {
-              iframe.contentWindow.postMessage({ type: 'multiPlanSetSpeeds', speeds: globalSpeeds }, '*');
-            }
+
+            startAutoSizingIframe(iframe);
           });
         }
+
+        // Column actions live in the comparator (outside the iframe)
+        // Note: these require the embedded simulator to listen for these message types.
+        const wireAction = (selector, message) => {
+          const btn = column.querySelector(selector);
+          if (!btn) return;
+          btn.addEventListener('click', () => {
+            const frame = column.querySelector('iframe[data-field="simFrame"]');
+            if (!frame || !frame.contentWindow) return;
+            // Same-origin path: click the real simulator button inside the iframe.
+            if (message?.type === 'exportParsedData') {
+              if (tryClickInIframe(frame, 'exportDataBtn')) return;
+            }
+            if (message?.type === 'exportSimulationDataCsv') {
+              if (tryClickInIframe(frame, 'exportCsvBtn')) return;
+            }
+            if (message?.type === 'clearAllData') {
+              if (tryClickInIframe(frame, 'clearAllBtn')) return;
+            }
+            // Fallback: postMessage (requires simulator listener).
+            frame.contentWindow.postMessage(message, '*');
+          });
+        };
+
+        wireAction('[data-action="exportParsed"]', { type: 'exportParsedData' });
+        wireAction('[data-action="exportSimCsv"]', { type: 'exportSimulationDataCsv' });
+        wireAction('[data-action="clearAll"]', { type: 'clearAllData' });
 
         board.appendChild(column);
         return column;
@@ -463,24 +841,194 @@
         slotCounter = 0;
       }
 
-      function getGlobalSpeeds() {
-        return {
-          maxGantrySpeed: parseFloat(globalMaxGantrySpeed.value) || null,
-          maxGantryAccelDecel: parseFloat(globalMaxGantryAccelDecel.value) || null,
-          maxMlcSpeed: parseFloat(globalMaxMlcSpeed.value) || null,
-          maxMlcAccelDecel: parseFloat(globalMaxMlcAccelDecel.value) || null,
-          maxCollSpeed: parseFloat(globalMaxCollSpeed.value) || null,
-          maxCollAccelDecel: parseFloat(globalMaxCollAccelDecel.value) || null,
+      function checkAndLoadMultiPlanFromEclipse() {
+        const script = document.createElement('script');
+        script.src = './eclipse-multiplan-launch-params.js';
+        script.type = 'text/javascript';
+
+        script.onload = function () {
+          if (window.eclipseMultiPlanLaunchParams && typeof window.loadEclipseMultiPlanComparator === 'function') {
+            window.loadEclipseMultiPlanComparator(window.eclipseMultiPlanLaunchParams);
+          }
         };
+        script.onerror = function () {
+          // Normal if not launched from Eclipse.
+        };
+        document.head.appendChild(script);
       }
 
-      function broadcastSpeeds() {
-        board.querySelectorAll('iframe[data-field="simFrame"]').forEach((iframe) => {
-          if (iframe.contentWindow) {
-            iframe.contentWindow.postMessage({ type: 'multiPlanSetSpeeds', speeds: globalSpeeds }, '*');
-          }
-        });
+      function extractMetaFromPlanJson(jsonData) {
+        try {
+          const plan = jsonData?.parsedDicomPlan || null;
+          if (!plan) return null;
+
+          const patientName =
+            (Array.isArray(plan.patientName) && plan.patientName[0] && (plan.patientName[0].Alphabetic || plan.patientName[0].alphabetic)) ||
+            (typeof plan.patientName === 'string' ? plan.patientName : '') ||
+            plan.patientID ||
+            '';
+
+          const patientId = plan.patientID || '';
+
+          const planId = plan.rtPlanLabel || plan.planId || '';
+          const beams = Array.isArray(plan.beams) ? plan.beams.length : null;
+          const totalMu = Number.isFinite(plan.totalPlanMU) ? plan.totalPlanMU : null;
+          const primaryDose = Number.isFinite(plan.primaryDoseRate) ? plan.primaryDoseRate : null;
+
+          return {
+            patientName,
+            patientId,
+            planId,
+            beams,
+            totalMu,
+            primaryDose,
+          };
+        } catch {
+          return null;
+        }
       }
+
+      // Called by eclipse-multiplan-launch-params.js (when present)
+      window.loadEclipseMultiPlanComparator = function (params) {
+        try {
+          if (!params || params.mode !== 'eclipse-multiplan' || !Array.isArray(params.plans) || params.plans.length === 0) {
+            return;
+          }
+
+          resetBoard();
+          params.plans.forEach((p, idx) => {
+            const label = p.label || p.planId || `Plan ${idx + 1}`;
+            const column = addPlanColumn(label);
+            const iframe = column?.querySelector?.('iframe[data-field="simFrame"]');
+            if (!iframe) return;
+
+            // Parse embedded JSON (if present) so the comparator header shows plan stats immediately.
+            // This is independent of whether the iframe successfully loads the plan.
+            if (p.planData) {
+              try {
+                const rawText = p.planDataIsBase64 ? atob(p.planData) : p.planData;
+                const jsonText = normalizePossiblyEscapedJsonText(rawText);
+                if (!jsonText || jsonText.length < 50) {
+                  console.warn('Eclipse multi-plan: planData looks empty/short for', p.planId || label, 'len=', (jsonText || '').length);
+                }
+                const jsonData = parseJsonTextLoose(jsonText);
+                const meta = extractMetaFromPlanJson(jsonData);
+                if (meta) {
+                  setPlanMeta(column, {
+                    slot: Number(column.dataset.planSlot || idx + 1),
+                    title: label,
+                    fileName: p.planFile || '—',
+                    patientName: meta.patientName || '—',
+                    planId: meta.planId || p.planId || '—',
+                    beams: meta.beams ?? '—',
+                    totalMu: meta.totalMu ?? '—',
+                    primaryDose: meta.primaryDose ?? '—',
+                    status: p.structData ? 'Plan+Structures JSON ready' : 'Plan JSON ready',
+                  });
+                } else {
+                  setPlanMeta(column, {
+                    slot: Number(column.dataset.planSlot || idx + 1),
+                    title: label,
+                    fileName: p.planFile || '—',
+                    status: p.structData ? 'Plan JSON unrecognized (struct present)' : 'Plan JSON unrecognized',
+                  });
+                }
+              } catch (e) {
+                console.error('Eclipse multi-plan: JSON parse failed for', p.planId || label, e);
+                setPlanMeta(column, {
+                  slot: Number(column.dataset.planSlot || idx + 1),
+                  title: label,
+                  fileName: p.planFile || '—',
+                  status: p.structData ? 'Plan JSON parse error (struct present)' : 'Plan JSON parse error',
+                });
+              }
+            } else {
+              setPlanMeta(column, {
+                slot: Number(column.dataset.planSlot || idx + 1),
+                title: label,
+                fileName: p.planFile || '—',
+                status: 'No embedded plan JSON',
+              });
+              console.warn('Eclipse multi-plan: missing planData for', p.planId || label);
+            }
+
+            // On iframe load, inject the JSON string directly into the embedded simulator.
+            iframe.addEventListener('load', () => {
+              try {
+                const win = iframe.contentWindow;
+                if (!win) return;
+
+                if (p.planData) {
+                  const rawText = p.planDataIsBase64 ? atob(p.planData) : p.planData;
+                  const jsonText = normalizePossiblyEscapedJsonText(rawText);
+                  if (!jsonText || jsonText.length < 50) {
+                    console.warn('Eclipse multi-plan: skipping injection (empty/short planData) for', p.planId || label);
+                    return;
+                  }
+
+                  let structText = null;
+                  if (p.structData) {
+                    try {
+                      const rawStruct = p.structDataIsBase64 ? atob(p.structData) : p.structData;
+                      structText = normalizePossiblyEscapedJsonText(rawStruct);
+                      if (!structText || structText.length < 20) structText = null;
+                    } catch {
+                      structText = null;
+                    }
+                  }
+
+                  const eclipseContext = {
+                    patientId: p.patientId || '',
+                    courseId: p.courseId || '',
+                    planId: p.planId || '',
+                    timestamp: params.timestamp || '',
+                    planFile: p.planFile || ''
+                  };
+
+                  // Best option: drive the embedded simulator exactly like a user would,
+                  // by feeding it a JSON File through its existing <input type="file">.
+                  // This avoids depending on simulator-global functions.
+                  const planSuggestedName = (p.planFile && String(p.planFile).trim()) ? String(p.planFile).trim() : `${label}.json`;
+                  const structSuggestedName = (p.structFile && String(p.structFile).trim()) ? String(p.structFile).trim() : `${label}-struct.json`;
+
+                  const items = [{ jsonText, suggestedName: planSuggestedName }];
+                  if (structText) items.push({ jsonText: structText, suggestedName: structSuggestedName });
+
+                  const loadedViaInput = tryLoadJsonTextsViaFileInput(iframe, items);
+
+                  // Secondary option: if the simulator exposes a global ingest function (not guaranteed), use it.
+                  const injectedPlan = loadedViaInput ? true : tryIngestPlanWrapperIntoIframe(iframe, jsonText, eclipseContext);
+                  if (!loadedViaInput && injectedPlan && structText) {
+                    // Best-effort: still try to feed structures through the normal file-input path.
+                    tryLoadJsonTextViaFileInput(iframe, structText, structSuggestedName);
+                  }
+                  const injected = loadedViaInput || injectedPlan;
+
+                  if (!injected) {
+                    // Last-resort fallback for file:// or other isolation.
+                    win.postMessage({ type: 'multiPlanLoadJson', jsonTexts: [jsonText], eclipseContext }, '*');
+                  }
+
+                  // Best-effort: after load/inject, mirror the simulator's plan-info spans.
+                  setTimeout(() => {
+                    syncPlanMetaFromIframeDom(column, iframe);
+                    updateColumnFieldIfPresent(column, '[data-field="statusLabel"]', 'Loaded');
+                  }, 350);
+                  setTimeout(() => syncPlanMetaFromIframeDom(column, iframe), 1200);
+
+                  startAutoSizingIframe(iframe);
+                } else {
+                  console.warn('Eclipse multi-plan: no planData to inject for', p.planId || label);
+                }
+              } catch (e) {
+                console.error('Eclipse multi-plan inject error:', e);
+              }
+            }, { once: true });
+          });
+        } catch (e) {
+          console.error('loadEclipseMultiPlanComparator error:', e);
+        }
+      };
 
       function updateIframeHeight(slot, height) {
         if (!slot || !height) return;
@@ -503,10 +1051,6 @@
       addBtn?.addEventListener('click', () => addPlanColumn());
       resetBtn?.addEventListener('click', resetBoard);
       clearBtn?.addEventListener('click', clearBoard);
-      applyGlobalSpeedsBtn?.addEventListener('click', () => {
-        globalSpeeds = getGlobalSpeeds();
-        broadcastSpeeds();
-      });
       toggleGlobalNotesBtn?.addEventListener('click', () => {
         const isHidden = !globalNotes || globalNotes.style.display === 'none' || globalNotes.style.display === '';
         if (globalNotes) globalNotes.style.display = isHidden ? 'block' : 'none';
@@ -514,6 +1058,9 @@
       });
 
       fileInput?.addEventListener('change', (e) => handleFiles(e.target.files));
+
+      // Auto-load plans when launched from Eclipse (optional).
+      checkAndLoadMultiPlanFromEclipse();
 
       dropZone?.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -531,6 +1078,10 @@
       window.addEventListener('message', (event) => {
         const data = event.data;
         if (!data || !data.type) return;
+        if (data.type === 'planMeta' && data.slot && data.payload) {
+          applyPlanMetaFromIframeMessage(data.slot, data.payload);
+          return;
+        }
         if (data.type === 'simHeight') {
           updateIframeHeight(data.slot, data.height);
         } else if (data.type === 'sectionHeights' && data.slot) {
@@ -556,10 +1107,13 @@
           slot,
           title: payload.title,
           patientName: payload.patientName,
+          patientId: payload.patientId,
           planId: payload.planId,
+          planLabel: payload.planLabel,
           beams: payload.beams,
           totalMu: payload.totalMu,
           primaryDose: payload.primaryDose,
+          totalPlanSimTime: payload.totalPlanSimTime,
           status: payload.status,
         });
         return column;
