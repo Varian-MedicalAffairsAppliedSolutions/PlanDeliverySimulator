@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-label="Workflow diagram">
+  <defs>
+    <style>
+      .bg{fill:#0B1220}
+      .card{fill:#0F172A;stroke:#23314E;stroke-width:2}
+      .title{fill:#E5E7EB;font:700 20px Segoe UI,Inter,Arial,sans-serif}
+      .text{fill:#CBD5E1;font:16px Segoe UI,Inter,Arial,sans-serif}
+      .muted{fill:#94A3B8;font:14px Segoe UI,Inter,Arial,sans-serif}
+      .arrow{stroke:#22C55E;stroke-width:4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+      .chip{fill:#111C33;stroke:#23314E;stroke-width:2}
+    </style>
+    <marker id="m" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0 0 L12 6 L0 12 Z" fill="#22C55E"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1200" height="360"/>
+
+  <!-- left: inputs -->
+  <g transform="translate(70,70)">
+    <rect class="card" width="300" height="220" rx="16"/>
+    <text class="title" x="20" y="38">Inputs</text>
+
+    <g transform="translate(20,60)">
+      <rect class="chip" width="260" height="46" rx="12"/>
+      <text class="text" x="16" y="30">RTPLAN (.dcm)</text>
+    </g>
+    <g transform="translate(20,118)">
+      <rect class="chip" width="260" height="46" rx="12"/>
+      <text class="text" x="16" y="30">RTSTRUCT (.dcm) (optional)</text>
+    </g>
+    <text class="muted" x="20" y="204">Drag & drop or file picker</text>
+  </g>
+
+  <!-- middle: simulator -->
+  <g transform="translate(450,55)">
+    <rect class="card" width="300" height="250" rx="16"/>
+    <text class="title" x="20" y="38">Simulator</text>
+
+    <text class="text" x="20" y="78">• Parse DICOM sequences</text>
+    <text class="text" x="20" y="110">• Compute BEV geometry</text>
+    <text class="text" x="20" y="142">• Enforce machine limits</text>
+    <text class="text" x="20" y="174">• Segment-time estimation</text>
+    <text class="text" x="20" y="206">• Complexity metrics</text>
+    <text class="muted" x="20" y="238">Fixed-speed or simulated delivery</text>
+  </g>
+
+  <!-- right: outputs -->
+  <g transform="translate(830,70)">
+    <rect class="card" width="300" height="220" rx="16"/>
+    <text class="title" x="20" y="38">Outputs</text>
+
+    <text class="text" x="20" y="78">• BEV animation (MLC/jaws)</text>
+    <text class="text" x="20" y="110">• Radial scrub plots</text>
+    <text class="text" x="20" y="142">• XY-time plots (Sim mode)</text>
+    <text class="text" x="20" y="174">• JSON export</text>
+    <text class="muted" x="20" y="204">Educational & research use</text>
+  </g>
+
+  <!-- arrows -->
+  <path class="arrow" marker-end="url(#m)" d="M370 180 C405 180, 415 180, 450 180"/>
+  <path class="arrow" marker-end="url(#m)" d="M750 180 C785 180, 795 180, 830 180"/>
+</svg>
