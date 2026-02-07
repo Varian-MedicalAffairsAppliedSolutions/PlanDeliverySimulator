@@ -55,7 +55,30 @@ The tool aims to provide insights into the mechanical aspects of VMAT plan deliv
 
 ---
 
-## 2. How to Use
+## 2. System Requirements
+
+This tool is designed to run in a modern web browser and has no other software dependencies.
+
+*   **Recommended Browsers:** For the best performance and compatibility, please use the latest version of:
+    *   **Google Chrome** ([Download](https://www.google.com/chrome/))
+    *   **Mozilla Firefox** ([Download](https://www.mozilla.org/firefox/new/))
+
+*   **Other Supported Browsers:** The tool is also compatible with:
+    *   Microsoft Edge (latest version)
+    *   Safari (version 14 or newer)
+
+*   **Unsupported:** Internet Explorer is not supported.
+
+*   **Hardware Requirements:**
+    *   Minimum 4GB RAM (8GB+ recommended for complex cases)
+    *   Modern graphics card supporting HTML5 Canvas
+    *   Sufficient storage for DICOM files (typically 50-500MB per plan)
+
+For users in environments with software installation restrictions, please contact your IT department to request that a supported browser be installed.
+
+---
+
+## 3. How to Use
 
 ### Load DICOM RT Plan File:
 1. Drag and drop your DICOM RT Plan (`.dcm`) file onto the designated "Drag & Drop" area.
@@ -126,14 +149,14 @@ If you have measured delivery trajectory logs (e.g., sampled every ~20ms) and wa
 
 ---
 
-## 3. Simulation and Calculation Details
+## 4. Simulation and Calculation Details
 
-### 3.1. Parsing and Initial Data Processing
+### 4.1. Parsing and Initial Data Processing
 The simulator parses standard DICOM RT Plan tags, including `BeamSequence`, `ControlPointSequence`, `BeamLimitingDeviceSequence` (for MLCs and Jaws), and `FractionGroupSequence` (for beam meterset).
 MLC leaf boundary positions are extracted from `LeafPositionBoundaries`.
 Effective MLC positions are determined for multi-layer MLC systems by taking the most restrictive position for each leaf pair across layers.
 
-### 3.2. Segment Time Calculation (`calculateSegmentTimes`)
+### 4.2. Segment Time Calculation (`calculateSegmentTimes`)
 The method for calculating the duration of each segment (time between two consecutive control points) depends on the active mode:
 
 #### Fixed Speed Animation Mode:
@@ -180,25 +203,25 @@ This mode estimates segment durations based on device kinematics and MU delivery
   * `avgDoseRate = (deltaDose / segmentDuration) * 60` (MU/min)
   * Capability (%) shown in the UI is `avg / max * 100` for each component.
 
-### 3.2.1. RT Structure display (RS)
+### 4.2.1. RT Structure display (RS)
 * **Parsing & mirroring**: RTSTRUCT contours are read in LPS, then converted to RAS with X negated (LPS +X → RAS –X) so BEV left/right align with labels.
 * **Projection & frame**: RS uses the same beam frame and projection as MLCs/jaws; WebGL flips Y to match the 2D canvas.
 * **Point cloud model**: Structures render as anisotropic Gaussian points. X/Y scale with in-plane spacing; Z elongates with slice thickness. The “Point blur (sigma)” slider scales the Gaussian footprint size; structure transparency sets the alpha (up to ~60% of legacy max).
 * **Visibility controls**: The structure list shows up to 200 entries and prioritizes PTV/CTV/GTV/ITV/TARGET names at the top.
 
-### 3.3. Calculated Quantities and Metrics
+### 4.3. Calculated Quantities and Metrics
 
-#### 3.3.1. Basic Parameters
+#### 4.3.1. Basic Parameters
 * **Gantry Angle, Collimator Angle, MLC Positions, Jaw Positions, Cumulative MU Weight**: Directly from DICOM.
 * **Dose Rate (Estimated)**:
     * In **Simulate Delivery** mode: `doseRate = (deltaMU / segmentDuration) * 60` (MU/min), where `deltaMU = beam.totalMeterset * deltaMetersetWeight`.
     * If the plan total MU is 0, the UI displays "MUwt" (meterset weight) for consistency.
 
-#### 3.3.2. Device Speeds and Accelerations
-* Calculated as described in Section 3.2. Units change based on mode (/CP vs. /s, /s²).
+#### 4.3.2. Device Speeds and Accelerations
+* Calculated as described in Section 4.2. Units change based on mode (/CP vs. /s, /s²).
 * Displayed in the "Calculated Values (Current CP)" section and plotted in radial/XY-time plots.
 
-#### 3.3.3. Overall MCSv (Modulation Complexity Score for VMAT)
+#### 4.3.3. Overall MCSv (Modulation Complexity Score for VMAT)
 The simulator computes an **MCSv-like** score per beam in `calculateMCSForScope`. While inspired by MCSv literature, the current implementation uses a simplified, code-driven formulation:
 
 * **AAV** is computed per CP by comparing the CP’s aperture area to the maximum aperture area seen in the beam (`calculateAAVAtCP`).
@@ -209,7 +232,7 @@ The simulator computes an **MCSv-like** score per beam in `calculateMCSForScope`
 * The final score is MU-weighted over segments:
   * `mcsValue = sum( meanAAV * normalizedLSV * collimatorRotationFactor * muWeightSegment ) / sum(muWeightSegment)`
 
-#### 3.3.4. MIsport (Modulation Index for SPORT)
+#### 4.3.4. MIsport (Modulation Index for SPORT)
 Calculated per CP in `calculateModulationIndex(beamData, cpIndexS, K)`.
 
 For a given center CP `S`, the implementation sums over neighbor CPs `S_K` in a window of size `K` (the UI currently uses `K_3_PERCENT = max(1, ceil(numControlPoints * 0.03))`):
@@ -227,7 +250,7 @@ deltaMU = abs(Δ cumulativeMetersetWeight) * beam.totalMeterset
 
 Displayed in the modulation radial plot (excluding the first/last `K` CPs because the window is truncated near the boundaries).
 
-#### 3.3.5. Local MIt (Local Modulation Index total)
+#### 4.3.5. Local MIt (Local Modulation Index total)
 Calculated per CP as `localMItFactor` (derived metrics section; see around where `global_σ_MLC_speed` is computed in `RP_Delivery_Simulator.html`).
 
 Current implementation (simplified description):
@@ -251,7 +274,7 @@ Current implementation (simplified description):
 
 Displayed in radial plots (note: near the start/end of the CP list, the window is truncated).
 
-#### 3.3.6. Avg Leaf Gap (Average Leaf Opening)
+#### 4.3.6. Avg Leaf Gap (Average Leaf Opening)
 Calculated per CP as `avgLeafGap` from the effective MLC aperture at that CP (`calculateAverageLeafGap`).
 
 Conceptually, this is the **area-weighted mean opening** across all open leaf pairs:
@@ -263,7 +286,7 @@ Conceptually, this is the **area-weighted mean opening** across all open leaf pa
 
 Beam-level and plan-level summaries are MU-weighted averages across control-point segments (see `computeBeamApertureSummaryMetricsFromControlPoints` and `updateOverallPlanInfoDisplay` in `RP_Delivery_Simulator.html`).
 
-#### 3.3.7. Plan Complexity (Younge et al. Aperture Complexity)
+#### 4.3.7. Plan Complexity (Younge et al. Aperture Complexity)
 Calculated per CP as `edgeComplexity`. This is the aperture complexity metric shown in the UI as **Plan Complexity (Younge)**.
 
 The current implementation follows the Younge et al. approach using **leaf-side perimeter only** (excluding leaf-end perimeter), normalized by aperture area:
@@ -278,7 +301,7 @@ Beam-level and plan-level summaries are MU-weighted averages across control-poin
 
 ---
 
-## 4. User Customizable Parameters (Speed & Acceleration Limits)
+## 5. User Customizable Parameters (Speed & Acceleration Limits)
 These parameters are found under "Machine Speed & Acceleration Limits (for Simulation)" and affect calculations only when "Simulate Delivery" mode is active.
 
 * **Max Gantry Speed (°/s)**: `maxGantrySpeedInput` (Default: 6 or 12, machine-dependent)
@@ -294,7 +317,7 @@ Clicking "Apply & Recalculate Simulation" updates these limits and re-runs `init
 
 ---
 
-## 5. Key Internal Constants
+## 6. Key Internal Constants
 * `FIXED_ANIMATION_SPEED_MS`: (e.g., 100) Milliseconds per CP in fixed speed animation mode.
 * `MAX_BEEPS_PER_SECOND`: (e.g., 20) Limits MU beeps in simulation mode.
 * `ACCEL_CHECK_FACTOR`: (Legacy/unused) Present in code but not currently used by `calculateSegmentTimes`.
@@ -309,7 +332,7 @@ Clicking "Apply & Recalculate Simulation" updates these limits and re-runs `init
 
 ---
 
-## 6. References
+## 7. References
 * Li, R., & Xing, L. (2013). An adaptive planning strategy for station parameter optimized radiation therapy (SPORT): segmentally boosted VMAT. *Medical Physics, 40*(5), 050701. doi: 10.1118/1.4802748
 * Masi, L., Doro, R., Favuzza, V., Cipressi, S., & Livi, L. (2013). Impact of plan parameters on the dosimetric accuracy of volumetric modulated arc therapy. *Medical Physics, 40*(7), 071718. doi: 10.1118/1.4810960 (Note: The MCSv is adapted from this, which adapted from McNiven et al.)
 * McNiven, A. L., Sharpe, M. B., & Purdie, T. G. (2010). A new metric for assessing IMRT modulation complexity and plan deliverability. *Medical Physics, 37*(2), 505-515. doi: 10.1118/1.3276772
