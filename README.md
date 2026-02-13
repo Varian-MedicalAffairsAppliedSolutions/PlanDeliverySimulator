@@ -11,6 +11,11 @@
 **Third-Party Notices:** `THIRD_PARTY_NOTICES.md`  
 **License:** `License`
 
+## How to Cite
+Use GitHub's "Cite this repository" button or the citation below.
+
+Li, T. (2026). DICOM RT Plan Delivery Simulator (Non-Clinical/Research-Only) (v1.1.1) [Software]. Varian Medical Affairs Applied Solutions. https://github.com/Varian-MedicalAffairsAppliedSolutions/PlanDeliverySimulator
+
 ---
 
 > © 2025–2026 Taoran Li. All rights reserved. This software is provided "as is" for educational and research purposes only. It is not intended for clinical use, patient diagnosis, or treatment planning. The accuracy of simulations and any derived data is not guaranteed. The user assumes all responsibility for the use of this software.
