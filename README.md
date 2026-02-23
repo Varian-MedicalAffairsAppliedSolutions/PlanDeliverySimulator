@@ -339,6 +339,7 @@ Clicking "Apply & Recalculate Simulation" updates these limits and re-runs `init
 
 ## 7. References
 * Li, R., & Xing, L. (2013). An adaptive planning strategy for station parameter optimized radiation therapy (SPORT): segmentally boosted VMAT. *Medical Physics, 40*(5), 050701. doi: 10.1118/1.4802748
+* Kessler, M. L., McShan, D. L., & Fraass, B. A. (1995). A computer-controlled conformal radiotherapy system. III: Graphical simulation and monitoring of treatment delivery. International Journal of Radiation Oncology, Biology, Physics, 33*(5), 1159-1172. doi: 10.1016/0360-3016(95)02045-4
 * Masi, L., Doro, R., Favuzza, V., Cipressi, S., & Livi, L. (2013). Impact of plan parameters on the dosimetric accuracy of volumetric modulated arc therapy. *Medical Physics, 40*(7), 071718. doi: 10.1118/1.4810960 (Note: The MCSv is adapted from this, which adapted from McNiven et al.)
 * McNiven, A. L., Sharpe, M. B., & Purdie, T. G. (2010). A new metric for assessing IMRT modulation complexity and plan deliverability. *Medical Physics, 37*(2), 505-515. doi: 10.1118/1.3276772
 * Park, J. M., Park, S. Y., Kim, H., Kim, J. H., Carlson, J., & Ye, S. J. (2014). Modulation indices for volumetric modulated arc therapy. *Physics in Medicine & Biology, 59*(23), 7315-7340. doi: 10.1088/0031-9155/59/23/7315
