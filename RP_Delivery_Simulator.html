@@ -8066,6 +8066,10 @@ function animateAllBeams() {
                         totalPlanElapsedTime += (finishedBeam.interBeamTransitionTime || 0);
                         currentBeamIndexForFullSim++;
                         currentCP = 0;
+                        // initVisualization maps the global slider position back to
+                        // a beam. Advance it before initializing the next beam, or
+                        // the previous beam's final CP restarts this transition.
+                        globalCPIndex = mapLocalToGlobal(currentBeamIndexForFullSim, 0);
                         totalMuDeliveredForBeeps_currentBeam = 0;
                         selectedBeamIndex = currentBeamIndexForFullSim;
                         if (beamSelector) beamSelector.value = selectedBeamIndex;
