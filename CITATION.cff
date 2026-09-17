@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as follows."
+title: "DICOM RT Plan Delivery Simulator (Non-Clinical/Research-Only)"
+type: software
+version: "1.1.1"
+date-released: "2026-01-29"
+authors:
+  - family-names: "Li"
+    given-names: "Taoran"
+    name-suffix: "PhD"
+repository-code: "https://github.com/Varian-MedicalAffairsAppliedSolutions/PlanDeliverySimulator"
+url: "https://github.com/Varian-MedicalAffairsAppliedSolutions/PlanDeliverySimulator"
+abstract: "Web-based simulator for visualization and analysis of DICOM RT plan delivery for educational and research use."
+license: "Varian Limited Use Software License Agreement"
+preferred-citation:
+  type: software
+  title: "DICOM RT Plan Delivery Simulator (Non-Clinical/Research-Only)"
+  version: "1.1.1"
+  date-released: "2026-01-29"
+  authors:
+    - family-names: "Li"
+      given-names: "Taoran"
+      name-suffix: "PhD"
+  url: "https://github.com/Varian-MedicalAffairsAppliedSolutions/PlanDeliverySimulator"
+keywords:
+  - "DICOM"
+  - "RT Plan"
+  - "VMAT"
+  - "Radiation therapy"

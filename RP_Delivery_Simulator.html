@@ -2146,7 +2146,7 @@
                     successMessage = "Plan data successfully loaded from JSON file.",
                     errorTitle = "JSON Parsing Error",
                     errorMessage = "Failed to parse JSON plan or no valid beams found.",
-                    suppressSuccessModal = false,
+                    suppressSuccessModal = true,
                     silent = false,
                     onSuccess = null
                 } = options;
@@ -8124,9 +8124,31 @@ function animateAllBeams() {
             });
 
 
+            function isEmbeddedComparatorMode() {
+                try {
+                    const params = new URLSearchParams(window.location.search || '');
+                    if (params.get('embedded') === '1') return true;
+                } catch (e) {
+                    // ignore
+                }
+                try {
+                    return window.self !== window.top;
+                } catch (e) {
+                    // If cross-origin blocks access to window.top, we must be embedded.
+                    return true;
+                }
+            }
+
+
             setAndApplyInitialSpeedLimits();
             clearAll();
-            checkAndLoadPlanFromEclipse();
+            // IMPORTANT: when this simulator is embedded inside RP_MultiPlan_Comparator.html,
+            // do NOT auto-load eclipse-launch-params.js. The comparator handles injection per-column.
+            if (!isEmbeddedComparatorMode()) {
+                checkAndLoadPlanFromEclipse();
+            } else {
+                console.log('DEBUG: Embedded mode detected; skipping eclipse-launch-params.js autoload.');
+            }
         });
     </script>
 </body>
