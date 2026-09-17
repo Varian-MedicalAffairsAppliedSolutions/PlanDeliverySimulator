@@ -88,8 +88,9 @@ test('binary modal upload uses the same Legacy fitter; mixed BIN/CSV routes are 
  const file={name:'test.BIN',arrayBuffer:async()=>Uint8Array.from(b).buffer};
  h.get('calibrationDoseRate').value='600';h.get('calibrationLabel').value='Synthetic BIN';h.get('calibrationLogs').files=[file];
  await h.get('fitCalibration').events.click();
- const profile=h.run('loadedTimingProfile');assert.equal(profile.model,C.MODEL);
- const pair=C.reconstruct(C.parseBin(b))[0];near(profile.parameters.timeScale,pair.measuredSeconds/h.baseline(pair.beam));
+ const profile=h.run('loadedTimingProfile');assert.equal(profile.model,C.LOCAL_MODEL);
+ assert.ok(profile.parameters.leafResponseAcceleration >= 20);
+ assert.equal(profile.parameters.timeScale,undefined);
  assert.equal(profile.calibration.deliveryCount,1);assert.equal(h.get('calibrationEnabled').checked,false);
  // A CSV must route through the CSV parser, not binary decoding.
  await assert.rejects(()=>C.readFile({name:'x.csv',text:async()=>''}),/CSV is empty/);

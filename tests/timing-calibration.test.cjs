@@ -140,12 +140,12 @@ test('modal analyzes CSV using real Legacy timing and enables only after review'
  h.get('calibrationLogs').files=[{text:async()=>source}];
  await h.get('fitCalibration').events.click();
  const p=h.run('loadedTimingProfile');
- assert.equal(p.model,C.MODEL);
- const pair=C.reconstruct(C.parseCsv(source))[0];
- near(p.parameters.timeScale,pair.measuredSeconds/h.baseline(pair.beam));
+ assert.equal(p.model,C.LOCAL_MODEL);
+ assert.ok(p.parameters.leafResponseAcceleration >= 20);
+ assert.equal(p.parameters.timeScale,undefined);
  assert.equal(h.get('calibrationEnabled').checked,false);
  assert.match(h.get('calibrationReport').textContent,/1 arcs from 1 logs/);
- assert.match(h.get('calibrationReport').textContent,/not available/);
+ assert.match(h.get('calibrationReport').textContent,/Contiguous-window holdout/);
  h.get('calibrationEnabled').checked=true;
  h.get('calibrationEnabled').events.change();
  assert.match(h.get('timingModelStatus').textContent,/Selected model: Calibrated/);

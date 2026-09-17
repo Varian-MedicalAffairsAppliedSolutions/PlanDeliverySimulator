@@ -1227,7 +1227,7 @@
                     <span id="timingModelStatus" class="timing-model-badge" role="status">Active model: Standard</span>
                     <dialog id="calibrationModal" aria-labelledby="calibrationTitle" style="width:min(1120px,94vw);max-height:85vh;overflow:auto;border:1px solid #ccc;border-radius:12px;padding:24px;">
                         <h2 id="calibrationTitle">Delivery time calibration</h2>
-                        <p>Calibrate delivery timing from measured logs. Local mode fits roughly one-second windows; uniform mode fits whole-arc totals. Between-beam transitions remain separate. Use logs from the same machine, energy and delivery mode.</p>
+                        <p>Calibrate delivery timing from measured logs. Local axis response fits roughly one-second windows. Between-beam transitions remain separate. Use logs from the same machine, energy and delivery mode.</p>
                         <label for="calibrationLabel">Profile name (machine / energy / mode)</label>
                         <input id="calibrationLabel" type="text" value="6X VMAT" maxlength="120">
                         <p><label for="calibrationLogs">Trajectory logs (.bin or pylinac .csv; single-layer MLC)</label>
@@ -1235,7 +1235,7 @@
                         <label for="calibrationDoseRate">Nominal log dose rate (MU/min)</label>
                         <input id="calibrationDoseRate" type="number" min="1" value="600">
                         <p>Uses the current machine speed, acceleration and overhead settings. No matching plan is required: commanded paths are reconstructed from the logs. This supports single-layer MLC logs; use independent matched plans/logs to check prediction accuracy.</p>
-                        <p><label for="calibrationMethod">Calibration method</label><select id="calibrationMethod"><option value="local">Local axis response (~1 s windows)</option><option value="uniform">Uniform whole-delivery correction</option></select></p>
+                        <p><strong>Calibration method:</strong> Local axis response (~1 s windows)</p>
                         <button type="button" id="fitCalibration">Analyze logs</button>
                         <pre id="calibrationReport" role="status" style="white-space:pre-wrap;font:inherit;"></pre>
 <section id="calibrationPlots" hidden aria-label="Log and prediction comparisons">
@@ -3514,7 +3514,7 @@
                         outside += TimingCalibration.diagnostics(log).outsideDeliverySeconds;
                     }
                     calibrationPlotPanel.set(comparisons);
-                    const profile = TimingCalibration.fitForMethod(pairs, settings, document.getElementById('calibrationLabel').value || 'Delivery calibration',document.getElementById('calibrationMethod').value);
+                    const profile = TimingCalibration.fitForMethod(pairs, settings, document.getElementById('calibrationLabel').value || 'Delivery calibration','local');
                     profile.calibration.nominalLogDoseRate = dose;
                     report.textContent=TimingCalibration.report(profile,files.length,outside)+'\nClick Accept and apply to current session to use this calibration.';
                     CalibrationPlots.calibrate(comparisons,pairs,profile,TimingCalibration);
@@ -3533,7 +3533,6 @@
                     loadedTimingProfile=profile;
                     calibrationPlotPanel.clear();
                     document.getElementById('calibrationLabel').value=profile.label || 'Delivery calibration';
-                    document.getElementById('calibrationMethod').value=profile.model===TimingCalibration.LOCAL_MODEL?'local':'uniform';
                     document.getElementById('calibrationReport').textContent='Profile loaded; saved machine settings restored.';
                     document.getElementById('calibrationEnabled').checked=true;
                     applyCalibrationProfileToInputs(); recalculateCalibration();

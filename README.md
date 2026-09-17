@@ -155,17 +155,17 @@ Coordinate conversion follows [TrajectoryLogReader's native-scale converter](htt
 
 ### Delivery Time Calibration (Optional)
 
-The simulator uses the standard timing model by default. Log profiles can apply local axis-response timing or a uniform whole-delivery correction.
+The simulator uses the standard timing model by default. New log profiles use local axis-response timing.
 
 1. Set the intended machine speed, acceleration and overhead settings.
 2. Click **Delivery time calibration…** under the simulator machine limits.
-3. Select complete **Varian trajectory `.bin` logs or pylinac `.csv` exports** from the same machine, energy and mode, enter the nominal log dose rate, choose **Local axis response (~1 s windows)** or **Uniform whole-delivery correction**, and analyze. Automatic log calibration supports single-layer 80- or 120-leaf MLCs.
+3. Select complete **Varian trajectory `.bin` logs or pylinac `.csv` exports** from the same machine, energy and mode, enter the nominal log dose rate, and analyze using **Local axis response (~1 s windows)**. Automatic log calibration supports single-layer 80- or 120-leaf MLCs.
 4. Review arc totals, fit errors and raw/averaged/predicted comparison plots. Select a delivery and an averaging window; the window affects plots only. Click **Accept and apply to current session** to restore the profile settings, recalculate the loaded plan, and close the modal. This button remains disabled until a profile is available.
 5. **Save profile…** in the modal exports a JSON file. **Load profile…** restores its baseline machine settings and enables the correction. Uncheck **Calibration enabled** to compare with the uncorrected standard model.
 
 Direct BIN reading supports trajectory versions **2.1, 3.0, 4.0 and 5.0**, including machine/isocentric-couch scale 3. The reader uses the header/subbeam/snapshot layout documented by [pylinac](https://pylinac.readthedocs.io/en/latest/_modules/pylinac/log_analyzer.html). No Python installation or CSV conversion is required.
 
-Local calibration fits CP-window timing using competing speed/dose demands and neighboring signed axis-velocity changes. It preserves machine speed caps and replaces manual overheads. Uniform mode retains the median whole-delivery time-ratio fit. It keeps inter-beam transitions separate and requires no matching plan for log-only fitting. Changed machine settings disable an incompatible correction. Profiles from the removed experimental models must be refitted against the standard model. See [method and limitations](docs/log-calibration.md).
+Local calibration fits CP-window timing using competing speed/dose demands and neighboring signed axis-velocity changes. It preserves machine speed caps and replaces manual overheads. Calibration keeps inter-beam transitions separate and requires no matching plan for log-only fitting. Changed machine settings disable an incompatible correction. Profiles from the removed experimental models must be refitted against the standard model. See [method and limitations](docs/log-calibration.md).
 
 ---
 

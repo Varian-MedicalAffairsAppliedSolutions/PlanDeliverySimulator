@@ -10,11 +10,11 @@ The reader skips patient/plan metadata and beam names. Numeric subbeam headers a
 
 Local verification against the supplied 4.0 log and its CSV export compared 16,315 snapshots and 4,192,955 axis values. Differences were below 0.000001 in normalized units (CSV rounding); fitted correction factors differed by less than 0.000000001. A supplied version 5.0 / scale-3 log also passed decoding and the modal calibration path: 6,391 snapshots, 120 leaves, one delivery window of 127.54 s. Versions 2.1 and 3.0 have synthetic layout tests, not validation against supplied machine files. The v5 sample is a 6xFFF delivery; the nominal log dose-rate input must match that delivery, rather than assuming the default 600 MU/min.
 
-## Calibration methods
+## Calibration method
 
 The tool reconstructs expected gantry, collimator, leaves, jaws and MU at integer CP starts, aligned by actual CP progression. It also interpolates measured arrival times at those same CP boundaries. The baseline remains the shared `lib/legacy-timing.js` calculation.
 
-### Local axis response (default in the calibrator)
+### Local axis response
 
 `lib/axis-response-timing.js` first assigns each CP interval the maximum time required by its gantry, collimator, MLC and dose demands at the selected speed caps. It then compares signed CP-average velocities between adjacent intervals, including every individual leaf. The magnitude of that velocity change divided by the midpoint-to-midpoint time acts as an empirical response-demand estimate. Six simultaneous relaxation passes extend neighboring intervals when this estimate exceeds the response parameters.
 
@@ -24,14 +24,14 @@ One leaf-response parameter is fitted over a fixed 20–180 mm/s² search range 
 
 The fit target is elapsed duration in non-overlapping windows ending at CP boundaries after approximately one second. The objective is mean absolute window error plus 0.04 times the mean absolute aggregate training-window bias per delivery. Total duration remains a reported outcome; traces are never warped to the observed timeline. The final few samples after the last CP arrival are included in total-time error but not used as a fabricated CP interval.
 
-### Uniform whole-delivery correction
+### Older profile compatibility and validation baseline
 
 ```
 correction = median(measured whole-arc time / Legacy whole-arc time)
 prediction = Legacy beam time × correction
 ```
 
-This original method scales every segment equally, including configured startup/per-CP overheads. It is retained for comparison and compatibility with existing profiles. It can fit totals while lowering predicted plateau speeds too much and leaving local slowdowns misplaced.
+This original method scales every segment equally, including configured startup/per-CP overheads. It is no longer selectable for new profiles. Its implementation remains for validation comparisons and importing existing profiles. It can fit totals while lowering predicted plateau speeds too much and leaving local slowdowns misplaced.
 
 Both methods leave inter-beam transitions separate. Recalculation always starts with fresh uncorrected data, avoiding compounded corrections. Plot averaging never changes fitting targets or predictions.
 
@@ -43,7 +43,7 @@ Gray traces contain actual snapshot positions or adjacent-sample rates. Fastest-
 
 Orange traces simulate a reconstructed RP-like sequence using expected gantry, collimator, MLC, jaw and MU values interpolated at integer CP starts (aligned by actual CP progression). These use the exact Legacy engine and entered nominal dose rate. Position traces connect CP states; predicted speeds are segment averages, not predictions of individual logged frames. Measured and predicted traces use their own elapsed clocks, including initial simulator overhead. The final measured position is held through the last snapshot's coverage interval, consistent with fitted total duration.
 
-The optional green trace uses the selected profile: local mode recomputes each CP interval, whereas uniform mode multiplies timestamps and divides rates. Green predicted rates are time-averaged over the same window as blue measurements. The predicted average integrates the piecewise-constant rate over elapsed time, rather than giving unequal CP intervals equal weight. Preview visibility does not enable calibration in the simulator. Plots retain compact numeric traces in memory only; saved profiles still contain aggregate settings and fit diagnostics, not trajectories.
+The optional green trace recomputes each CP interval using the fitted local axis-response profile. Green predicted rates are time-averaged over the same window as blue measurements. The predicted average integrates the piecewise-constant rate over elapsed time, rather than giving unequal CP intervals equal weight. Preview visibility does not enable calibration in the simulator. Plots retain compact numeric traces in memory only; saved profiles still contain aggregate settings and fit diagnostics, not trajectories.
 
 The standalone tool starts with TDS settings. Use **Load profile settings…** or edit machine settings to reproduce a specific baseline. Its downloadable profile is imported through the simulator modal. New inputs invalidate standalone results and downloads until analysis is rerun. Calibration may reject an implausible multiplier while still leaving the uncorrected comparison plots available for diagnosis.
 
