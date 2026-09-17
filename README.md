@@ -231,27 +231,53 @@ The simulator computes an **MCSv-like** score per beam in `calculateMCSForScope`
 
 * **AAV** is computed per CP by comparing the CP’s aperture area to the maximum aperture area seen in the beam (`calculateAAVAtCP`).
 * **LSV** is represented by a monotonic penalty based on the segment’s maximum leaf travel:
-  * `normalizedLSV = 1 / (1 + maxLeafTravelThisSegment / 10.0)`
+
+  $$
+  \mathrm{normalizedLSV} = \frac{1}{1 + \mathrm{maxLeafTravelThisSegment}/10.0}
+  $$
+
 * **Collimator rotation factor** is applied per segment:
-  * `collimatorRotationFactor = 1 + (COLLIMATOR_WEIGHTING_FACTOR * deltaCollAngleForSegment)`
+
+  $$
+  \mathrm{collimatorRotationFactor} = 1 + \mathrm{COLLIMATOR\_WEIGHTING\_FACTOR} \cdot \mathrm{deltaCollAngleForSegment}
+  $$
+
 * The final score is MU-weighted over segments:
-  * `mcsValue = sum( meanAAV * normalizedLSV * collimatorRotationFactor * muWeightSegment ) / sum(muWeightSegment)`
+
+  $$
+  \mathrm{mcsValue} =
+  \frac{\sum_j \left(\mathrm{meanAAV}_j \cdot \mathrm{normalizedLSV}_j \cdot \mathrm{collimatorRotationFactor}_j \cdot \mathrm{muWeightSegment}_j\right)}
+       {\sum_j \mathrm{muWeightSegment}_j}
+  $$
+
+  Here, $j$ indexes the control-point segments.
 
 #### 4.3.4. MIsport (Modulation Index for SPORT)
 Calculated per CP in `calculateModulationIndex(beamData, cpIndexS, K)`.
 
 For a given center CP `S`, the implementation sums over neighbor CPs `S_K` in a window of size `K` (the UI currently uses `K_3_PERCENT = max(1, ceil(numControlPoints * 0.03))`):
 
-```text
-totalMI += sumAbsLeafTravel(S, S_K)
-           * (1 + K_MISPORT_COLL * deltaCollAngle(S, S_K))
-           * muPerDegree(S, S_K)
+$$
+\begin{aligned}
+\mathrm{totalMI}(S) = \sum_{S_K \in \mathcal{W}_K(S)} &\mathrm{sumAbsLeafTravel}(S, S_K) \\
+&\cdot \left(1 + \mathrm{K\_MISPORT\_COLL} \cdot \mathrm{deltaCollAngle}(S, S_K)\right) \\
+&\cdot \mathrm{muPerDegree}(S, S_K)
+\end{aligned}
+$$
 
-muPerDegree(S, S_K) = 0                                  if deltaGantry <= MI_GANTRY_DIFF_EPSILON
-                      (deltaMU / deltaGantry)             otherwise
+Here, $\mathcal{W}_K(S)$ denotes the neighboring CPs in the window around $S$.
 
-deltaMU = abs(Δ cumulativeMetersetWeight) * beam.totalMeterset
-```
+$$
+\mathrm{muPerDegree}(S, S_K) =
+\begin{cases}
+0, & \mathrm{deltaGantry} \leq \mathrm{MI\_GANTRY\_DIFF\_EPSILON}, \\
+\dfrac{\mathrm{deltaMU}}{\mathrm{deltaGantry}}, & \text{otherwise}.
+\end{cases}
+$$
+
+$$
+\mathrm{deltaMU} = \left|\Delta\mathrm{cumulativeMetersetWeight}\right| \cdot \mathrm{beam.totalMeterset}
+$$
 
 Displayed in the modulation radial plot (excluding the first/last `K` CPs because the window is truncated near the boundaries).
 
@@ -271,11 +297,22 @@ Current implementation (simplified description):
     * or if `abs(mlcAcceleration_i) > (MIT_ALPHA * sigmaMlcAccel)` (and `sigmaMlcAccel > 0.001`)
     * else `N_i = 0`
   * If `N_i == 1`, compute weighting factors from *subsequent* dynamics (when available):
-    * `W(x) = 1 + (MIT_BETA - 1) * (1 - exp(-MIT_GAMMA * abs(x)))`
+
+    $$
+    W(x) = 1 + (\mathrm{MIT\_BETA} - 1)\left(1 - \exp\left(-\mathrm{MIT\_GAMMA}\,|x|\right)\right)
+    $$
+
     * `WGA` from gantry acceleration, `WMU` from dose rate change, `WCA` from collimator acceleration.
     * Otherwise all weights default to 1.0.
   * Accumulate `N_i * WGA * WMU * WCA`.
-* `localMItFactor(s)` is the average of that weighted sum over the window size.
+* `localMItFactor(s)` is the average of that weighted sum over the window size:
+
+  $$
+  \mathrm{localMItFactor}(s) = \frac{1}{|\mathcal{W}(s)|}
+  \sum_{i \in \mathcal{W}(s)} N_i \cdot \mathrm{WGA}_i \cdot \mathrm{WMU}_i \cdot \mathrm{WCA}_i
+  $$
+
+  Here, $\mathcal{W}(s)$ is the window of CPs around $s$, and $|\mathcal{W}(s)|$ is its size.
 
 Displayed in radial plots (note: near the start/end of the CP list, the window is truncated).
 
@@ -287,7 +324,15 @@ Conceptually, this is the **area-weighted mean opening** across all open leaf pa
 * For each leaf pair `i` with opening `opening_i = (bankB_i - bankA_i) > 0` and leaf width `w_i`:
   * Add to aperture area: `area += w_i * opening_i`
   * Add to open height: `openHeight += w_i`
-* `avgLeafGap = area / openHeight` (mm), or 0 if nothing is open.
+* The average opening (mm) is:
+
+  $$
+  \mathrm{avgLeafGap} =
+  \begin{cases}
+  \dfrac{\mathrm{area}}{\mathrm{openHeight}}, & \mathrm{openHeight} > 0, \\
+  0, & \text{if nothing is open}.
+  \end{cases}
+  $$
 
 Beam-level and plan-level summaries are MU-weighted averages across control-point segments (see `computeBeamApertureSummaryMetricsFromControlPoints` and `updateOverallPlanInfoDisplay` in `RP_Delivery_Simulator.html`).
 
@@ -299,8 +344,13 @@ The current implementation follows the Younge et al. approach using **leaf-side 
 * Compute:
   * `area` (mm²) from the MLC aperture (`calculateApertureArea`)
   * `leafSidePerimeter` (mm) from the aperture outline (`calculateApertureEdgePerimeters`)
-* Then:
-  * `edgeComplexity = (EDGE_COMPLEXITY_C2 * leafSidePerimeter) / area` (mm⁻¹), or 0 if `area` is ~0
+* Then (in $\mathrm{mm}^{-1}$):
+
+  $$
+  \mathrm{edgeComplexity} = \frac{\mathrm{EDGE\_COMPLEXITY\_C2} \cdot \mathrm{leafSidePerimeter}}{\mathrm{area}}
+  $$
+
+  The value is 0 if `area` is approximately 0.
 
 Beam-level and plan-level summaries are MU-weighted averages across control-point segments.
 
