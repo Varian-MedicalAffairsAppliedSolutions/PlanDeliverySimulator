@@ -37,5 +37,5 @@ test('visual replay maps native banks/jaws into the existing BEV without using e
  log.metadata.axisScale=2;log.metadata.mlcModel=3;
  const hd=buildReplay(log);assert.equal(hd.data[0].cp.gantryAngle,180);assert.equal(hd.data[0].cp.mlcPositionData[0].positions[0],8);
  assert.equal(hd.beam.mlcDefinitions[0].boundaries[0],-110);assert.equal(hd.beam.mlcDefinitions[0].boundaries[60],110);
- log.metadata.mlcModel=99;assert.throws(()=>buildReplay(log),/MLC models/);
+ log.metadata.mlcModel=99;assert.throws(()=>buildReplay(log),/Unsupported MLC geometry/);
 });

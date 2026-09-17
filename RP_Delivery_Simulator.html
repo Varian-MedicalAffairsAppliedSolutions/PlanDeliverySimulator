@@ -1230,11 +1230,12 @@
                         <p>Calibrate delivery timing from measured logs. Local axis response fits roughly one-second windows. Between-beam transitions remain separate. Use logs from the same machine, energy and delivery mode.</p>
                         <label for="calibrationLabel">Profile name (machine / energy / mode)</label>
                         <input id="calibrationLabel" type="text" value="6X VMAT" maxlength="120">
-                        <p><label for="calibrationLogs">Trajectory logs (.bin or pylinac .csv; single-layer MLC)</label>
+                        <p><label for="calibrationLogs">Trajectory logs (.bin or pylinac .csv)</label>
                         <input id="calibrationLogs" type="file" accept=".bin,.csv,application/octet-stream,text/csv" multiple></p>
+                        <p><label for="calibrationEnergy">Detected energy</label><input id="calibrationEnergy" type="text" value="Unknown" readonly><span id="calibrationMetadataStatus" role="status">Select BIN logs to detect energy and maximum dose rate.</span></p>
                         <label for="calibrationDoseRate">Nominal log dose rate (MU/min)</label>
                         <input id="calibrationDoseRate" type="number" min="1" value="600">
-                        <p>Uses the current machine speed, acceleration and overhead settings. No matching plan is required: commanded paths are reconstructed from the logs. This supports single-layer MLC logs; use independent matched plans/logs to check prediction accuracy.</p>
+                        <p>Uses the current machine speed, acceleration and overhead settings. No matching plan is required: commanded paths are reconstructed from the logs. Supports TDS single-layer logs and RDS dual-layer BIN logs; use independent matched plans/logs to check prediction accuracy.</p>
                         <p><strong>Calibration method:</strong> Local axis response (~1 s windows)</p>
                         <button type="button" id="fitCalibration">Analyze logs</button>
                         <pre id="calibrationReport" role="status" style="white-space:pre-wrap;font:inherit;"></pre>
@@ -3484,10 +3485,36 @@
                 if (!loadedTimingProfile) document.getElementById('calibrationEnabled').checked = false;
                 recalculateCalibration();
             });
+            let calibrationMetadataRequest = 0;
+            let automaticCalibrationLabel = "6X VMAT";
+            async function populateCalibrationMetadata(files) {
+                const request=++calibrationMetadataRequest;
+                document.getElementById('calibrationEnergy').value='Reading…';
+                try {
+                    const metadata=await TimingCalibration.inspectFiles(files);
+                    if(request!==calibrationMetadataRequest)return metadata;
+                    document.getElementById('calibrationEnergy').value=metadata.energy || 'Unknown';
+                    const labelInput=document.getElementById('calibrationLabel');
+                    if(metadata.energy && (!labelInput.value || labelInput.value===automaticCalibrationLabel)){
+                        automaticCalibrationLabel=`${metadata.energy} ${metadata.machine || ''} VMAT`.replace(/ +/g,' ');
+                        labelInput.value=automaticCalibrationLabel;
+                    }
+                    if(metadata.nominalDoseRate)document.getElementById('calibrationDoseRate').value=metadata.nominalDoseRate;
+                    document.getElementById('calibrationMetadataStatus').textContent=metadata.nominalDoseRate?`${metadata.machine || 'Photon'} · maximum ${metadata.nominalDoseRate} MU/min`:'Energy or machine metadata unavailable. Review the nominal dose rate manually.';
+                    return metadata;
+                } catch(error) {
+                    if(request===calibrationMetadataRequest){document.getElementById('calibrationEnergy').value='Unknown';document.getElementById('calibrationMetadataStatus').textContent=error.message;}
+                    throw error;
+                }
+            }
+            document.getElementById('calibrationLogs').addEventListener('change', async () => {
+                try { await populateCalibrationMetadata(Array.from(document.getElementById('calibrationLogs').files)); }
+                catch(error) { document.getElementById('calibrationReport').textContent=error.message; }
+            });
             document.getElementById('fitCalibration').addEventListener('click', async () => {
                 const files = Array.from(document.getElementById('calibrationLogs').files);
                 const report = document.getElementById('calibrationReport');
-                const dose = Number(document.getElementById('calibrationDoseRate').value);
+                let dose = Number(document.getElementById('calibrationDoseRate').value);
                 const settings = calibrationSettings();
                 const controls = Array.from(calibrationModal.querySelectorAll('input, button, select'));
                 const previousDisabled = controls.map(el => el.disabled);
@@ -3496,6 +3523,8 @@
                 calibrationPlotPanel.clear();
                 try {
                     if (!files.length) throw new Error('Select at least one trajectory .bin or .csv file.');
+                    const metadata=await populateCalibrationMetadata(files);
+                    dose=Number(document.getElementById('calibrationDoseRate').value);
                     if (!(dose > 0 && Number.isFinite(dose))) throw new Error('Enter a positive nominal dose rate.');
                     updateCurrentSpeedLimits();
                     const pairs = [], comparisons = []; let outside = 0;
@@ -3503,11 +3532,11 @@
                         const log = await TimingCalibration.readFile(files[group]);
                         if (JSON.stringify(calibrationSettings()) !== JSON.stringify(settings)) throw new Error('Machine settings changed during analysis. Analyze again with the intended settings.');
                         updateCurrentSpeedLimits();
-                        if (log.leafCount !== 120 && log.leafCount !== 80) throw new Error('Automatic calibration currently supports 80- or 120-leaf single-layer MLC logs only.');
+                        if (log.metadata.mlcModel !== 6 && log.leafCount !== 120 && log.leafCount !== 80) throw new Error('Automatic calibration currently supports 80- or 120-leaf single-layer MLC logs only.');
                         const deliveries = TimingCalibration.reconstruct(log, dose);
                         for (const pair of deliveries) {
                             const prediction=[];
-                            pair.baselineSeconds = calculateSegmentTimes(pair.beam, pair.beam.controlPoints, prediction, dose);
+                            pair.baselineSeconds = pair.beam.isRDSMachine ? LegacyTiming.calculateSegmentTimes(pair.beam,pair.beam.controlPoints,prediction,dose,settings) : calculateSegmentTimes(pair.beam, pair.beam.controlPoints, prediction, dose);
                             comparisons.push({label:`Log ${group+1} · arc ${pair.beam.beamNumber}`, comparison:CalibrationPlots.buildComparison(log,pair,prediction)});
                             pair.baselineData=prediction; pair.group = group; pairs.push(pair);
                         }
@@ -3516,6 +3545,8 @@
                     calibrationPlotPanel.set(comparisons);
                     const profile = TimingCalibration.fitForMethod(pairs, settings, document.getElementById('calibrationLabel').value || 'Delivery calibration','local');
                     profile.calibration.nominalLogDoseRate = dose;
+                    profile.calibration.energy=metadata.energy;
+                    profile.calibration.machine=metadata.machine || profile.calibration.machine;
                     report.textContent=TimingCalibration.report(profile,files.length,outside)+'\nClick Accept and apply to current session to use this calibration.';
                     CalibrationPlots.calibrate(comparisons,pairs,profile,TimingCalibration);
                     calibrationPlotPanel.set(comparisons, profile.parameters.timeScale??1);
@@ -3533,6 +3564,9 @@
                     loadedTimingProfile=profile;
                     calibrationPlotPanel.clear();
                     document.getElementById('calibrationLabel').value=profile.label || 'Delivery calibration';
+                    document.getElementById('calibrationEnergy').value=profile.calibration?.energy || 'Unknown';
+                    if(profile.calibration?.nominalLogDoseRate)document.getElementById('calibrationDoseRate').value=profile.calibration.nominalLogDoseRate;
+                    document.getElementById('calibrationMetadataStatus').textContent=profile.calibration?.machine || 'Imported profile';
                     document.getElementById('calibrationReport').textContent='Profile loaded; saved machine settings restored.';
                     document.getElementById('calibrationEnabled').checked=true;
                     applyCalibrationProfileToInputs(); recalculateCalibration();
@@ -4169,7 +4203,7 @@
                     try {
                         TimingCalibration.validateProfile(profile, calibrationSettings());
                         rtPlanData.beams.forEach(beam=>TimingCalibration.validateBeam(profile,beam));
-                        if (profile.calibration?.source === 'log-commanded-control-points' && rtPlanData.beams.some(b => b.isRDSMachine)) throw new Error('This log profile was fitted for a single-layer MLC, not RDS.');
+                        if (profile.model !== TimingCalibration.LOCAL_MODEL && profile.calibration?.source === 'log-commanded-control-points' && rtPlanData.beams.some(b => b.isRDSMachine)) throw new Error('This log profile was fitted for a single-layer MLC, not RDS.');
                     }
                     catch(error) {
                         // Keep a usable Legacy prediction when edited limits invalidate a fit.

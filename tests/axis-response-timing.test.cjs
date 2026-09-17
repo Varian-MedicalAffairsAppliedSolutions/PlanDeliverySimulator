@@ -82,3 +82,60 @@ test('simulator applies local profile and rejects a beam incompatible with it',(
  h.run('rtPlanData.beams[0].isRDSMachine=true;processAllBeamsForTimings()');
  assert.equal(h.get('calibrationEnabled').checked,false);
 });
+
+test('RDS timing includes motion in the hidden layer and profiles cannot cross machine types',()=>{
+ const A=require('../lib/axis-response-timing.js'),C=require('../lib/timing-calibration.js');
+ const cp=(move)=>({gantryAngle:0,collimatorAngle:0,doseRateSet:800,cumulativeMetersetWeight:move?1:0,mlcPositionData:[
+  {type:'MLCX1',positions:[...Array(28).fill(-5),...Array(28).fill(5)]},
+  {type:'MLCX2',positions:[...Array(29).fill(-10-move),...Array(29).fill(10)]}]});
+ const beam={isRDSMachine:true,totalMeterset:1,controlPoints:[cp(0),cp(80)]};
+ const limits={...C.DEFAULT_LIMITS,maxMlcSpeedInput:5};
+ const result=A.predict(beam,limits,{leafResponseAcceleration:300});
+ assert.ok(result.totalTime>=1.6);assert.equal(result.data[0].maxLeafTravel,80);
+ const profile={schema:'delivery-timing-profile',version:1,model:C.LOCAL_MODEL,nominalLimits:limits,parameters:{leafResponseAcceleration:300},calibration:{machine:'RDS'}};
+ C.validateProfile(profile);C.validateBeam(profile,beam);
+ assert.throws(()=>C.validateBeam(profile,{...beam,isRDSMachine:false}),/matching machine/);
+ assert.throws(()=>C.validateBeam({...profile,parameters:{leafResponseAcceleration:100},calibration:{machine:'TDS'}},beam),/matching machine/);
+});
+
+function rdsTransitionBeam(){
+ const b={isRDSMachine:true,totalMeterset:6,controlPoints:[]};
+ for(let i=0;i<=8;i++)b.controlPoints.push({gantryAngle:2*i,collimatorAngle:0,doseRateSet:800,cumulativeMetersetWeight:Math.min(i,3)/6+Math.max(0,i-5)/6,
+ mlcPositionData:[{type:'MLCX1',positions:[...Array(28).fill(-10),...Array(28).fill(10)]},{type:'MLCX2',positions:[...Array(29).fill(-10),...Array(29).fill(10)]}]});
+ return b;
+}
+const rdsLimits={...C.DEFAULT_LIMITS,maxGantrySpeedInput:12,maxGantryAccelDecelInput:12,maxMlcSpeedInput:5,maxMlcAccelDecelInput:5};
+const transitions={leafResponseAcceleration:510,rdsTransitionModel:'planned-zero-mu-v1'};
+test('RDS zero-MU blocks stop at their boundaries, not every CP, and obey ramp acceleration',()=>{
+ const b=rdsTransitionBeam(),p=A.predict(b,rdsLimits,transitions);
+ const m=p.data.map(r=>r.motionProfile);
+ near(m[0].start,0);near(m[2].end,0);near(m[3].start,0);
+ assert.ok(m[3].end>0);near(m[4].end,0);near(m[5].start,0);near(m[7].end,0);
+ // Four degrees of beam-off movement from rest to rest: triangular profile.
+ near(p.data[3].segmentDuration+p.data[4].segmentDuration,2*Math.sqrt(4/12));
+ for(const r of p.data.slice(0,-1)){
+  const v=r.motionProfile;near(A.motionAt(v,0).fraction,0);near(A.motionAt(v,r.segmentDuration).fraction,1);
+  assert.ok(v.acceleration*r.deltaGantryAngle/v.distance<=12+1e-8);
+ }
+ const noisy=rdsTransitionBeam();noisy.controlPoints[4].cumulativeMetersetWeight+=1e-7;
+ near(A.predict(noisy,rdsLimits,transitions).totalTime,p.totalTime);
+});
+test('transition plots integrate to commanded MU and angles on the predicted clock',()=>{
+ const b=rdsTransitionBeam(),p=A.predict(b,rdsLimits,transitions),series=P.predictionSeries(b,p.data,{gantry:0,collimator:0}).series;
+ const area=points=>points.slice(1).reduce((sum,v,i)=>sum+(v.x-points[i].x)*(v.y+points[i].y)/2,0);
+ near(area(series.gantrySpeed),16,1e-7);near(area(series.doseRate)/60,6,1e-7);
+ assert.ok(series.mlcSpeed.every(p=>p.y===0));assert.ok(series.gantrySpeed.some(p=>p.y>0));
+ for(const points of Object.values(series))assert.ok(points.every((p,i)=>Number.isFinite(p.y)&&(!i||p.x>=points[i-1].x)));
+ assert.ok(series.doseRate.every(p=>p.y<=800+1e-8));
+ near(series.gantry.at(-1).y,16);
+});
+test('transition model round-trips without changing old RDS or TDS profiles',()=>{
+ const b=rdsTransitionBeam(),old=A.predict(b,rdsLimits,{leafResponseAcceleration:510}),updated=A.predict(b,rdsLimits,transitions);
+ assert.ok(updated.totalTime>old.totalTime);
+ const profile={schema:'delivery-timing-profile',version:1,model:C.LOCAL_MODEL,nominalLimits:rdsLimits,parameters:transitions,calibration:{machine:'RDS'}};
+ const loaded=C.validateProfile(JSON.parse(JSON.stringify(profile))),data=old.data.map(r=>({...r}));
+ near(C.apply(data,old.totalTime,loaded,b),updated.totalTime);
+ assert.ok(data[0].motionProfile);
+ assert.throws(()=>C.validateProfile({...profile,parameters:{...transitions,rdsTransitionModel:'unknown'}}),/Unsupported RDS/);
+ assert.throws(()=>A.predict(beam(),rdsLimits,{...transitions,leafResponseAcceleration:100}),/Unsupported RDS/);
+});

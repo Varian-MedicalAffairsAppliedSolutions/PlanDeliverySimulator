@@ -120,3 +120,49 @@ test('playback BIN reader preserves native actual axes, holds, resets and flagge
  near(log.samples[50].actual.leaves[0],5);near(log.samples[50].expected.leaves[0],6);
  assert.throws(()=>C.parseBin(f.b.subarray(0,-10),{playback:true}),/Incomplete/);
 });
+
+function energyFixture(energy,model=2){
+ const f=fixture({leaves:model===6?114:120});f.b.fill(0,f.tail+20,1024);f.b.write(`Patient ID:\tDO-NOT-RETAIN\nEnergy:\t${energy}\nPlan:\tDO-NOT-RETAIN`,f.tail+20);f.b.writeInt32LE(model,f.tail+16);return f;
+}
+test('BIN metadata detects photon energy and user-defined dose-rate defaults without retaining identifiers',()=>{
+ for(const [energy,model,rate,normalized]of [['6x',2,600,'6X'],['10X',3,600,'10X'],['15x',2,600,'15X'],['6xFFF',2,1400,'6X FFF'],['10fff',3,2400,'10X FFF'],['6xFFF',6,800,'6X FFF'],['10xFFF',6,800,'10X FFF']]){
+  const m=C.inspectBinHeader(energyFixture(energy,model).b);assert.equal(m.energy,normalized);assert.equal(m.nominalDoseRate,rate);assert.equal(JSON.stringify(m).includes('DO-NOT-RETAIN'),false);
+ }
+ assert.equal(C.inspectBinHeader(energyFixture('6e').b).energy,null);
+ assert.equal(C.inspectBinHeader(energyFixture('15xFFF').b).nominalDoseRate,null);
+ assert.equal(C.inspectBinHeader(energyFixture('6xFFF',99).b).nominalDoseRate,null);
+});
+test('energy detection rejects mixed energy or machine selections and treats missing metadata as unknown',async()=>{
+ const file=(energy,model=2)=>({name:'log.bin',arrayBuffer:async()=>energyFixture(energy,model).b});
+ await assert.rejects(()=>C.inspectFiles([file('6x'),file('10x')]),/Mixed energies/);
+ await assert.rejects(()=>C.inspectFiles([file('6xFFF'),file('6xFFF',6)]),/Mixed RDS/);
+ assert.equal((await C.inspectFiles([file('6x'),{name:'legacy.csv'}])).nominalDoseRate,null);
+});
+test('RDS metadata and unavailable jaws allow the dual-layer calibration workspace to fit',async()=>{
+ const h=require('./legacy-harness.cjs')(),f=energyFixture('6xFFF',6);
+ f.b.writeFloatLE(3.4028234663852886e38,f.start+f.axes.indexOf(2)*8+4);
+ h.get('calibrationLogs').files=[{name:'rds.bin',arrayBuffer:async()=>f.b}];
+ await h.get('calibrationLogs').events.change();
+ assert.equal(h.get('calibrationEnergy').value,'6X FFF');assert.equal(Number(h.get('calibrationDoseRate').value),800);
+ await h.get('fitCalibration').events.click();
+ assert.equal(h.run('loadedTimingProfile').calibration.machine,'RDS');
+ assert.equal(h.run('loadedTimingProfile').calibration.energy,'6X FFF');
+});
+
+test('RDS bank ordering, layer geometry and absent jaws are preserved for calibration and playback',()=>{
+ const f=energyFixture('6xFFF',6),log=C.parseBin(f.b),p=C.reconstruct(log,800)[0];
+ assert.equal(log.leafCount,114);assert.equal(log.samples[0].actual.jaws,null);assert.equal(p.beam.isRDSMachine,true);
+ assert.deepEqual(p.beam.controlPoints[0].mlcPositionData.map(l=>l.positions.length),[56,58]);
+ const values=Array.from({length:114},(_,i)=>i+1),layers=C.mlcLayers(values,6,1);
+ assert.equal(layers[0].positions[0],-58);assert.equal(layers[0].positions[28],1);
+ assert.equal(layers[1].positions[0],-86);assert.equal(layers[1].positions[29],29);
+ assert.deepEqual(C.mlcGeometry(6,114).map(d=>[d.boundaries[0],d.boundaries.at(-1)]),[[-140,140],[-145,145]]);
+ const replay=require('../lib/log-playback.js').buildReplay(C.parseBin(f.b,{playback:true}));
+ assert.equal(replay.beam.isRDSMachine,true);assert.equal(replay.data[0].cp.asymx,null);
+});
+test('BIN subbeam markers group internal holds without dropping their elapsed time',()=>{
+ const state=(cp,mu,hold)=>({actual:{cp,mu,hold},expected:{cp,mu}});
+ const samples=[state(0,0,0),state(1,1,0),state(1,1,2),state(2,2,0),state(3,3,0),state(3,3,2),state(4,3,0),state(5,4,0),state(6,5,0),state(6,5,2)].map((s,i)=>({...s,time:i*.02}));
+ const log={metadata:{samplingIntervalMs:20,subbeams:2},subbeamHeaders:[{cp:0},{cp:3}],samples};
+ const windows=C.deliveryWindows(log);assert.equal(windows.length,2);near(windows[0].seconds,.1);near(windows[0].holdSeconds,.02);assert.equal(windows[0].cpEnd,3);assert.equal(windows[1].cpStart,4);
+});
