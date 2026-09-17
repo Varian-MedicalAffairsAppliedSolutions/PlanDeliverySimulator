@@ -30,3 +30,6 @@ Thumbs.db
 # Dependencies
 packages/
 node_modules/
+
+# Local standalone calibration tool
+/RP_Trajectory_Timing_Calibrator.html

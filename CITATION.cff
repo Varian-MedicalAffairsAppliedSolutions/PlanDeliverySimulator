@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as follows."
 title: "DICOM RT Plan Delivery Simulator (Non-Clinical/Research-Only)"
 type: software
-version: "1.1.1"
-date-released: "2026-01-29"
+version: "1.2.0"
+date-released: "2026-09-17"
 authors:
   - family-names: "Li"
     given-names: "Taoran"
@@ -15,8 +15,8 @@ license: "Varian Limited Use Software License Agreement"
 preferred-citation:
   type: software
   title: "DICOM RT Plan Delivery Simulator (Non-Clinical/Research-Only)"
-  version: "1.1.1"
-  date-released: "2026-01-29"
+  version: "1.2.0"
+  date-released: "2026-09-17"
   authors:
     - family-names: "Li"
       given-names: "Taoran"

@@ -15,6 +15,20 @@
     })();
   </script>
   <style>
+        .research-disclaimer-banner {
+            box-sizing: border-box;
+            width: 100%;
+            padding: 14px 20px;
+            margin: 0 0 16px;
+            border: 2px solid #b45309;
+            border-radius: 6px;
+            background: #fffbeb;
+            color: #78350f;
+            text-align: center;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
     :root {
       /* Narrow columns like the original layout. */
       --column-width: 400px;
@@ -370,6 +384,10 @@
   </style>
 </head>
 <body>
+    <aside class="research-disclaimer-banner" aria-label="Education and research disclaimer">
+        <strong>For education and research only. Not for clinical use.</strong>
+        Predicted delivery times have not been verified.
+    </aside>
   <div class="page-shell">
     <header class="page-header">
       <div>
@@ -425,7 +443,7 @@
           <p><strong>Total Beams in Plan:</strong> <span data-field="planTotalBeams">N/A</span></p>
           <p><strong>Total Plan MU:</strong> <span data-field="planTotalMu">N/A</span></p>
           <p><strong>Primary Dose Rate (First Beam, CP0):</strong> <span data-field="planDoseRate">N/A</span> MU/min</p>
-          <p><strong>Est. Total Plan Time (All Beams):</strong> <span data-field="totalPlanSimTime">N/A</span> s</p>
+          <p><strong>Est. Total Plan Time (All Beams):</strong> <span data-field="totalPlanSimTime">N/A</span> s <span data-field="timingModel">(Standard)</span></p>
         </div>
         <iframe data-field="simFrame" title="Embedded Plan Delivery Simulator" style="width:100%; display:block; border:1px solid #e2e8f0; border-radius:12px; background:#fff;" scrolling="no"></iframe>
 
@@ -440,8 +458,8 @@
     <footer class="global-footer">
       <p><strong>Author:</strong> Taoran Li, PhD</p>
       <p><strong>Contact:</strong> taoran.li@varian.com</p>
-      <p><strong>Version:</strong> 1.1.1</p>
-      <p><strong>Date:</strong> Jan 29, 2026</p>
+      <p><strong>Version:</strong> 1.2.0</p>
+      <p><strong>Date:</strong> Sep 17, 2026</p>
       <p><strong>Rights & Disclaimer:</strong> © 2025–2026 Taoran Li. All rights reserved. This software is provided "as is" for educational and research purposes only. It is not intended for clinical use, patient diagnosis, or treatment planning. The accuracy of simulations and any derived data is not guaranteed. The user assumes all responsibility for the use of this software.</p>
     </footer>
 
@@ -664,6 +682,7 @@
           updateColumnFieldIfPresent(column, '[data-field="planTotalMu"]', getText('planTotalMU'));
           updateColumnFieldIfPresent(column, '[data-field="planDoseRate"]', getText('planDoseRate'));
           updateColumnFieldIfPresent(column, '[data-field="totalPlanSimTime"]', getText('totalPlanSimTime'));
+          updateColumnFieldIfPresent(column, '[data-field="timingModel"]', getText('planTimingModel'));
           return true;
         });
       }

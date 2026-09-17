@@ -4,9 +4,9 @@
   <img src="docs/images/simulator-screenshot-2.png" alt="Simulator screenshot" width="980" />
 </p>
 
-**Version:** 1.1.1  
+**Version:** 1.2.0<br>
 **Author:** Taoran Li, PhD  
-**Date:** Jan 29, 2026  
+**Date:** Sep 17, 2026<br>
 **Changelog:** `CHANGELOG.md`  
 **Third-Party Notices:** `THIRD_PARTY_NOTICES.md`  
 **License:** `License`
@@ -14,7 +14,7 @@
 ## How to Cite
 Use GitHub's "Cite this repository" button or the citation below.
 
-Li, T. (2026). DICOM RT Plan Delivery Simulator (Non-Clinical/Research-Only) (v1.1.1) [Software]. Varian Medical Affairs Applied Solutions. https://github.com/Varian-MedicalAffairsAppliedSolutions/PlanDeliverySimulator
+Li, T. (2026). DICOM RT Plan Delivery Simulator (Non-Clinical/Research-Only) (v1.2.0) [Software]. Varian Medical Affairs Applied Solutions. https://github.com/Varian-MedicalAffairsAppliedSolutions/PlanDeliverySimulator
 
 ---
 
@@ -102,7 +102,7 @@ Upon successful loading, overall plan information (patient name, ID, plan label,
 2. Adjust the maximum speeds and accelerations for Gantry, MLC, and Collimator. These values are used when the "Simulate Delivery" mode is active.
 3. Optional timing knobs:
    * **Beam Start Overhead (ms)**: adds a fixed delay at beam start in simulated time.
-   * **Per-CP Overhead (ms)**: adds a fixed overhead to each control point-to-control point segment; useful to model controller update granularity (often ~20ms).
+   * **Per-CP Overhead (ms)**: adds a fixed overhead to each control point-to-control point segment in the standard model. A log sampling interval is not evidence of a delay per planned CP.
 4. Default values may be set based on the `ManufacturerModelName` tag in the DICOM file (e.g., different defaults for "RDS" vs. "TDS" machines).
 5. Click "Apply & Recalculate Simulation" to apply changes. This will re-initialize the visualization and recalculate simulation-dependent metrics if a plan is loaded.
 
@@ -139,18 +139,29 @@ Upon successful loading, overall plan information (patient name, ID, plan label,
 ### Clear Data:
 * Click "Clear All Data & Visuals" to remove the loaded plan, reset all visualizations, and clear input fields.
 
-### Trajectory Log Timing Calibration (Optional)
-If you have measured delivery trajectory logs (e.g., sampled every ~20ms) and want to tune the simulator timing parameters to better match measured delivery time:
+### Recorded BIN Playback
 
-1. Obtain a **plan JSON**:
-   * From Eclipse via `PlanDeliverySimulator-Launcher.cs` (ESAPI) which auto-generates an `eclipse-plan-*.json`, or
-   * From the simulator: click **Export Parsed Data as JSON** after loading a plan.
-2. Export/prepare a **trajectory log CSV/TSV** that contains:
-   * A monotonically increasing **time** column (seconds or milliseconds), and
-   * A monotonically increasing **cumulative MU/meterset** column.
-   * Alternatively, you can load Varian TrueBeam **Trajectory Log** binaries (`.bin`) directly in the calibrator.
-3. Open `RP_Trajectory_Timing_Calibrator.html` in a browser, load your plan JSON(s) and log file(s), create plan-beam/log pairs, then click **Run Fit**.
-4. Apply the fitted parameters back in the simulator under **Machine Speed & Acceleration Limits (for Simulation)**, including **Per-CP Overhead (ms)** if fitted.
+Click **Load trajectory log for playback…** under the machine controls and select a trajectory `.bin` file. The **existing simulator BEV** displays recorded leaves, jaws, gantry and collimator positions. The normal **Play/Pause**, **Reset**, and slider controls operate the recorded timeline at 1× real time. A 20 ms log advances one recorded snapshot per 20 ms of elapsed time; slower browser redraws catch up to the clock rather than extending delivery time. Holds and recorded between-arc intervals are retained.
+
+Machine settings, calibration and other inputs are grayed out and disabled during playback. **Exit playback** restores the previous simulation controls and loaded plan. Patient structures are hidden because a BIN file does not establish a matching plan or patient coordinate frame.
+
+Playback uses actual snapshots without CP reconstruction, smoothing or simulated timing. Display coordinates are converted to the simulator's IEC convention, and leaf/jaw positions to mm. Millennium 120 and HD120 MLC geometry is selected from the BIN's model identifier; other models are rejected. Dials and radial plots show rates calculated from adjacent actual snapshots, with scales based on recorded maxima. Playback stops at the last recorded timestamp. Flagged partial logs and CP/MU resets can be replayed, but incomplete binary payloads are rejected. Calibration continues to require complete monotonic deliveries.
+
+Coordinate conversion follows [TrajectoryLogReader's native-scale converter](https://github.com/anmcgrath/TrajectoryLogReader/blob/main/TrajectoryLogReader/Util/VarianNativeScaleConverter.cs); MLC identifiers follow [pylinac's trajectory header documentation](https://pylinac.readthedocs.io/en/latest/log_analyzer.html#pylinac.log_analyzer.TrajectoryLogHeader).
+
+### Delivery Time Calibration (Optional)
+
+The simulator uses the standard timing model by default. Log profiles can apply local axis-response timing or a uniform whole-delivery correction.
+
+1. Set the intended machine speed, acceleration and overhead settings.
+2. Click **Delivery time calibration…** under the simulator machine limits.
+3. Select complete **Varian trajectory `.bin` logs or pylinac `.csv` exports** from the same machine, energy and mode, enter the nominal log dose rate, choose **Local axis response (~1 s windows)** or **Uniform whole-delivery correction**, and analyze. Automatic log calibration supports single-layer 80- or 120-leaf MLCs.
+4. Review arc totals, fit errors and raw/averaged/predicted comparison plots. Select a delivery and an averaging window; the window affects plots only. In the modal, check **Apply calibration** to enable the correction.
+5. **Save profile…** in the modal exports a JSON file. **Load profile…** restores its baseline machine settings and enables the correction. Disable the checkbox to compare with the uncorrected standard model.
+
+Direct BIN reading supports trajectory versions **2.1, 3.0, 4.0 and 5.0**, including machine/isocentric-couch scale 3. The reader uses the header/subbeam/snapshot layout documented by [pylinac](https://pylinac.readthedocs.io/en/latest/_modules/pylinac/log_analyzer.html). No Python installation or CSV conversion is required.
+
+Local calibration fits CP-window timing using competing speed/dose demands and neighboring signed axis-velocity changes. It preserves machine speed caps and replaces manual overheads. Uniform mode retains the median whole-delivery time-ratio fit. It keeps inter-beam transitions separate and requires no matching plan for log-only fitting. Changed machine settings disable an incompatible correction. Profiles from the removed experimental models must be refitted against the standard model. See [method and limitations](docs/log-calibration.md).
 
 ---
 
@@ -227,132 +238,103 @@ This mode estimates segment durations based on device kinematics and MU delivery
 * Displayed in the "Calculated Values (Current CP)" section and plotted in radial/XY-time plots.
 
 #### 4.3.3. Overall MCSv (Modulation Complexity Score for VMAT)
-The simulator computes an **MCSv-like** score per beam in `calculateMCSForScope`. While inspired by MCSv literature, the current implementation uses a simplified, code-driven formulation:
 
-* **AAV** is computed per CP by comparing the CP’s aperture area to the maximum aperture area seen in the beam (`calculateAAVAtCP`).
-* **LSV** is represented by a monotonic penalty based on the segment’s maximum leaf travel:
+The simulator computes an **MCSv-like** score per beam in `calculateMCSForScope`. The following describes the implemented formulation.
 
-  $$
-  \mathrm{normalizedLSV} = \frac{1}{1 + \mathrm{maxLeafTravelThisSegment}/10.0}
-  $$
+For each segment, `meanAAV` is the mean of its endpoint AAV values. Each endpoint AAV compares aperture area with the maximum aperture area seen in the beam. The segment's `normalizedLSV` uses its maximum leaf travel, **d**, in mm:
 
-* **Collimator rotation factor** is applied per segment:
+```math
+L = \frac{1}{1 + d/10.0}
+```
 
-  $$
-  \mathrm{collimatorRotationFactor} = 1 + \mathrm{COLLIMATOR\_WEIGHTING\_FACTOR} \cdot \mathrm{deltaCollAngleForSegment}
-  $$
+The collimator rotation factor uses the segment's angular travel **Δθ** and constant **c**, corresponding to `COLLIMATOR_WEIGHTING_FACTOR`:
 
-* The final score is MU-weighted over segments:
+```math
+R = 1 + c\,\Delta\theta
+```
 
-  $$
-  \mathrm{mcsValue} =
-  \frac{\sum_j \left(\mathrm{meanAAV}_j \cdot \mathrm{normalizedLSV}_j \cdot \mathrm{collimatorRotationFactor}_j \cdot \mathrm{muWeightSegment}_j\right)}
-       {\sum_j \mathrm{muWeightSegment}_j}
-  $$
+The final MU-weighted score is:
 
-  Here, $j$ indexes the control-point segments.
+```math
+\mathrm{MCSv} = \frac{\sum_{j} A_{j}\,L_{j}\,R_{j}\,w_{j}}{\sum_{j} w_{j}}
+```
+
+Here, **j** indexes segments; **A** is `meanAAV`, **L** is `normalizedLSV`, **R** is `collimatorRotationFactor`, and **w** is `muWeightSegment`.
 
 #### 4.3.4. MIsport (Modulation Index for SPORT)
-Calculated per CP in `calculateModulationIndex(beamData, cpIndexS, K)`.
 
-For a given center CP `S`, the implementation sums over neighbor CPs `S_K` in a window of size `K` (the UI currently uses `K_3_PERCENT = max(1, ceil(numControlPoints * 0.03))`):
+Calculated per CP in `calculateModulationIndex(beamData, cpIndexS, K)`. For a center CP **s**, let **W(s)** be its neighboring CPs, excluding **s** itself. The UI uses `K_3_PERCENT = max(1, ceil(numControlPoints * 0.03))` to set the neighborhood size.
 
-$$
-\begin{aligned}
-\mathrm{totalMI}(S) = \sum_{S_K \in \mathcal{W}_K(S)} &\mathrm{sumAbsLeafTravel}(S, S_K) \\
-&\cdot \left(1 + \mathrm{K\_MISPORT\_COLL} \cdot \mathrm{deltaCollAngle}(S, S_K)\right) \\
-&\cdot \mathrm{muPerDegree}(S, S_K)
-\end{aligned}
-$$
+```math
+\mathrm{MI}(s) = \sum_{k \in W(s)} D(s,k)\,\bigl(1 + c\,C(s,k)\bigr)\,Q(s,k)
+```
 
-Here, $\mathcal{W}_K(S)$ denotes the neighboring CPs in the window around $S$.
+Here, **D** is the sum of absolute leaf travel between CPs **s** and **k**, **C** is their collimator angular travel, and **c** is `K_MISPORT_COLL`. The MU-per-degree factor **Q** uses gantry angular travel **G** and MU difference **ΔM**:
 
-$$
-\mathrm{muPerDegree}(S, S_K) =
-\begin{cases}
-0, & \mathrm{deltaGantry} \leq \mathrm{MI\_GANTRY\_DIFF\_EPSILON}, \\
-\dfrac{\mathrm{deltaMU}}{\mathrm{deltaGantry}}, & \text{otherwise}.
+```math
+Q(s,k) = \begin{cases}
+0, & G(s,k) \leq \varepsilon, \\
+\dfrac{\Delta M(s,k)}{G(s,k)}, & G(s,k) > \varepsilon.
 \end{cases}
-$$
+```
 
-$$
-\mathrm{deltaMU} = \left|\Delta\mathrm{cumulativeMetersetWeight}\right| \cdot \mathrm{beam.totalMeterset}
-$$
+The threshold **ε** is `MI_GANTRY_DIFF_EPSILON`. If **m** is `cumulativeMetersetWeight` and **M** is `beam.totalMeterset` (the implementation falls back to 1 when it is missing or zero), then:
 
-Displayed in the modulation radial plot (excluding the first/last `K` CPs because the window is truncated near the boundaries).
+```math
+\Delta M(s,k) = \left|m(k)-m(s)\right|\,M
+```
+
+Displayed in the modulation radial plot, excluding the first/last `K` CPs because the window is truncated near the boundaries.
 
 #### 4.3.5. Local MIt (Local Modulation Index total)
-Calculated per CP as `localMItFactor` (derived metrics section; see around where `global_σ_MLC_speed` is computed in `RP_Delivery_Simulator.html`).
 
-Current implementation (simplified description):
+Calculated per CP as `localMItFactor` in the derived-metrics code.
 
-* Define a symmetric window around CP `s`:
-  * The UI currently uses `K_3_PERCENT = max(1, ceil(numControlPoints * 0.03))`.
-* Compute global variability:
-  * `sigmaMlcSpeed = stddev(mlcSpeed over CPs)`
-  * `sigmaMlcAccel = stddev(mlcAcceleration over CPs)`
-* For each CP `i` in the window:
-  * Binary activity flag `N_i`:
-    * `N_i = 1` if `mlcSpeed_i > sigmaMlcSpeed` (and `sigmaMlcSpeed > 0.001`)
-    * or if `abs(mlcAcceleration_i) > (MIT_ALPHA * sigmaMlcAccel)` (and `sigmaMlcAccel > 0.001`)
-    * else `N_i = 0`
-  * If `N_i == 1`, compute weighting factors from *subsequent* dynamics (when available):
+The implementation defines a symmetric window **W(s)** around CP **s**, using `K_3_PERCENT = max(1, ceil(numControlPoints * 0.03))`. It computes the global standard deviations of MLC speed and acceleration as `sigmaMlcSpeed` and `sigmaMlcAccel`.
 
-    $$
-    W(x) = 1 + (\mathrm{MIT\_BETA} - 1)\left(1 - \exp\left(-\mathrm{MIT\_GAMMA}\,|x|\right)\right)
-    $$
+For each CP **i**, the activity flag **N** is 1 when either condition holds:
 
-    * `WGA` from gantry acceleration, `WMU` from dose rate change, `WCA` from collimator acceleration.
-    * Otherwise all weights default to 1.0.
-  * Accumulate `N_i * WGA * WMU * WCA`.
-* `localMItFactor(s)` is the average of that weighted sum over the window size:
+- `mlcSpeed > sigmaMlcSpeed`, with `sigmaMlcSpeed > 0.001`.
+- `abs(mlcAcceleration) > MIT_ALPHA * sigmaMlcAccel`, with `sigmaMlcAccel > 0.001`.
 
-  $$
-  \mathrm{localMItFactor}(s) = \frac{1}{|\mathcal{W}(s)|}
-  \sum_{i \in \mathcal{W}(s)} N_i \cdot \mathrm{WGA}_i \cdot \mathrm{WMU}_i \cdot \mathrm{WCA}_i
-  $$
+Otherwise, **N** is 0. Active CPs use the following weighting function for subsequent dynamics, when available:
 
-  Here, $\mathcal{W}(s)$ is the window of CPs around $s$, and $|\mathcal{W}(s)|$ is its size.
+```math
+F(x) = 1 + (\beta-1)\bigl(1-\exp(-\gamma |x|)\bigr)
+```
 
-Displayed in radial plots (note: near the start/end of the CP list, the window is truncated).
+Here, **β** is `MIT_BETA` and **γ** is `MIT_GAMMA`. The gantry-acceleration weight **g**, dose-rate-change weight **u**, and collimator-acceleration weight **c** correspond to `WGA`, `WMU`, and `WCA`. Unavailable weights default to 1.
+
+```math
+\mathrm{MIt}(s) = \frac{1}{|W(s)|}\sum_{i \in W(s)} N_{i}\,g_{i}\,u_{i}\,c_{i}
+```
+
+The denominator is the number of CPs in the window. The window is truncated near the start/end of the CP list. Results are displayed in the radial plots.
 
 #### 4.3.6. Avg Leaf Gap (Average Leaf Opening)
-Calculated per CP as `avgLeafGap` from the effective MLC aperture at that CP (`calculateAverageLeafGap`).
 
-Conceptually, this is the **area-weighted mean opening** across all open leaf pairs:
+Calculated as `avgLeafGap` by `calculateAverageLeafGap`, using the effective MLC aperture at each CP.
 
-* For each leaf pair `i` with opening `opening_i = (bankB_i - bankA_i) > 0` and leaf width `w_i`:
-  * Add to aperture area: `area += w_i * opening_i`
-  * Add to open height: `openHeight += w_i`
-* The average opening (mm) is:
+For every open leaf pair, multiply its opening (`bankB - bankA`) by its leaf width and sum these contributions into aperture area **A**. Sum the same leaf widths into open height **H**. The average opening, in mm, is:
 
-  $$
-  \mathrm{avgLeafGap} =
-  \begin{cases}
-  \dfrac{\mathrm{area}}{\mathrm{openHeight}}, & \mathrm{openHeight} > 0, \\
-  0, & \text{if nothing is open}.
-  \end{cases}
-  $$
+```math
+\mathrm{gap} = \begin{cases}
+A/H, & H > 0, \\
+0, & H = 0.
+\end{cases}
+```
 
-Beam-level and plan-level summaries are MU-weighted averages across control-point segments (see `computeBeamApertureSummaryMetricsFromControlPoints` and `updateOverallPlanInfoDisplay` in `RP_Delivery_Simulator.html`).
+Beam-level and plan-level summaries are MU-weighted averages across control-point segments; see `computeBeamApertureSummaryMetricsFromControlPoints` and `updateOverallPlanInfoDisplay`.
 
 #### 4.3.7. Plan Complexity (Younge et al. Aperture Complexity)
-Calculated per CP as `edgeComplexity`. This is the aperture complexity metric shown in the UI as **Plan Complexity (Younge)**.
 
-The current implementation follows the Younge et al. approach using **leaf-side perimeter only** (excluding leaf-end perimeter), normalized by aperture area:
+Calculated as `edgeComplexity`, displayed as **Plan Complexity (Younge)**. The implementation uses leaf-side perimeter **P** (excluding leaf-end perimeter), aperture area **A**, and constant **c** (`EDGE_COMPLEXITY_C2`):
 
-* Compute:
-  * `area` (mm²) from the MLC aperture (`calculateApertureArea`)
-  * `leafSidePerimeter` (mm) from the aperture outline (`calculateApertureEdgePerimeters`)
-* Then (in $\mathrm{mm}^{-1}$):
+```math
+E = \frac{c\,P}{A}
+```
 
-  $$
-  \mathrm{edgeComplexity} = \frac{\mathrm{EDGE\_COMPLEXITY\_C2} \cdot \mathrm{leafSidePerimeter}}{\mathrm{area}}
-  $$
-
-  The value is 0 if `area` is approximately 0.
-
-Beam-level and plan-level summaries are MU-weighted averages across control-point segments.
+Units are inverse millimetres. The value is 0 when the aperture area is approximately 0. Beam-level and plan-level summaries are MU-weighted averages across control-point segments.
 
 ---
 
@@ -375,12 +357,12 @@ Clicking "Apply & Recalculate Simulation" updates these limits and re-runs `init
 ## 6. Key Internal Constants
 * `FIXED_ANIMATION_SPEED_MS`: (e.g., 100) Milliseconds per CP in fixed speed animation mode.
 * `MAX_BEEPS_PER_SECOND`: (e.g., 20) Limits MU beeps in simulation mode.
-* `ACCEL_CHECK_FACTOR`: (Legacy/unused) Present in code but not currently used by `calculateSegmentTimes`.
-* `MI_SPORT_K_NEIGHBORS`: (Legacy/unused) Present in code; current UI uses `K_3_PERCENT = max(1, ceil(numControlPoints * 0.03))`.
+* `ACCEL_CHECK_FACTOR`: (Unused) Present in code but not currently used by `calculateSegmentTimes`.
+* `MI_SPORT_K_NEIGHBORS`: (Unused) Present in code; current UI uses `K_3_PERCENT = max(1, ceil(numControlPoints * 0.03))`.
 * `MI_GANTRY_DIFF_EPSILON`: (e.g., 0.001) Small gantry angle difference threshold for MIsport.
 * `K_MCS_COLL`: (e.g., 0.002) Constant for collimator rotation factor in overall MCSv-like score.
 * `K_MISPORT_COLL`: (e.g., 0.001) Constant for collimator rotation factor in MIsport.
-* `LOCAL_MIT_K_NEIGHBORS`: (Legacy/unused) Present in code; current UI uses `K_3_PERCENT = max(1, ceil(numControlPoints * 0.03))`.
+* `LOCAL_MIT_K_NEIGHBORS`: (Unused) Present in code; current UI uses `K_3_PERCENT = max(1, ceil(numControlPoints * 0.03))`.
 * `MIT_ALPHA`: (e.g., 1.5) Sensitivity factor for MLC acceleration threshold in Local MIt.
 * `MIT_BETA`: (e.g., 1.5) Base for Local MIt weighting factors (max weight).
 * `MIT_GAMMA`: (e.g., 0.1) Decay factor for Local MIt weighting factors.

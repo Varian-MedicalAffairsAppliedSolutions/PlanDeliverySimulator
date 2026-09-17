@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Plan Delivery Simulator</title>
+    <title>Plan Delivery Simulator</title>
     <link rel="icon" href="data:,">
 
     <script>
@@ -103,6 +103,11 @@
                 await loadLocalScript('lib/chart.umd.min.js');
                 await loadLocalScript('lib/chartjs-plugin-annotation.min.js');
                 await loadLocalScript('lib/chartjs-plugin-zoom.min.js');
+                await loadLocalScript('lib/timing-calibration.js');
+                await loadLocalScript('lib/legacy-timing.js');
+                await loadLocalScript('lib/axis-response-timing.js');
+                await loadLocalScript('lib/calibration-plots.js');
+                await loadLocalScript('lib/log-playback.js');
 
                 console.log('DEBUG: All critical scripts loaded.');
             } catch (error) {
@@ -113,6 +118,20 @@
     </script>
 
     <style>
+        .research-disclaimer-banner {
+            box-sizing: border-box;
+            width: 100%;
+            padding: 14px 20px;
+            margin: 0 0 16px;
+            border: 2px solid #b45309;
+            border-radius: 6px;
+            background: #fffbeb;
+            color: #78350f;
+            text-align: center;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
@@ -351,6 +370,23 @@
             border: 1px solid #ccc;
             font-size: 0.85em;
         }
+
+
+        body.log-playback-active input:disabled, body.log-playback-active select:disabled, body.log-playback-active button:disabled { opacity:.4; filter:grayscale(1); cursor:not-allowed; }
+        body.log-playback-active .radial-plot-container { pointer-events:none; }
+        .calibration-plot-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+        .calibration-chart { position:relative; height:290px; min-width:0; border:1px solid #dce3eb; border-radius:8px; padding:8px; background:white; }
+        .calibration-chart canvas { display:block; width:100% !important; height:100% !important; max-width:none; margin:0; border:0; box-shadow:none; background:transparent; }
+        .calibration-plot-controls { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+        .calibration-plot-controls select { max-width:100%; padding:8px; }
+        #calibrationPlots p { font-size: .9rem; color:#475569; }
+        @media(max-width:750px) { .calibration-plot-grid { grid-template-columns:1fr; } }
+        #calibrationModal::backdrop { background: rgba(0,0,0,.45); }
+        #calibrationModal { text-align: left; }
+        #calibrationModal label { white-space: normal; font-size: .95em; }
+        #calibrationModal input[type="text"] { width: 95%; padding: 8px; box-sizing: border-box; }
+        #calibrationModal input[type="file"] { max-width: 100%; margin-top: 8px; }
+        #calibrationModal button:disabled { opacity: .5; cursor: default; }
 
         .beam-selector-controls select {
             padding: 8px;
@@ -1110,11 +1146,15 @@
 </head>
 
 <body>
+    <aside class="research-disclaimer-banner" aria-label="Education and research disclaimer">
+        <strong>For education and research only. Not for clinical use.</strong>
+        Predicted delivery times have not been verified.
+    </aside>
     <div class="container">
 
 
         <div class="top-stack">
-            <h1>Advanced Plan Delivery Simulator</h1>
+            <h1>Plan Delivery Simulator</h1>
             <button id="toggleNotesBtn" class="notes-toggle">Show Instructions</button>
             <div class="notes">
                 <h3>Quick Instructions</h3>
@@ -1150,6 +1190,53 @@
 
                 <div class="data-input-group speed-limit-controls">
                     <h3>Machine Speed & Acceleration Limits</h3>
+                    <div style="flex-basis:100%;">
+                        <button type="button" id="openLogPlayback">Load trajectory log for playback…</button>
+                        <input id="logPlaybackFile" type="file" accept=".bin" hidden>
+                        <button type="button" id="openCalibration">Delivery time calibration…</button>
+                        <span id="timingModelStatus" role="status">Active model: Standard</span>
+                    </div>
+                    <dialog id="calibrationModal" aria-labelledby="calibrationTitle" style="width:min(1120px,94vw);max-height:85vh;overflow:auto;border:1px solid #ccc;border-radius:12px;padding:24px;">
+                        <h2 id="calibrationTitle">Delivery time calibration</h2>
+                        <p>Calibrate delivery timing from measured logs. Local mode fits roughly one-second windows; uniform mode fits whole-arc totals. Between-beam transitions remain separate. Use logs from the same machine, energy and delivery mode.</p>
+                        <label for="calibrationLabel">Profile name (machine / energy / mode)</label>
+                        <input id="calibrationLabel" type="text" value="6X VMAT" maxlength="120">
+                        <p><label for="calibrationLogs">Trajectory logs (.bin or pylinac .csv; single-layer MLC)</label>
+                        <input id="calibrationLogs" type="file" accept=".bin,.csv,application/octet-stream,text/csv" multiple></p>
+                        <label for="calibrationDoseRate">Nominal log dose rate (MU/min)</label>
+                        <input id="calibrationDoseRate" type="number" min="1" value="600">
+                        <p>Uses the current machine speed, acceleration and overhead settings. No matching plan is required: commanded paths are reconstructed from the logs. This supports single-layer MLC logs; use independent matched plans/logs to check prediction accuracy.</p>
+                        <p><label for="calibrationMethod">Calibration method</label><select id="calibrationMethod"><option value="local">Local axis response (~1 s windows)</option><option value="uniform">Uniform whole-delivery correction</option></select></p>
+                        <button type="button" id="fitCalibration">Analyze logs</button>
+                        <pre id="calibrationReport" role="status" style="white-space:pre-wrap;font:inherit;"></pre>
+<section id="calibrationPlots" hidden aria-label="Log and prediction comparisons">
+    <div class="calibration-plot-controls">
+        <label for="calibrationArc">Delivery</label><select id="calibrationArc"></select>
+        <label for="calibrationAverage">Average window (s)</label><input id="calibrationAverage" type="number" value="0.4" min="0.02" max="10" step="0.02">
+        <label><input id="calibrationPreview" type="checkbox" checked> Show fitted prediction</label>
+        <button type="button" id="calibrationResetZoom">Reset zoom</button>
+    </div>
+    <p id="calibrationPlotSummary" role="status"></p>
+    <p>Raw positions come from actual snapshots; raw speeds and dose rate are adjacent-sample differences. Blue traces use a centered moving average. Orange predictions simulate expected positions/MU at each CP start using the standard model; their speeds are segment averages, not frame-level predictions. Green is a fitted preview; its rates use the same averaging window as the blue measurements. Local calibration preserves speed limits and adds time for coupled axis-velocity changes, replacing manual overheads. Averaging changes plots only. Ctrl + wheel or pinch to zoom; click a legend to hide a trace.</p>
+    <div class="calibration-plot-grid">
+        <div class="calibration-chart"><canvas id="calibrationPlot_cp" role="img" aria-label="cp log and prediction comparison"></canvas></div>
+        <div class="calibration-chart"><canvas id="calibrationPlot_mu" role="img" aria-label="mu log and prediction comparison"></canvas></div>
+        <div class="calibration-chart"><canvas id="calibrationPlot_gantry" role="img" aria-label="gantry log and prediction comparison"></canvas></div>
+        <div class="calibration-chart"><canvas id="calibrationPlot_collimator" role="img" aria-label="collimator log and prediction comparison"></canvas></div>
+        <div class="calibration-chart"><canvas id="calibrationPlot_gantrySpeed" role="img" aria-label="gantrySpeed log and prediction comparison"></canvas></div>
+        <div class="calibration-chart"><canvas id="calibrationPlot_collimatorSpeed" role="img" aria-label="collimatorSpeed log and prediction comparison"></canvas></div>
+        <div class="calibration-chart"><canvas id="calibrationPlot_mlcSpeed" role="img" aria-label="mlcSpeed log and prediction comparison"></canvas></div>
+        <div class="calibration-chart"><canvas id="calibrationPlot_doseRate" role="img" aria-label="doseRate log and prediction comparison"></canvas></div>
+    </div>
+</section>
+                        <p><label><input id="calibrationEnabled" type="checkbox"> Apply calibration</label></p>
+                        <p id="timingProfileStatus" role="status">No calibration profile loaded.</p>
+                        <button type="button" id="loadTimingProfile">Load profile…</button>
+                        <button type="button" id="saveTimingProfile" disabled>Save profile…</button>
+                        <button type="button" id="clearTimingProfile">Remove profile</button>
+                        <input type="file" id="timingProfileFile" accept=".json,application/json" hidden>
+                        <button type="button" id="closeCalibration">Close</button>
+                    </dialog>
                     <div>
                         <label for="maxGantrySpeedInput">Max Gantry Speed (°/s):</label>
                         <input type="number" id="maxGantrySpeedInput" step="0.1">
@@ -1196,7 +1283,8 @@
                 <p><strong>Primary Dose Rate (First Beam, CP0):</strong> <span id="planDoseRate">N/A</span> MU/min</p>
                 <p><strong>Avg Leaf Gap (MU-wt):</strong> <span id="planAvgLeafGap">N/A</span> mm</p>
                 <p><strong>Plan Complexity (Younge et al, MU-wt):</strong> <span id="planEdgeComplexity">N/A</span> 1/mm</p>
-                <p><strong>Est. Total Plan Time (All Beams):</strong> <span id="totalPlanSimTime">N/A</span> s</p>
+                <p><strong>Est. Total Plan Time (All Beams):</strong> <span id="totalPlanSimTime">N/A</span> s <span id="planTimingModel">(Standard)</span></p>
+                <p><strong>Beam delivery sum:</strong> <span id="beamDeliveryTimeSum">N/A</span> s · <strong>Mechanical transitions:</strong> <span id="mechanicalTransitionTimeSum">N/A</span> s</p>
                 <div id="individualBeamInfoContainer">
                 </div>
             </div>
@@ -1351,6 +1439,11 @@
                     <select id="beamSelector"></select>
                 </div>
                 <h2>Beam's Eye View (BEV)</h2>
+                <div id="logPlaybackBanner" hidden style="padding:12px;background:#e0f2fe;border:1px solid #7dd3fc;border-radius:6px;margin:12px 0;">
+                    <strong>Recorded BIN playback · 1× real time</strong>
+                    <p id="logPlaybackStatus" role="status"></p>
+                    <button id="exitLogPlayback" type="button">Exit playback</button>
+                </div>
                 <div class="bev-canvas-wrapper" style="margin-bottom: 16px;" >
                     <canvas id="bevCanvas" width="400" height="400"></canvas>
                     <canvas id="bevWebglCanvas" width="400" height="400" style="position:absolute; left:0; top:0; pointer-events:none;"></canvas>
@@ -1491,8 +1584,8 @@
     <div class="author-info-header">
         <p><strong>Author:</strong> Taoran Li, PhD</p>
         <p><strong>Contact:</strong> taoran.li@varian.com</p>
-        <p><strong>Version:</strong> 1.1.1</p>
-        <p><strong>Date:</strong> Jan 29, 2026</p>
+        <p><strong>Version:</strong> 1.2.0</p>
+        <p><strong>Date:</strong> Sep 17, 2026</p>
         <p><strong>Rights & Disclaimer:</strong> © 2025–2026 Taoran Li. All rights reserved. This software is provided
             "as is" for educational and research purposes only. It is not intended for clinical use, patient
             diagnosis, or treatment planning. The accuracy of simulations and any derived data is not guaranteed.
@@ -1625,7 +1718,10 @@
                 'BeamNumber': 'x300a00c0',
                 'BeamName': 'x300a00c2',
                 'TreatmentMachineName': 'x300a00b2',
-                'FinalCumulativeMetersetWeight': 'x300a0084',
+                'FinalCumulativeMetersetWeight': 'x300a0084', // Legacy import compatibility
+                'FinalMetersetWeightForTiming': 'x300a010e',
+                'GantryDirectionForTiming': 'x300a011f',
+                'CollimatorDirectionForTiming': 'x300a0121',
                 'GantryRotationDirection': 'x300a0118',
                 'BeamLimitingDeviceSequence': 'x300a00b6',
                 'RTBeamLimitingDeviceType': 'x300a00b8',
@@ -1699,6 +1795,7 @@
 
             // Global variables for application state
             let rtPlanData = null;
+            let logPlaybackState = null;
             let selectedBeamIndex = 0;
             let currentCP = 0;
             let animationFrameId = null;
@@ -1933,6 +2030,8 @@
             const maxCollimatorAccelDecelInput = document.getElementById('maxCollimatorAccelDecelInput');
             const beamStartOverheadMsInput = document.getElementById('beamStartOverheadMsInput');
             const segmentOverheadMsInput = document.getElementById('segmentOverheadMsInput');
+            const timingModelStatus = document.getElementById('timingModelStatus');
+
 
 
             const applySpeedLimitsBtn = document.getElementById('applySpeedLimitsBtn');
@@ -1943,6 +2042,7 @@
             if (showStampToggle) { showStampToggle.addEventListener('change', () => { showStampMiniPlots = showStampToggle.checked; renderStampStrips(); }); }
 
 	            function redrawBev() {
+                    if (logPlaybackState) { renderLogPlayback(); return; }
 	                if (!rtPlanData || !rtPlanData.beams || !rtPlanData.beams[selectedBeamIndex]) return;
 	                if (!processedData || processedData.length === 0) return;
 	                const beam = rtPlanData.beams[selectedBeamIndex];
@@ -2143,6 +2243,8 @@
 
 
             let currentMaxGantrySpeed, currentMaxMlcSpeedMMPS, currentMaxCollimatorSpeed, currentMaxGantryAccelDecel, currentMaxMlcAccelDecelMMPS2, currentMaxCollimatorAccelDecel, currentBeamStartOverheadSec, currentSegmentOverheadSec;
+            let loadedTimingProfile = null;
+            let activeTimingMetadata = { model: 'legacy' };
             let maxGantrySpeedOverall = 0, maxMlcSpeedOverall = 0, maxCollimatorSpeedOverall = 0, maxDoseRateOverall = 0, maxModulationIndexOverall = 0, maxLocalMItFactorOverall = 0, maxCpDensityOverall = 0, maxAvgLeafGapOverall = 0, maxEdgeComplexityOverall = 0;
             let miniMetricScales = {};
             const STAMP_METRIC_KEYS = ['gantrySpeed', 'mlcSpeed', 'collimatorSpeed', 'cpDensity', 'doseRate', 'avgLeafGap', 'edgeComplexity', 'modulationIndex', 'localMItFactor', 'sasValue', 'aavValue', 'mcsValue_cp'];
@@ -2702,9 +2804,10 @@
 
             function postPlanLoadSetup() {
                 setAndApplyInitialSpeedLimits();
+                if (loadedTimingProfile && document.getElementById('calibrationEnabled').checked) applyCalibrationProfileToInputs();
                 isSimulatingDelivery = true;
                 updateOverallPlanInfoDisplay(rtPlanData);
-                processAllBeamsForTimings();
+                if (processAllBeamsForTimings() === false) return;
                 updateBeamDetailsSummary();
                 computePlanCpOffsets();
                 globalCPIndex = 0;
@@ -2742,7 +2845,7 @@
                     showMessageModal("Export Error", "No data available to export. Please load a plan first.");
                     return;
                 }
-                const dataToExport = { parsedDicomPlan: rtPlanData, simulationAndCalculationData: isSimulatingAllBeams ? allBeamsProcessedData : processedData };
+                const dataToExport = { timingModel: activeTimingMetadata, parsedDicomPlan: rtPlanData, simulationAndCalculationData: isSimulatingAllBeams ? allBeamsProcessedData : processedData };
                 const jsonString = JSON.stringify(dataToExport, null, 2);
                 const blob = new Blob([jsonString], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
@@ -2771,15 +2874,16 @@
                 const headers = [
                     "ControlPoint_Index", "Timestamp_s", "Segment_Duration_s", "Gantry_Angle_deg", "Gantry_Speed_deg_s",
                     "Collimator_Angle_deg", "Collimator_Speed_deg_s", "Max_Leaf_Travel_in_Segment_mm", "Fastest_MLC_Speed_mm_s",
-                    "MU_in_Segment", "Effective_Dose_Rate_MU_min"
+                    "MU_in_Segment", "Effective_Dose_Rate_MU_min", "Timing_Model", "Limiting_Component", "Calibration_Extra_s", "Timing_Settings_JSON"
                 ];
 
+                const timingSettingsCsv = '"' + JSON.stringify(activeTimingMetadata).replace(/"/g, '""') + '"';
                 const csvRows = [headers.join(',')];
 
                 const initialStateRow = [
-                    0, 0.00.toFixed(4), 0.00.toFixed(4), processedData[0].cp.gantryAngle.toFixed(4), 0.00.toFixed(4),
+                    0, processedData[0].cumulativeSimTime.toFixed(4), 0.00.toFixed(4), processedData[0].cp.gantryAngle.toFixed(4), 0.00.toFixed(4),
                     processedData[0].cp.collimatorAngle.toFixed(4), 0.00.toFixed(4), 0.00.toFixed(4), 0.00.toFixed(4),
-                    0.00.toFixed(4), 0.00.toFixed(4)
+                    0.00.toFixed(4), 0.00.toFixed(4), activeTimingMetadata.model, 'None', '0.0000', timingSettingsCsv
                 ];
                 csvRows.push(initialStateRow.join(','));
 
@@ -2801,7 +2905,8 @@
                         currentPointData.cp.gantryAngle.toFixed(4), gantrySpeed.toFixed(4),
                         currentPointData.cp.collimatorAngle.toFixed(4), collimatorSpeed.toFixed(4),
                         segmentData.maxLeafTravel.toFixed(4), mlcSpeed.toFixed(4), muInSegment.toFixed(4),
-                        effectiveDoseRate.toFixed(4)
+                        effectiveDoseRate.toFixed(4), activeTimingMetadata.model, segmentData.limitingComponent || 'None',
+                        (segmentData.calibrationExtra || 0).toFixed(4), timingSettingsCsv
                     ];
                     csvRows.push(row.join(','));
                 }
@@ -2811,7 +2916,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `simulation_data_beam_${beam.beamNumber || (selectedBeamIndex + 1)}.csv`;
+                a.download = `simulation_data_${activeTimingMetadata.model}_beam_${beam.beamNumber || (selectedBeamIndex + 1)}.csv`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -2892,6 +2997,9 @@
 
                     beam.beamNumber = beamNumber;
                     beam.totalMeterset = totalMeterset;
+                    beam.hasAbsoluteMeterset = Number.isFinite(refBeams[beamNumber.toString()]) && refBeams[beamNumber.toString()] > 0;
+                    const finalWeightForTiming = getDicomElementValue(bi, 'FinalMetersetWeightForTiming');
+                    if (finalWeightForTiming != null) beam.finalCumulativeMetersetWeight = Number(finalWeightForTiming);
 
                     let explicitBeamName = getDicomElementValue(bi, 'BeamName');
                     if (explicitBeamName) {
@@ -2940,6 +3048,8 @@
                     cpSeq.forEach((cpi, cidx) => {
                         const cp = {};
                         cp.controlPointIndex = cidx;
+                        cp.gantryRotationDirection = getDicomElementValue(cpi, 'GantryDirectionForTiming');
+                        cp.collimatorRotationDirection = getDicomElementValue(cpi, 'CollimatorDirectionForTiming');
 
                         let ga = getDicomElementValue(cpi, 'GantryAngle'); cp.gantryAngle = parseFloat(ga == null ? (cidx > 0 ? lastGA : 0) : ga); lastGA = cp.gantryAngle;
                         let ca = getDicomElementValue(cpi, 'BeamLimitingDeviceAngle'); cp.collimatorAngle = parseFloat(ca == null ? (cidx > 0 ? lastCA : 0) : ca); lastCA = cp.collimatorAngle;
@@ -3282,7 +3392,7 @@
                         beamSelector.disabled = false;
                     }
 
-                    processAllBeamsForTimings();
+                    if (processAllBeamsForTimings() === false) return;
                     updateBeamDetailsSummary();
                     computePlanCpOffsets();
                     renderCpTrackBar();
@@ -3291,9 +3401,192 @@
 
                     showMessageModal("Settings Applied", "Machine limits applied and simulation(s) have been recalculated.");
                 } else {
+                    timingModelStatus.textContent = `Selected model: ${loadedTimingProfile && document.getElementById('calibrationEnabled').checked ? "Calibrated" : "Standard"} (load a plan)`;
                     showMessageModal("Settings Updated", "Settings updated. Load a plan to see their effect.");
                 }
             });
+
+            function calibrationSettings() {
+                return Object.fromEntries(Object.keys(TimingCalibration.DEFAULT_LIMITS).map(id => [id, document.getElementById(id).value.trim() === '' ? NaN : Number(document.getElementById(id).value)]));
+            }
+            function applyCalibrationProfileToInputs() {
+                if (!loadedTimingProfile) return;
+                Object.entries(loadedTimingProfile.nominalLimits).forEach(([id, value]) => {
+                    if (Object.hasOwn(TimingCalibration.DEFAULT_LIMITS, id)) document.getElementById(id).value = value;
+                });
+            }
+            function refreshCalibrationStatus() {
+                const p = loadedTimingProfile;
+                document.getElementById('timingProfileStatus').textContent = p ? `${p.label}: ${TimingCalibration.description(p)}. ${document.getElementById('calibrationEnabled').checked ? 'Enabled' : 'Disabled'}.` : 'No calibration profile loaded.';
+                document.getElementById('saveTimingProfile').disabled = !p;
+            }
+            function recalculateCalibration() {
+                refreshCalibrationStatus();
+                updateCurrentSpeedLimits();
+                if (rtPlanData) {
+                    if (isPlaying) playPauseBtn.click();
+                    if (fullPlanToggle.checked) { fullPlanToggle.checked=false; isSimulatingAllBeams=false; beamSelector.disabled=false; }
+                    if (processAllBeamsForTimings() === false) return;
+                    updateBeamDetailsSummary(); computePlanCpOffsets(); renderCpTrackBar(); initVisualizationForSelectedBeam(); renderStampStrips();
+                } else timingModelStatus.textContent = `Selected model: ${loadedTimingProfile && document.getElementById('calibrationEnabled').checked ? 'Calibrated' : 'Standard'} (load a plan)`;
+            }
+            const calibrationModal = document.getElementById('calibrationModal');
+            const calibrationPlotPanel = new CalibrationPlots.Panel(document, typeof Chart === 'undefined' ? null : Chart);
+            document.getElementById('openCalibration').addEventListener('click', () => calibrationModal.showModal());
+            document.getElementById('closeCalibration').addEventListener('click', () => calibrationModal.close());
+            document.getElementById('calibrationEnabled').addEventListener('change', () => {
+                if (!loadedTimingProfile) document.getElementById('calibrationEnabled').checked = false;
+                recalculateCalibration();
+            });
+            document.getElementById('fitCalibration').addEventListener('click', async () => {
+                const files = Array.from(document.getElementById('calibrationLogs').files);
+                const report = document.getElementById('calibrationReport');
+                const dose = Number(document.getElementById('calibrationDoseRate').value);
+                const settings = calibrationSettings();
+                const controls = Array.from(calibrationModal.querySelectorAll('input, button, select'));
+                const previousDisabled = controls.map(el => el.disabled);
+                controls.forEach(el => el.disabled = true);
+                report.textContent = 'Analyzing logs…';
+                calibrationPlotPanel.clear();
+                try {
+                    if (!files.length) throw new Error('Select at least one trajectory .bin or .csv file.');
+                    if (!(dose > 0 && Number.isFinite(dose))) throw new Error('Enter a positive nominal dose rate.');
+                    updateCurrentSpeedLimits();
+                    const pairs = [], comparisons = []; let outside = 0;
+                    for (let group=0; group<files.length; group++) {
+                        const log = await TimingCalibration.readFile(files[group]);
+                        if (JSON.stringify(calibrationSettings()) !== JSON.stringify(settings)) throw new Error('Machine settings changed during analysis. Analyze again with the intended settings.');
+                        updateCurrentSpeedLimits();
+                        if (log.leafCount !== 120 && log.leafCount !== 80) throw new Error('Automatic calibration currently supports 80- or 120-leaf single-layer MLC logs only.');
+                        const deliveries = TimingCalibration.reconstruct(log, dose);
+                        for (const pair of deliveries) {
+                            const prediction=[];
+                            pair.baselineSeconds = calculateSegmentTimes(pair.beam, pair.beam.controlPoints, prediction, dose);
+                            comparisons.push({label:`Log ${group+1} · arc ${pair.beam.beamNumber}`, comparison:CalibrationPlots.buildComparison(log,pair,prediction)});
+                            pair.baselineData=prediction; pair.group = group; pairs.push(pair);
+                        }
+                        outside += TimingCalibration.diagnostics(log).outsideDeliverySeconds;
+                    }
+                    calibrationPlotPanel.set(comparisons);
+                    const profile = TimingCalibration.fitForMethod(pairs, settings, document.getElementById('calibrationLabel').value || 'Delivery calibration',document.getElementById('calibrationMethod').value);
+                    profile.calibration.nominalLogDoseRate = dose;
+                    report.textContent=TimingCalibration.report(profile,files.length,outside)+'\nEnable calibration below to apply it.';
+                    CalibrationPlots.calibrate(comparisons,pairs,profile,TimingCalibration);
+                    calibrationPlotPanel.set(comparisons, profile.parameters.timeScale??1);
+                    loadedTimingProfile = profile;
+                    document.getElementById('calibrationEnabled').checked = false;
+                    recalculateCalibration();
+                } catch(error) { report.textContent = error.message; }
+                finally { controls.forEach((el,i) => el.disabled = previousDisabled[i]); refreshCalibrationStatus(); }
+            });
+            document.getElementById('loadTimingProfile').addEventListener('click', () => document.getElementById('timingProfileFile').click());
+            document.getElementById('timingProfileFile').addEventListener('change', async event => {
+                const file=event.target.files[0]; if (!file) return;
+                try {
+                    const profile=TimingCalibration.validateProfile(JSON.parse(await file.text()));
+                    loadedTimingProfile=profile;
+                    calibrationPlotPanel.clear();
+                    document.getElementById('calibrationLabel').value=profile.label || 'Delivery calibration';
+                    document.getElementById('calibrationMethod').value=profile.model===TimingCalibration.LOCAL_MODEL?'local':'uniform';
+                    document.getElementById('calibrationReport').textContent='Profile loaded; saved machine settings restored.';
+                    document.getElementById('calibrationEnabled').checked=true;
+                    applyCalibrationProfileToInputs(); recalculateCalibration();
+                } catch(error) { document.getElementById('calibrationReport').textContent=error.message; }
+                finally { event.target.value=''; }
+            });
+            document.getElementById('saveTimingProfile').addEventListener('click', () => {
+                if (!loadedTimingProfile) return;
+                const url=URL.createObjectURL(new Blob([JSON.stringify(loadedTimingProfile,null,2)],{type:'application/json'}));
+                const link=document.createElement('a'); link.href=url; link.download='delivery-calibration.json'; link.click();
+                setTimeout(()=>URL.revokeObjectURL(url),1000);
+            });
+            document.getElementById('clearTimingProfile').addEventListener('click', () => {
+                calibrationPlotPanel.clear();
+                loadedTimingProfile=null; document.getElementById('calibrationEnabled').checked=false;
+                document.getElementById('calibrationReport').textContent=''; recalculateCalibration();
+            });
+
+            function setupLogPlayback() {
+                const file=document.getElementById('logPlaybackFile');
+                document.getElementById('openLogPlayback').addEventListener('click',()=>file.click());
+                file.addEventListener('change',async()=>{
+                    const selected=file.files[0];if(!selected)return;
+                    try {
+                        const log=TimingCalibration.parseBin(await selected.arrayBuffer(),{playback:true});
+                        const replay=LogPlayback.buildReplay(log);
+                        if(isPlaying)playPauseBtn.click();
+                        if(logPlaybackState)exitLogPlayback();
+                        const allowed=new Set(['playPauseBtn','resetBtn','cpSlider','exitLogPlayback']);
+                        const disabled=Array.from(document.querySelectorAll('input,select,textarea,button')).map(el=>[el,el.disabled]);
+                        const hidden=[];
+                        const hide=el=>{if(el){hidden.push([el,el.style.display]);el.style.display='none';}};
+                        ['overallPlanInfoContainer','beamSelectorContainer','xyTimePlotsContainer','stampAnalysisContainer','cpTrack','cpTypeOverlay'].forEach(id=>hide(document.getElementById(id)));
+                        const visiblePlots=new Set(['gantrySpeedCanvas','mlcSpeedCanvas','collimatorSpeedCanvas','doseRateCanvas']);
+                        document.querySelectorAll('.radial-plot-container').forEach(el=>{if(!visiblePlots.has(el.querySelector('canvas')?.id))hide(el);});
+                        document.querySelectorAll('.stamp-mini').forEach(hide);
+                        logPlaybackState={log,...replay,player:new LogPlayback.Player(log),disabled,hidden,raf:null,lastIndex:-1,lastPlots:-Infinity,
+                            saved:{showStructures,mlcRenderXOffsetMm,mlcRenderYOffsetMm,sliderMax:cpSlider.max,sliderValue:cpSlider.value,sliderStep:cpSlider.step,model:timingModelStatus.textContent}};
+                        disabled.forEach(([el])=>el.disabled=!allowed.has(el.id));
+                        showStructures=false;mlcRenderXOffsetMm=0;mlcRenderYOffsetMm=0;
+                        document.body.classList.add('log-playback-active');
+                        document.getElementById('logPlaybackBanner').hidden=false;
+                        timingModelStatus.textContent='Active mode: Recorded BIN playback';
+                        cpSlider.max=log.samples.length-1;cpSlider.step=1;cpSlider.value=0;
+                        renderLogPlayback();renderLogPlaybackPlots();
+                        document.getElementById('logPlaybackBanner').scrollIntoView({block:'center'});
+                    } catch(error){showMessageModal('BIN Playback',error.message);}
+                    finally{file.value='';}
+                });
+                document.getElementById('exitLogPlayback').addEventListener('click',exitLogPlayback);
+                document.addEventListener('visibilitychange',()=>{if(document.hidden&&logPlaybackState){if(logPlaybackState.raf!=null)cancelAnimationFrame(logPlaybackState.raf);logPlaybackState.raf=null;logPlaybackState.player.pause(performance.now());renderLogPlayback();}});
+            }
+            function exitLogPlayback(){
+                const state=logPlaybackState;if(!state)return;
+                if(state.raf!=null)cancelAnimationFrame(state.raf);
+                logPlaybackState=null;
+                state.disabled.forEach(([el,value])=>el.disabled=value);
+                state.hidden.forEach(([el,value])=>el.style.display=value);
+                ({showStructures,mlcRenderXOffsetMm,mlcRenderYOffsetMm}=state.saved);
+                cpSlider.max=state.saved.sliderMax;cpSlider.value=state.saved.sliderValue;cpSlider.step=state.saved.sliderStep;
+                document.body.classList.remove('log-playback-active');document.getElementById('logPlaybackBanner').hidden=true;
+                timingModelStatus.textContent=state.saved.model;playPauseBtn.textContent='Play';
+                updateParamDisplay();redrawBev();
+            }
+            function toggleLogPlayback(){
+                const state=logPlaybackState;if(!state)return;
+                if(state.player.playing){state.player.pause(performance.now());if(state.raf!=null)cancelAnimationFrame(state.raf);state.raf=null;renderLogPlayback();return;}
+                state.player.play(performance.now());
+                const frame=now=>{
+                    if(logPlaybackState!==state)return;
+                    state.raf=null;const {index}=state.player.tick(now);
+                    if(index!==state.lastIndex || !state.player.playing)renderLogPlayback();
+                    if(state.player.playing)state.raf=requestAnimationFrame(frame);
+                };frame(performance.now());
+            }
+            function renderLogPlayback(){
+                const state=logPlaybackState;if(!state)return;
+                const {index,sample}=state.player.snapshot(),row=state.data[index],cp=row.cp;
+                state.lastIndex=index;cpSlider.value=index;
+                playPauseBtn.textContent=state.player.playing?'Pause playback':'Play playback';
+                currentCPIndexSpan.textContent=sample.actual.cp.toFixed(3);totalCPsSpan.textContent='recorded CP';
+                gantryAngleSpan.textContent=cp.gantryAngle.toFixed(2);collimatorAngleSpan.textContent=cp.collimatorAngle.toFixed(2);
+                if(couchAngleSpan)couchAngleSpan.textContent=cp.couchAngle==null?'N/A':cp.couchAngle.toFixed(2);
+                simTimeDisplay.style.display='flex';totalSimTimeDisplay.style.display='flex';
+                simTimeElapsedSpan.textContent=row.cumulativeSimTime.toFixed(2);totalSimTimeSpan.textContent=state.player.duration.toFixed(2);
+                [[gantryNeedle,gantrySpeedDialValSpan,'gantrySpeed'],[mlcNeedle,mlcSpeedDialValSpan,'mlcSpeed'],[collimatorNeedle,collimatorSpeedDialValSpan,'collimatorSpeed'],[doseRateNeedle,doseRateDialValSpan,'doseRate']].forEach(([needle,label,key])=>{
+                    needle.style.transform=`rotate(${Math.min(row[key]/state.maxima[key],1)*180-90}deg)`;label.textContent=row[key].toFixed(key==='doseRate'?0:1);
+                });
+                document.getElementById('logPlaybackStatus').textContent=`Snapshot ${index+1}/${state.data.length} · ${state.log.metadata.samplingIntervalMs} ms per recorded frame · ${row.cumulativeSimTime.toFixed(2)} / ${state.player.duration.toFixed(2)} s · ${row.recordedMu.toFixed(3)} MU · hold code ${row.beamHold}. Actual positions; rates from adjacent samples. ${state.log.metadata.truncated?'Partial log. ':''}Patient structures are not shown.`;
+                drawBEV(cp.collimatorAngle,cp.gantryAngle,state.beam,0.5,cp);
+                if(performance.now()-state.lastPlots>=200 || !state.player.playing)renderLogPlaybackPlots();
+            }
+            function renderLogPlaybackPlots(){
+                const state=logPlaybackState;if(!state)return;
+                const index=state.player.snapshot().index;state.lastPlots=performance.now();
+                for(const [context,key,title]of [[radialContexts.gantrySpeed,'gantrySpeed','Recorded Gantry Speed'],[radialContexts.mlcSpeed,'mlcSpeed','Recorded Max Leaf Speed'],[radialContexts.collimatorSpeed,'collimatorSpeed','Recorded Collimator Speed'],[radialContexts.doseRate,'doseRate','Recorded Dose Rate']]){
+                    if(context)drawSingleRadialPlot(context,state.data,key,state.maxima[key],index,title);
+                }
+            }
 
             function calculateProfiledMoveTime(distance, maxSpeed, maxAcceleration) {
                 if (distance <= 1e-6) {
@@ -3315,193 +3608,13 @@
                 }
             }
 
-            function calculateContinuousMoveTimesForDistances(distances, vmax, amax) {
-                if (!distances || distances.length === 0) return [];
-                if (!isFinite(vmax) || vmax <= 0) return distances.map(() => Infinity);
-                if (!isFinite(amax) || amax <= 0) return distances.map(d => Math.max(0, d) / vmax);
-
-                const n = distances.length;
-                const v = new Array(n + 1).fill(0);
-
-                for (let i = 0; i < n; i++) {
-                    const d = Math.max(0, distances[i]);
-                    const vNextMax = Math.sqrt((v[i] * v[i]) + (2 * amax * d));
-                    v[i + 1] = Math.min(vmax, vNextMax);
-                }
-
-                v[n] = 0;
-                for (let i = n - 1; i >= 0; i--) {
-                    const d = Math.max(0, distances[i]);
-                    const vMaxFromNext = Math.sqrt((v[i + 1] * v[i + 1]) + (2 * amax * d));
-                    v[i] = Math.min(v[i], vMaxFromNext);
-                }
-
-                for (let iter = 0; iter < 2; iter++) {
-                    for (let i = 0; i < n; i++) {
-                        const d = Math.max(0, distances[i]);
-                        const vNextMax = Math.sqrt((v[i] * v[i]) + (2 * amax * d));
-                        v[i + 1] = Math.min(v[i + 1], vmax, vNextMax);
-                    }
-                    v[n] = 0;
-                    for (let i = n - 1; i >= 0; i--) {
-                        const d = Math.max(0, distances[i]);
-                        const vMaxFromNext = Math.sqrt((v[i + 1] * v[i + 1]) + (2 * amax * d));
-                        v[i] = Math.min(v[i], vMaxFromNext);
-                    }
-                }
-
-                const t = new Array(n);
-                for (let i = 0; i < n; i++) {
-                    const d = Math.max(0, distances[i]);
-                    const denom = v[i] + v[i + 1];
-                    t[i] = (denom > 1e-9) ? (2 * d / denom) : 0;
-                }
-                return t;
-            }
-
             function calculateSegmentTimes(beamData, controlPoints, dataToProcess, primaryDoseRate) {
-                if (!beamData || !controlPoints || controlPoints.length < 2) return 0;
-
-                const defaults = beamData.isRDSMachine ? DEFAULTS_RDS : DEFAULTS_TDS;
-
-                const MAX_GANTRY_SPEED = currentMaxGantrySpeed || defaults.MAX_GANTRY_SPEED_DEGPS;
-                const MAX_MLC_SPEED_MMPS = currentMaxMlcSpeedMMPS || (defaults.MAX_MLC_SPEED_CMPS * 10);
-                const MAX_COLL_SPEED = currentMaxCollimatorSpeed || defaults.MAX_COLLIMATOR_SPEED_DEGPS;
-                const MAX_GANTRY_ACCEL = currentMaxGantryAccelDecel || defaults.MAX_GANTRY_ACCEL_DECEL_DEGPSS;
-                const MAX_MLC_ACCEL_MMPS2 = currentMaxMlcAccelDecelMMPS2 || (defaults.MAX_MLC_ACCEL_DECEL_CMPS2 * 10);
-                const MAX_COLL_ACCEL = currentMaxCollimatorAccelDecel || defaults.MAX_COLLIMATOR_ACCEL_DECEL_DEGPSS;
-                const MAX_DOSE_RATE = primaryDoseRate || 600.0;
-                const MAX_DOSE_RATE_PER_SEC = MAX_DOSE_RATE / 60.0;
-
-                const BEAM_START_OVERHEAD_SEC = currentBeamStartOverheadSec || 0;
-                const SEGMENT_OVERHEAD_SEC = currentSegmentOverheadSec || 0;
-
-                let totalBeamSimTime = BEAM_START_OVERHEAD_SEC;
-
-                const numSegments = controlPoints.length - 1;
-                const segmentDeltaG = new Array(numSegments).fill(0);
-                const segmentDeltaColl = new Array(numSegments).fill(0);
-                const segmentMaxLeafTravel = new Array(numSegments).fill(0);
-                const segmentDoseRateSet = new Array(numSegments).fill(MAX_DOSE_RATE);
-
-                let leafDistances = null;
-                const eff0 = getEffectiveMLCPositionsForCP(controlPoints[0], beamData);
-                if (eff0 && eff0.length > 0) {
-                    leafDistances = new Array(eff0.length);
-                    for (let k = 0; k < eff0.length; k++) leafDistances[k] = new Float32Array(numSegments);
-                }
-
-                if (!dataToProcess[0]) dataToProcess[0] = { cp: controlPoints[0] };
-                dataToProcess[0].cumulativeSimTime = totalBeamSimTime;
-                dataToProcess[0].segmentDuration = 0;
-
-                for (let i = 1; i < controlPoints.length; i++) {
-                    const prevCP = controlPoints[i - 1];
-                    const currentCP = controlPoints[i];
-                    const segmentIndex = i - 1;
-
-	                    let deltaGantryAngle = gantryAngleDeltaMagnitude(prevCP.gantryAngle, currentCP.gantryAngle, beamData);
-                    let deltaCollAngle = Math.abs(currentCP.collimatorAngle - prevCP.collimatorAngle);
-                    if (deltaCollAngle > 180) deltaCollAngle = 360 - deltaCollAngle;
-
-                    let maxLeafTravel = 0;
-                    if (beamData.mlcDefinitions && currentCP.mlcPositionData && prevCP.mlcPositionData) {
-                        const prevEffective = getEffectiveMLCPositionsForCP(prevCP, beamData);
-                        const currentEffective = getEffectiveMLCPositionsForCP(currentCP, beamData);
-
-                        if (prevEffective && currentEffective && prevEffective.length === currentEffective.length) {
-                            if (leafDistances && leafDistances.length === currentEffective.length) {
-                                for (let l = 0; l < currentEffective.length; l++) {
-                                    const d = Math.abs(currentEffective[l] - prevEffective[l]);
-                                    leafDistances[l][segmentIndex] = d;
-                                    if (d > maxLeafTravel) maxLeafTravel = d;
-                                }
-                            } else {
-                                for (let l = 0; l < currentEffective.length; l++) {
-                                    maxLeafTravel = Math.max(maxLeafTravel, Math.abs(currentEffective[l] - prevEffective[l]));
-                                }
-                            }
-                        } else {
-                            leafDistances = null;
-                        }
-                    }
-
-                    if (isNaN(deltaGantryAngle)) deltaGantryAngle = 0;
-                    if (isNaN(deltaCollAngle)) deltaCollAngle = 0;
-                    if (isNaN(maxLeafTravel)) maxLeafTravel = 0;
-
-                    segmentDeltaG[segmentIndex] = deltaGantryAngle;
-                    segmentDeltaColl[segmentIndex] = deltaCollAngle;
-                    segmentMaxLeafTravel[segmentIndex] = maxLeafTravel;
-                    const drSet = (Number(currentCP.doseRateSet) || Number(prevCP.doseRateSet) || MAX_DOSE_RATE);
-                    segmentDoseRateSet[segmentIndex] = drSet;
-                }
-
-                const gantryMinTimes = calculateContinuousMoveTimesForDistances(segmentDeltaG, MAX_GANTRY_SPEED, MAX_GANTRY_ACCEL);
-                const collMinTimes = calculateContinuousMoveTimesForDistances(segmentDeltaColl, MAX_COLL_SPEED, MAX_COLL_ACCEL);
-                let mlcMinTimes;
-                if (leafDistances && leafDistances.length > 0) {
-                    mlcMinTimes = new Array(numSegments).fill(0);
-                    for (let l = 0; l < leafDistances.length; l++) {
-                        const tLeaf = calculateContinuousMoveTimesForDistances(leafDistances[l], MAX_MLC_SPEED_MMPS, MAX_MLC_ACCEL_MMPS2);
-                        for (let si = 0; si < numSegments; si++) mlcMinTimes[si] = Math.max(mlcMinTimes[si], tLeaf[si] || 0);
-                    }
-                } else {
-                    mlcMinTimes = calculateContinuousMoveTimesForDistances(segmentMaxLeafTravel, MAX_MLC_SPEED_MMPS, MAX_MLC_ACCEL_MMPS2);
-                }
-
-                for (let i = 1; i < controlPoints.length; i++) {
-                    const prevCP = controlPoints[i - 1];
-                    const currentCP = controlPoints[i];
-                    const segmentIndex = i - 1;
-
-                    const deltaGantryAngle = segmentDeltaG[segmentIndex] || 0;
-                    const deltaCollAngle = segmentDeltaColl[segmentIndex] || 0;
-                    const maxLeafTravel = segmentMaxLeafTravel[segmentIndex] || 0;
-
-                    const dMU_WEIGHT = currentCP.cumulativeMetersetWeight - prevCP.cumulativeMetersetWeight;
-                    let deltaDose = (dMU_WEIGHT > 1e-6) ? beamData.totalMeterset * dMU_WEIGHT : 0;
-                    if (isNaN(deltaDose)) deltaDose = 0;
-
-                    const timeGantry = gantryMinTimes[segmentIndex] || 0;
-                    const timeMlc = mlcMinTimes[segmentIndex] || 0;
-                    const timeColl = collMinTimes[segmentIndex] || 0;
-                    const maxDrPerSec = (Number(segmentDoseRateSet[segmentIndex]) || 0) / 60.0;
-                    const timeDose = (maxDrPerSec > 1e-6) ? deltaDose / maxDrPerSec : 0;
-
-                    const baseSegmentDuration = Math.max(timeGantry, timeMlc, timeColl, timeDose);
-                    const segmentDuration = baseSegmentDuration + SEGMENT_OVERHEAD_SEC;
-                    totalBeamSimTime += segmentDuration;
-
-                    let limitingComponent = 'None';
-                    if (baseSegmentDuration > 1e-9) {
-                        const times = { Gantry: timeGantry, MLC: timeMlc, Collimator: timeColl, 'Dose Rate': timeDose };
-                        limitingComponent = Object.keys(times).reduce((a, b) => times[a] >= times[b] ? a : b);
-                    }
-
-                    if (!dataToProcess[segmentIndex]) dataToProcess[segmentIndex] = { cp: prevCP };
-                    dataToProcess[segmentIndex].segmentDuration = segmentDuration;
-                    dataToProcess[segmentIndex].deltaGantryAngle = deltaGantryAngle;
-                    dataToProcess[segmentIndex].deltaCollAngle = deltaCollAngle;
-                    dataToProcess[segmentIndex].maxLeafTravel = maxLeafTravel;
-                    dataToProcess[segmentIndex].limitingComponent = limitingComponent;
-
-                    const motionDuration = Math.max(1e-9, segmentDuration - SEGMENT_OVERHEAD_SEC);
-                    const avgGantrySpeed = (motionDuration > 1e-9) ? deltaGantryAngle / motionDuration : 0;
-                    const avgMlcSpeed = (motionDuration > 1e-9) ? maxLeafTravel / motionDuration : 0;
-                    const avgCollSpeed = (motionDuration > 1e-9) ? deltaCollAngle / motionDuration : 0;
-                    const avgDoseRate = (segmentDuration > 1e-9) ? (deltaDose / segmentDuration) * 60 : 0;
-
-                    dataToProcess[segmentIndex].gantryCapability = MAX_GANTRY_SPEED > 0 ? (avgGantrySpeed / MAX_GANTRY_SPEED) * 100 : 0;
-                    dataToProcess[segmentIndex].mlcCapability = MAX_MLC_SPEED_MMPS > 0 ? (avgMlcSpeed / MAX_MLC_SPEED_MMPS) * 100 : 0;
-                    dataToProcess[segmentIndex].collimatorCapability = MAX_COLL_SPEED > 0 ? (avgCollSpeed / MAX_COLL_SPEED) * 100 : 0;
-                    dataToProcess[segmentIndex].doseRateCapability = MAX_DOSE_RATE > 0 ? (avgDoseRate / MAX_DOSE_RATE) * 100 : 0;
-
-                    if (!dataToProcess[i]) dataToProcess[i] = { cp: currentCP };
-                    dataToProcess[i].cumulativeSimTime = totalBeamSimTime;
-                }
-
-                return totalBeamSimTime;
+                return LegacyTiming.calculateSegmentTimes(beamData, controlPoints, dataToProcess, primaryDoseRate, {
+                    maxGantrySpeedInput:currentMaxGantrySpeed, maxMlcSpeedInput:currentMaxMlcSpeedMMPS/10,
+                    maxCollimatorSpeedInput:currentMaxCollimatorSpeed, maxGantryAccelDecelInput:currentMaxGantryAccelDecel,
+                    maxMlcAccelDecelInput:currentMaxMlcAccelDecelMMPS2/10, maxCollimatorAccelDecelInput:currentMaxCollimatorAccelDecel,
+                    beamStartOverheadMsInput:currentBeamStartOverheadSec*1000, segmentOverheadMsInput:currentSegmentOverheadSec*1000
+                }, getEffectiveMLCPositionsForCP);
             }
 
             function getBankPositions(allLeafPositions, bankId) {
@@ -4006,6 +4119,26 @@
             function processAllBeamsForTimings() {
                 if (!rtPlanData || !rtPlanData.beams || rtPlanData.beams.length === 0) return;
 
+                updateCurrentSpeedLimits();
+                const profile = document.getElementById('calibrationEnabled').checked ? loadedTimingProfile : null;
+                if (profile) {
+                    try {
+                        TimingCalibration.validateProfile(profile, calibrationSettings());
+                        rtPlanData.beams.forEach(beam=>TimingCalibration.validateBeam(profile,beam));
+                        if (profile.calibration?.source === 'log-commanded-control-points' && rtPlanData.beams.some(b => b.isRDSMachine)) throw new Error('This log profile was fitted for a single-layer MLC, not RDS.');
+                    }
+                    catch(error) {
+                        // Keep a usable Legacy prediction when edited limits invalidate a fit.
+                        document.getElementById('calibrationEnabled').checked = false;
+                        refreshCalibrationStatus();
+                        document.getElementById('timingProfileStatus').textContent = `Calibration disabled: ${error.message}`;
+                        return processAllBeamsForTimings();
+                    }
+                }
+                activeTimingMetadata = { model: profile ? profile.model : 'legacy', calibration: profile };
+                const modelLabel = profile ? (profile.model===TimingCalibration.LOCAL_MODEL?'Local axis-response calibration':'Calibrated') : 'Standard';
+                document.getElementById('planTimingModel').textContent = `(${modelLabel})`;
+                timingModelStatus.textContent = `Active model: ${modelLabel}${loadedTimingProfile && !profile ? ' (calibration disabled)' : ''}`;
                 let totalPlanTime = 0;
                 allBeamsProcessedData = [];
 
@@ -4026,7 +4159,9 @@
                     const beamDataForProcessing = [];
                     allBeamsProcessedData.push(beamDataForProcessing);
 
-                    const beamTime = calculateSegmentTimes(beam, beam.controlPoints, beamDataForProcessing, planPrimaryDoseRate);
+                    const baselineTime = calculateSegmentTimes(beam, beam.controlPoints, beamDataForProcessing, planPrimaryDoseRate);
+                    const beamTime = TimingCalibration.apply(beamDataForProcessing, baselineTime, profile, beam);
+                    beam.uncalibratedTime = baselineTime;
                     beam.totalTime = beamTime;
                     totalPlanTime += beamTime;
                     beam.interBeamTransitionTime = 0;
@@ -4077,6 +4212,9 @@
                     }
                 });
 
+                const beamSum = rtPlanData.beams.reduce((sum, beam) => sum + beam.totalTime, 0);
+                document.getElementById('beamDeliveryTimeSum').textContent = beamSum.toFixed(2);
+                document.getElementById('mechanicalTransitionTimeSum').textContent = (totalPlanTime - beamSum).toFixed(2);
                 if (totalPlanSimTimeSpan) totalPlanSimTimeSpan.textContent = `${totalPlanTime.toFixed(2)}`;
                 updateMiniMetricScales();
             }
@@ -5293,7 +5431,7 @@
                     pd_item.gantrySpeed = (segDur > 1e-9) ? (segmentData.deltaGantryAngle / segDur) : 0;
                     pd_item.mlcSpeed = (segDur > 1e-9) ? (segmentData.maxLeafTravel / segDur) : 0;
                     pd_item.collimatorSpeed = (segDur > 1e-9) ? (segmentData.deltaCollAngle / segDur) : 0;
-                    const dMUW = index > 0 ? controlPoints[index].cumulativeMetersetWeight - controlPoints[index - 1].cumulativeMetersetWeight : 0;
+                    const dMUW = index > 0 ? data[index].cp.cumulativeMetersetWeight - data[index - 1].cp.cumulativeMetersetWeight : 0;
                     const dMU = beam.totalMeterset * dMUW;
                     pd_item.doseRate = (segDur > 1e-9) ? (dMU / segDur) * 60 : 0;
                     pd_item.doseRateText = `${pd_item.doseRate.toFixed(2)} ${(beam.totalMeterset > 0 ? "MU" : "MUwt")}/min`;
@@ -5864,6 +6002,7 @@
             }
 
             function drawAllXYTimePlots(highlightTime = null) {
+                if (logPlaybackState) return;
                 if (!processedData || processedData.length < 1) {
                     if (componentCapabilityChart) {
                         componentCapabilityChart.destroy();
@@ -7225,6 +7364,7 @@
 
 
             function drawAllStaticParameterPlots() {
+                if (logPlaybackState) { renderLogPlaybackPlots(); return; }
                 if (!rtPlanData || !rtPlanData.beams[selectedBeamIndex] || !radialContexts.gantrySpeed) return;
                 const primaryDoseRate = typeof rtPlanData.primaryDoseRate === 'number' ? rtPlanData.primaryDoseRate : 0;
 
@@ -7656,6 +7796,7 @@
             }
 
             function updateParamDisplay(interpolatedState = null) {
+                if (logPlaybackState) { renderLogPlayback(); return; }
 
 
                 if (interpolatedState) {
@@ -8174,6 +8315,7 @@ function animateAllBeams() {
             });
 
             playPauseBtn.addEventListener('click', () => {
+                if (logPlaybackState) { toggleLogPlayback(); return; }
                 if (!rtPlanData || !rtPlanData.beams[selectedBeamIndex]?.controlPoints?.length) { showMessageModal("Data Error", "Please load a Plan and select a beam first."); return; }
                 if (typeof Tone !== 'undefined' && Tone.context.state !== 'running') Tone.start().catch(e => console.error("Tone.js start error:", e));
                 isPlaying = !isPlaying;
@@ -8192,6 +8334,7 @@ function animateAllBeams() {
             });
 
             resetBtn.addEventListener('click', () => {
+                if (logPlaybackState) { if(logPlaybackState.raf!=null)cancelAnimationFrame(logPlaybackState.raf); logPlaybackState.raf=null; logPlaybackState.player.pause(performance.now()); logPlaybackState.player.seek(0); renderLogPlayback(); return; }
                 if (isPlaying) playPauseBtn.click();
                 if (isSimulatingAllBeams) { currentBeamIndexForFullSim = 0; selectedBeamIndex = 0; if (beamSelector) beamSelector.value = 0; totalPlanElapsedTime = 0; }
                 currentCP = 0; lastAnimatedCP = 0; totalMuDeliveredForBeeps_currentBeam = 0;
@@ -8204,6 +8347,7 @@ function animateAllBeams() {
             });
 
             cpSlider.addEventListener('input', function () {
+                if (logPlaybackState) { logPlaybackState.player.seek(Number(this.value)*logPlaybackState.log.metadata.samplingIntervalMs/1000,performance.now()); renderLogPlayback(); return; }
                 if (isPlaying) {
                     this.value = isSimulatingAllBeams ? globalCPIndex : currentCP;
                     return;
@@ -8261,6 +8405,7 @@ function animateAllBeams() {
             }
 
 
+            setupLogPlayback();
             setAndApplyInitialSpeedLimits();
             clearAll();
             // IMPORTANT: when this simulator is embedded inside RP_MultiPlan_Comparator.html,
