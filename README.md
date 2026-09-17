@@ -86,6 +86,9 @@ For users in environments with software installation restrictions, please contac
 ## 3. How to Use
 
 ### Load DICOM RT Plan File:
+
+Use the shared **Load Plan Data or Trajectory Log** drop zone for DICOM, exported JSON, or one trajectory BIN. DICOM/JSON files load plan data; a `.bin` file enters recorded playback. Mixed selections containing a BIN are rejected before any file is loaded.
+
 1. Drag and drop your DICOM RT Plan (`.dcm`) file onto the designated "Drag & Drop" area.
 2. Alternatively, click the "Choose File" button and select your `.dcm` file.
 
@@ -98,13 +101,14 @@ Upon successful loading, overall plan information (patient name, ID, plan label,
 4. Fine-tune visuals in the **Fine Tune Visualization** block (below the BEV): Structure transparency, MLC transparency, and point blur (sigma) for structures.
 
 ### Configure Simulation Parameters (Optional):
-1. Navigate to the "Machine Speed & Acceleration Limits (for Simulation)" section.
-2. Adjust the maximum speeds and accelerations for Gantry, MLC, and Collimator. These values are used when the "Simulate Delivery" mode is active.
-3. Optional timing knobs:
-   * **Beam Start Overhead (ms)**: adds a fixed delay at beam start in simulated time.
-   * **Per-CP Overhead (ms)**: adds a fixed overhead to each control point-to-control point segment in the standard model. A log sampling interval is not evidence of a delay per planned CP.
-4. Default values may be set based on the `ManufacturerModelName` tag in the DICOM file (e.g., different defaults for "RDS" vs. "TDS" machines).
-5. Click "Apply & Recalculate Simulation" to apply changes. This will re-initialize the visualization and recalculate simulation-dependent metrics if a plan is loaded.
+
+The **Machine limits** panel groups settings into **Gantry**, **MLC**, and **Collimator** cards. Each card pairs **Max speed** with **Accel / decel**, with units beside the labels. The layout stacks on smaller screens.
+
+1. Adjust the speed and acceleration values for each axis. Defaults may depend on the plan's `ManufacturerModelName` (for example, RDS or TDS).
+2. Set optional **Timing overheads**: **Beam start** adds a fixed startup delay; **Per control point** adds a delay to each segment in the standard model. Both use milliseconds. A log sampling interval is not evidence of a per-CP delay. Local axis-response calibration replaces these manual overheads.
+3. Click **Apply & recalculate** to update the loaded plan's simulation and metrics.
+
+The model status badge identifies the selected timing model or recorded-playback mode. **Delivery time calibration…** opens the calibration modal from the panel header. Simulation settings are disabled during trajectory-log playback.
 
 ### Select Beam (if multiple exist):
 1. If the loaded plan contains multiple beams, a "Select Beam" dropdown menu will appear above the BEV visualization.
@@ -141,7 +145,7 @@ Upon successful loading, overall plan information (patient name, ID, plan label,
 
 ### Recorded BIN Playback
 
-Click **Load trajectory log for playback…** under the machine controls and select a trajectory `.bin` file. The **existing simulator BEV** displays recorded leaves, jaws, gantry and collimator positions. The normal **Play/Pause**, **Reset**, and slider controls operate the recorded timeline at 1× real time. A 20 ms log advances one recorded snapshot per 20 ms of elapsed time; slower browser redraws catch up to the clock rather than extending delivery time. Holds and recorded between-arc intervals are retained.
+Drop a trajectory `.bin` file into the main **Load Plan Data or Trajectory Log** drop zone, or select it with **Choose Files**. Load one log at a time, separately from plan/structure files. The **existing simulator BEV** displays recorded leaves, jaws, gantry and collimator positions. The normal **Play/Pause**, **Reset**, and slider controls operate the recorded timeline at 1× real time. A 20 ms log advances one recorded snapshot per 20 ms of elapsed time; slower browser redraws catch up to the clock rather than extending delivery time. Holds and recorded between-arc intervals are retained.
 
 Machine settings, calibration and other inputs are grayed out and disabled during playback. **Exit playback** restores the previous simulation controls and loaded plan. Patient structures are hidden because a BIN file does not establish a matching plan or patient coordinate frame.
 
@@ -156,8 +160,8 @@ The simulator uses the standard timing model by default. Log profiles can apply 
 1. Set the intended machine speed, acceleration and overhead settings.
 2. Click **Delivery time calibration…** under the simulator machine limits.
 3. Select complete **Varian trajectory `.bin` logs or pylinac `.csv` exports** from the same machine, energy and mode, enter the nominal log dose rate, choose **Local axis response (~1 s windows)** or **Uniform whole-delivery correction**, and analyze. Automatic log calibration supports single-layer 80- or 120-leaf MLCs.
-4. Review arc totals, fit errors and raw/averaged/predicted comparison plots. Select a delivery and an averaging window; the window affects plots only. In the modal, check **Apply calibration** to enable the correction.
-5. **Save profile…** in the modal exports a JSON file. **Load profile…** restores its baseline machine settings and enables the correction. Disable the checkbox to compare with the uncorrected standard model.
+4. Review arc totals, fit errors and raw/averaged/predicted comparison plots. Select a delivery and an averaging window; the window affects plots only. Click **Accept and apply to current session** to restore the profile settings, recalculate the loaded plan, and close the modal. This button remains disabled until a profile is available.
+5. **Save profile…** in the modal exports a JSON file. **Load profile…** restores its baseline machine settings and enables the correction. Uncheck **Calibration enabled** to compare with the uncorrected standard model.
 
 Direct BIN reading supports trajectory versions **2.1, 3.0, 4.0 and 5.0**, including machine/isocentric-couch scale 3. The reader uses the header/subbeam/snapshot layout documented by [pylinac](https://pylinac.readthedocs.io/en/latest/_modules/pylinac/log_analyzer.html). No Python installation or CSV conversion is required.
 
@@ -339,7 +343,7 @@ Units are inverse millimetres. The value is 0 when the aperture area is approxim
 ---
 
 ## 5. User Customizable Parameters (Speed & Acceleration Limits)
-These parameters are found under "Machine Speed & Acceleration Limits (for Simulation)" and affect calculations only when "Simulate Delivery" mode is active.
+These parameters are found under **Machine limits** and affect calculations only when "Simulate Delivery" mode is active.
 
 * **Max Gantry Speed (°/s)**: `maxGantrySpeedInput` (Default: 6 or 12, machine-dependent)
 * **Max Gantry Accel/Decel (°/s²)**: `maxGantryAccelDecelInput` (Default: 12)
@@ -350,7 +354,7 @@ These parameters are found under "Machine Speed & Acceleration Limits (for Simul
 * **Beam Start Overhead (ms)**: `beamStartOverheadMsInput` (Default: 0) - added once per beam.
 * **Per-CP Overhead (ms)**: `segmentOverheadMsInput` (Default: 20) - added once per CP-to-CP segment.
 
-Clicking "Apply & Recalculate Simulation" updates these limits and re-runs `initVisualization()`.
+Clicking **Apply & recalculate** updates these limits and refreshes the simulation.
 
 ---
 

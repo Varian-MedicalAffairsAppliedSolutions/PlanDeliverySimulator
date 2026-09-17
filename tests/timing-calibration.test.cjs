@@ -162,3 +162,18 @@ test('calibration scales startup time and segment durations consistently',()=>{
  near(rows[0].cumulativeSimTime,2.5);near(rows[0].segmentDuration,12.5);
  near(rows[1].cumulativeSimTime,15);near(rows[0].gantryCapability,40);
 });
+
+test('accept applies the reviewed profile to this session, restores its settings and closes the modal',()=>{
+ const h=require('./legacy-harness.cjs')();
+ h.run('refreshCalibrationStatus()');assert.equal(h.get('acceptCalibration').disabled,true);
+ const p=C.fit([{baselineSeconds:10,measuredSeconds:11}],C.DEFAULT_LIMITS,'Reviewed');
+ h.run(`loadedTimingProfile=${JSON.stringify(p)}; refreshCalibrationStatus();`);
+ assert.equal(h.get('acceptCalibration').disabled,false);
+ h.get('maxGantrySpeedInput').value='4';
+ h.get('openCalibration').click();h.get('acceptCalibration').click();
+ assert.equal(h.get('calibrationEnabled').checked,true);
+ assert.equal(Number(h.get('maxGantrySpeedInput').value),6);
+ assert.equal(h.get('calibrationModal').open,false);
+ assert.match(h.get('timingModelStatus').textContent,/Calibrated/);
+ h.get('clearTimingProfile').click();assert.equal(h.get('acceptCalibration').disabled,true);
+});

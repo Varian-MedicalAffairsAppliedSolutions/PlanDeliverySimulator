@@ -374,6 +374,37 @@
 
         body.log-playback-active input:disabled, body.log-playback-active select:disabled, body.log-playback-active button:disabled { opacity:.4; filter:grayscale(1); cursor:not-allowed; }
         body.log-playback-active .radial-plot-container { pointer-events:none; }
+        .data-input-group.machine-settings.speed-limit-controls { display:block; text-align:left; padding:20px; background:#f8fafc; border:1px solid #dbe4ee; border-radius:12px; }
+        .machine-settings.speed-limit-controls > div { border:0; background:none; padding:0; border-radius:0; }
+        .machine-settings .machine-settings-header { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+        .machine-settings .machine-settings-header h3 { margin:0; font-size:1.15rem; color:#24364b; }
+        .machine-settings .machine-settings-header p { margin:5px 0 0; font-size:.85rem; color:#64748b; }
+        .machine-settings #openCalibration { margin:0; background:white; color:#1d5c90; border:1px solid #b8cee0; border-radius:7px; padding:10px 14px; font-weight:600; }
+        .machine-settings #openCalibration:hover { background:#eaf3fb; }
+        .machine-settings .timing-model-badge { display:inline-block; margin:14px 0 18px; padding:5px 10px; border:1px solid #cbdce9; border-radius:6px; background:#eaf3fb; color:#295274; font-size:.8rem; line-height:1.5; overflow-wrap:anywhere; }
+        .machine-settings .machine-axis-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+        .machine-settings .machine-axis-card { min-width:0; margin:0; padding:12px 14px 14px; border:1px solid #d9e2ed; border-radius:9px; background:white; }
+        .machine-settings legend { padding:0 6px; font-weight:700; font-size:.9rem; color:#334155; }
+        .machine-settings .machine-field { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; }
+        .machine-settings .machine-field label { margin:0; font-size:.85rem; color:#334155; white-space:normal; line-height:1.3; }
+        .machine-settings .machine-field label span { display:block; margin-top:3px; font-size:.75rem; color:#64748b; }
+        .machine-settings .machine-field input { box-sizing:border-box; width:90px; min-width:70px; max-width:45%; padding:9px 10px; border:1px solid #bdcbd9; border-radius:6px; background:#fff; font-size:.95rem; font-variant-numeric:tabular-nums; }
+        .machine-settings .machine-field input:focus-visible { outline:2px solid #2583c5; outline-offset:2px; }
+        .machine-settings .machine-settings-footer { display:flex; justify-content:space-between; align-items:end; gap:20px; flex-wrap:wrap; margin-top:20px; padding-top:16px; border-top:1px solid #dbe4ee; }
+        .machine-settings .machine-overheads { display:flex; flex-wrap:wrap; gap:20px; padding:0; border:0; margin:0; min-width:0; }
+        .machine-settings .machine-overheads legend { padding:0; color:#64748b; font-size:.8rem; }
+        .machine-settings #applySpeedLimitsBtn { margin:0; padding:12px 20px; border-radius:7px; background:#247bb3; font-weight:600; box-shadow:none; }
+        .machine-settings #applySpeedLimitsBtn:hover { background:#1b6392; }
+        @media(max-width:760px) {
+            .machine-settings .machine-axis-grid { grid-template-columns:1fr; }
+            .machine-settings .machine-axis-card { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+            .machine-settings .machine-settings-footer { align-items:stretch; }
+            .machine-settings #applySpeedLimitsBtn { width:100%; }
+        }
+        @media(max-width:420px) {
+            .data-input-group.machine-settings.speed-limit-controls { padding:14px; }
+            .machine-settings .machine-axis-card { grid-template-columns:1fr; gap:0; }
+        }
         .calibration-plot-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
         .calibration-chart { position:relative; height:290px; min-width:0; border:1px solid #dce3eb; border-radius:8px; padding:8px; background:white; }
         .calibration-chart canvas { display:block; width:100% !important; height:100% !important; max-width:none; margin:0; border:0; box-shadow:none; background:transparent; }
@@ -1160,7 +1191,7 @@
                 <h3>Quick Instructions</h3>
                 <p style="color:red;">For Educational and Research Purpose Only. Not For Clinical Use.</p>
                 <ul style="margin:0 0 6px 18px; padding:0;">
-                    <li><strong>Load</strong>: Drag/drop a DICOM RT Plan (.dcm) or exported JSON, or use Choose File.</li>
+                    <li><strong>Load</strong>: Drag/drop DICOM (.dcm), exported JSON (.json), or a trajectory log (.bin) for recorded playback, or use Choose File.</li>
                     <li><strong>Limits</strong>: (Optional) Set machine speed/accel limits, then click Apply &amp; Recalculate.</li>
                     <li><strong>Play</strong>: Select a beam or enable Simulate Full Plan, then Play/Pause. Beep per MU is optional.</li>
                     <li><strong>Scrub</strong>: Use the CP bar + slider or hover radial plots/mini stamps to jump between CPs.</li>
@@ -1175,10 +1206,10 @@
                 <h2>Load Plan Data & Configure Simulation</h2>
 
                 <div class="data-input-group">
-                    <h3>Load from Plan File</h3>
-                    <div id="dicomDropZone">Drag & Drop your DICOM (.dcm) or exported JSON (.json) file here
+                    <h3>Load Plan Data or Trajectory Log</h3>
+                    <div id="dicomDropZone">Drag & Drop DICOM (.dcm), exported JSON (.json), or a trajectory log (.bin) for playback here
                         <br> or <br>
-                        <input type="file" id="dicomFileInput" accept=".dcm,application/dicom,.json,application/json" multiple>
+                        <input type="file" id="dicomFileInput" accept=".dcm,application/dicom,.json,application/json,.bin" multiple>
                     </div>
                 </div>
 
@@ -1188,14 +1219,12 @@
                     <button id="clearAllBtn" class="primary-btn">Clear All Data</button>
                 </div>
 
-                <div class="data-input-group speed-limit-controls">
-                    <h3>Machine Speed & Acceleration Limits</h3>
-                    <div style="flex-basis:100%;">
-                        <button type="button" id="openLogPlayback">Load trajectory log for playback…</button>
-                        <input id="logPlaybackFile" type="file" accept=".bin" hidden>
+                <div class="data-input-group speed-limit-controls machine-settings">
+                    <div class="machine-settings-header">
+                        <div><h3>Machine limits</h3><p>Maximum axis speeds and acceleration limits.</p></div>
                         <button type="button" id="openCalibration">Delivery time calibration…</button>
-                        <span id="timingModelStatus" role="status">Active model: Standard</span>
                     </div>
+                    <span id="timingModelStatus" class="timing-model-badge" role="status">Active model: Standard</span>
                     <dialog id="calibrationModal" aria-labelledby="calibrationTitle" style="width:min(1120px,94vw);max-height:85vh;overflow:auto;border:1px solid #ccc;border-radius:12px;padding:24px;">
                         <h2 id="calibrationTitle">Delivery time calibration</h2>
                         <p>Calibrate delivery timing from measured logs. Local mode fits roughly one-second windows; uniform mode fits whole-arc totals. Between-beam transitions remain separate. Use logs from the same machine, energy and delivery mode.</p>
@@ -1229,47 +1258,36 @@
         <div class="calibration-chart"><canvas id="calibrationPlot_doseRate" role="img" aria-label="doseRate log and prediction comparison"></canvas></div>
     </div>
 </section>
-                        <p><label><input id="calibrationEnabled" type="checkbox"> Apply calibration</label></p>
+                        <p><label><input id="calibrationEnabled" type="checkbox"> Calibration enabled</label></p>
                         <p id="timingProfileStatus" role="status">No calibration profile loaded.</p>
+                        <button type="button" id="acceptCalibration" disabled>Accept and apply to current session</button>
                         <button type="button" id="loadTimingProfile">Load profile…</button>
                         <button type="button" id="saveTimingProfile" disabled>Save profile…</button>
                         <button type="button" id="clearTimingProfile">Remove profile</button>
                         <input type="file" id="timingProfileFile" accept=".json,application/json" hidden>
                         <button type="button" id="closeCalibration">Close</button>
                     </dialog>
-                    <div>
-                        <label for="maxGantrySpeedInput">Max Gantry Speed (°/s):</label>
-                        <input type="number" id="maxGantrySpeedInput" step="0.1">
+                    <div class="machine-axis-grid">
+                        <fieldset class="machine-axis-card"><legend>Gantry</legend>
+                            <div class="machine-field"><label for="maxGantrySpeedInput">Max speed <span>°/s</span></label><input type="number" id="maxGantrySpeedInput" step="0.1"></div>
+                            <div class="machine-field"><label for="maxGantryAccelDecelInput">Accel / decel <span>°/s²</span></label><input type="number" id="maxGantryAccelDecelInput" step="0.1"></div>
+                        </fieldset>
+                        <fieldset class="machine-axis-card"><legend>MLC</legend>
+                            <div class="machine-field"><label for="maxMlcSpeedInput">Max speed <span>cm/s</span></label><input type="number" id="maxMlcSpeedInput" step="0.1"></div>
+                            <div class="machine-field"><label for="maxMlcAccelDecelInput">Accel / decel <span>cm/s²</span></label><input type="number" id="maxMlcAccelDecelInput" step="0.1"></div>
+                        </fieldset>
+                        <fieldset class="machine-axis-card"><legend>Collimator</legend>
+                            <div class="machine-field"><label for="maxCollimatorSpeedInput">Max speed <span>°/s</span></label><input type="number" id="maxCollimatorSpeedInput" step="0.1"></div>
+                            <div class="machine-field"><label for="maxCollimatorAccelDecelInput">Accel / decel <span>°/s²</span></label><input type="number" id="maxCollimatorAccelDecelInput" step="0.1"></div>
+                        </fieldset>
                     </div>
-                    <div>
-                        <label for="maxGantryAccelDecelInput">Max Gantry Accel/Decel (°/s²):</label>
-                        <input type="number" id="maxGantryAccelDecelInput" step="0.1">
+                    <div class="machine-settings-footer">
+                        <fieldset class="machine-overheads"><legend>Timing overheads</legend>
+                            <div class="machine-field"><label for="beamStartOverheadMsInput">Beam start <span>ms</span></label><input type="number" id="beamStartOverheadMsInput" step="1" min="0" value="0"></div>
+                            <div class="machine-field"><label for="segmentOverheadMsInput">Per control point <span>ms</span></label><input type="number" id="segmentOverheadMsInput" step="1" min="0" value="20"></div>
+                        </fieldset>
+                        <button id="applySpeedLimitsBtn" class="primary-btn">Apply &amp; recalculate</button>
                     </div>
-                    <div>
-                        <label for="maxMlcSpeedInput">Max MLC Speed (cm/s):</label>
-                        <input type="number" id="maxMlcSpeedInput" step="0.1">
-                    </div>
-                    <div>
-                        <label for="maxMlcAccelDecelInput">Max MLC Accel/Decel (cm/s²):</label>
-                        <input type="number" id="maxMlcAccelDecelInput" step="0.1">
-                    </div>
-                    <div>
-                        <label for="maxCollimatorSpeedInput">Max Coll Speed (°/s):</label>
-                        <input type="number" id="maxCollimatorSpeedInput" step="0.1">
-                    </div>
-                    <div>
-                        <label for="maxCollimatorAccelDecelInput">Max Collimator Accel/Decel (°/s²):</label>
-                        <input type="number" id="maxCollimatorAccelDecelInput" step="0.1">
-                    </div>
-                    <div>
-                        <label for="beamStartOverheadMsInput">Beam Start Overhead (ms):</label>
-                        <input type="number" id="beamStartOverheadMsInput" step="1" min="0" value="0">
-                    </div>
-                    <div>
-                        <label for="segmentOverheadMsInput">Per-CP Overhead (ms):</label>
-                        <input type="number" id="segmentOverheadMsInput" step="1" min="0" value="20">
-                    </div>
-                    <button id="applySpeedLimitsBtn" class="primary-btn">Apply & Recalculate Simulation</button>
                 </div>
             </div>
 
@@ -1796,6 +1814,7 @@
             // Global variables for application state
             let rtPlanData = null;
             let logPlaybackState = null;
+            let logPlaybackLoading = false;
             let selectedBeamIndex = 0;
             let currentCP = 0;
             let animationFrameId = null;
@@ -2686,15 +2705,28 @@
             }
 
             function handleFile(file) {
-                if (!file) return;
+                if (!file || logPlaybackState || logPlaybackLoading) return;
                 const fileName = file.name.toLowerCase();
-                if (fileName.endsWith('.dcm')) {
+                if (fileName.endsWith('.bin')) {
+                    loadTrajectoryPlayback(file);
+                } else if (fileName.endsWith('.dcm')) {
                     handleDicomFile(file);
                 } else if (fileName.endsWith('.json')) {
                     handleJsonFile(file);
                 } else {
-                    showMessageModal("File Type Error", "Please select a DICOM (.dcm) or JSON (.json) file.");
+                    showMessageModal("File Type Error", "Please select DICOM (.dcm), JSON (.json), or a trajectory log (.bin).");
                 }
+            }
+
+            function handleFiles(files) {
+                if (logPlaybackState || logPlaybackLoading) return;
+                const logs = files.filter(file => file.name.toLowerCase().endsWith('.bin'));
+                if (logs.length && files.length !== 1) {
+                    showMessageModal('File Selection', 'Load one trajectory log at a time, separately from plan or structure files.');
+                    dicomFileInput.value = '';
+                    return;
+                }
+                files.forEach(file => handleFile(file));
             }
 
             dicomDropZone.addEventListener('dragover', (event) => { event.preventDefault(); dicomDropZone.classList.add('dragover'); });
@@ -2704,13 +2736,13 @@
                 dicomDropZone.classList.remove('dragover');
                 const files = Array.from(event.dataTransfer.files || []);
                 if (files.length > 0) {
-                    files.forEach(file => handleFile(file));
+                    handleFiles(files);
                 }
             });
             dicomFileInput.addEventListener('change', (event) => {
                 const files = Array.from(event.target.files || []);
                 if (files.length > 0) {
-                    files.forEach(file => handleFile(file));
+                    handleFiles(files);
                 }
             });
 
@@ -3419,6 +3451,7 @@
                 const p = loadedTimingProfile;
                 document.getElementById('timingProfileStatus').textContent = p ? `${p.label}: ${TimingCalibration.description(p)}. ${document.getElementById('calibrationEnabled').checked ? 'Enabled' : 'Disabled'}.` : 'No calibration profile loaded.';
                 document.getElementById('saveTimingProfile').disabled = !p;
+                document.getElementById('acceptCalibration').disabled = !p;
             }
             function recalculateCalibration() {
                 refreshCalibrationStatus();
@@ -3434,6 +3467,19 @@
             const calibrationPlotPanel = new CalibrationPlots.Panel(document, typeof Chart === 'undefined' ? null : Chart);
             document.getElementById('openCalibration').addEventListener('click', () => calibrationModal.showModal());
             document.getElementById('closeCalibration').addEventListener('click', () => calibrationModal.close());
+            document.getElementById('acceptCalibration').addEventListener('click', () => {
+                if (!loadedTimingProfile) return;
+                try {
+                    TimingCalibration.validateProfile(loadedTimingProfile);
+                    if (rtPlanData) rtPlanData.beams.forEach(beam => TimingCalibration.validateBeam(loadedTimingProfile, beam));
+                    applyCalibrationProfileToInputs();
+                    document.getElementById('calibrationEnabled').checked = true;
+                    recalculateCalibration();
+                    if (document.getElementById('calibrationEnabled').checked) calibrationModal.close();
+                } catch (error) {
+                    document.getElementById('calibrationReport').textContent = error.message;
+                }
+            });
             document.getElementById('calibrationEnabled').addEventListener('change', () => {
                 if (!loadedTimingProfile) document.getElementById('calibrationEnabled').checked = false;
                 recalculateCalibration();
@@ -3470,7 +3516,7 @@
                     calibrationPlotPanel.set(comparisons);
                     const profile = TimingCalibration.fitForMethod(pairs, settings, document.getElementById('calibrationLabel').value || 'Delivery calibration',document.getElementById('calibrationMethod').value);
                     profile.calibration.nominalLogDoseRate = dose;
-                    report.textContent=TimingCalibration.report(profile,files.length,outside)+'\nEnable calibration below to apply it.';
+                    report.textContent=TimingCalibration.report(profile,files.length,outside)+'\nClick Accept and apply to current session to use this calibration.';
                     CalibrationPlots.calibrate(comparisons,pairs,profile,TimingCalibration);
                     calibrationPlotPanel.set(comparisons, profile.parameters.timeScale??1);
                     loadedTimingProfile = profile;
@@ -3506,11 +3552,9 @@
                 document.getElementById('calibrationReport').textContent=''; recalculateCalibration();
             });
 
-            function setupLogPlayback() {
-                const file=document.getElementById('logPlaybackFile');
-                document.getElementById('openLogPlayback').addEventListener('click',()=>file.click());
-                file.addEventListener('change',async()=>{
-                    const selected=file.files[0];if(!selected)return;
+            async function loadTrajectoryPlayback(selected) {
+                    if (!selected || logPlaybackState || logPlaybackLoading) return;
+                    logPlaybackLoading = true;
                     try {
                         const log=TimingCalibration.parseBin(await selected.arrayBuffer(),{playback:true});
                         const replay=LogPlayback.buildReplay(log);
@@ -3535,8 +3579,9 @@
                         renderLogPlayback();renderLogPlaybackPlots();
                         document.getElementById('logPlaybackBanner').scrollIntoView({block:'center'});
                     } catch(error){showMessageModal('BIN Playback',error.message);}
-                    finally{file.value='';}
-                });
+                    finally{logPlaybackLoading=false;dicomFileInput.value='';}
+            }
+            function setupLogPlayback() {
                 document.getElementById('exitLogPlayback').addEventListener('click',exitLogPlayback);
                 document.addEventListener('visibilitychange',()=>{if(document.hidden&&logPlaybackState){if(logPlaybackState.raf!=null)cancelAnimationFrame(logPlaybackState.raf);logPlaybackState.raf=null;logPlaybackState.player.pause(performance.now());renderLogPlayback();}});
             }
